@@ -133,6 +133,103 @@ assert(gameEnvidoTest.callEnvido(0, "falta_envido") === false, "Não pode chamar
 // Jogador 2 (Pé - index 0) chama Real Envido em resposta (Ok)
 assert(gameEnvidoTest.callEnvido(0, "real_envido") === true, "Pode aumentar de Envido para Real Envido.");
 
+// 7. Novos testes para correção de regras de Envido e Retruco
+console.log("\n=== Rodando Novos Testes de Regras (Envido e Retruco) ===");
+
+const gameRulesTest = new TrucoGame("TEST_RULES", "1v1");
+gameRulesTest.addPlayer("P1", "Jogador 1", "s1");
+gameRulesTest.addPlayer("P2", "Jogador 2", "s2");
+gameRulesTest.startNewHand();
+
+// Garantir que nenhum jogador tenha Flor para permitir Envido
+gameRulesTest.players[0].hasFlor = false;
+gameRulesTest.players[1].hasFlor = false;
+
+// Jogador 1 é o Mão (index 1), joga uma carta
+assert(gameRulesTest.playCard(1, 0) === true, "Jogador 1 (Mão) joga sua primeira carta.");
+
+// Jogador 2 (Pé - index 0) deve ser capaz de chamar Envido mesmo após Jogador 1 jogar carta
+assert(gameRulesTest.callEnvido(0, "envido") === true, "Jogador 2 (Pé) pode chamar Envido após oponente jogar carta.");
+
+// Resolver o Envido
+gameRulesTest.hand.envidoResponsePending = false;
+gameRulesTest.resolveEnvido();
+
+// Jogador 2 joga sua carta para fechar a primeira rodada
+assert(gameRulesTest.playCard(0, 0) === true, "Jogador 2 joga sua primeira carta.");
+
+// Agora na segunda rodada, jogador 2 não pode mais chamar Envido (rodada > 0)
+assert(gameRulesTest.callEnvido(0, "real_envido") === false, "Não é permitido chamar Envido na segunda rodada.");
+
+// Teste de Retruco durante jogada normal (sem responder a Truco pendente)
+const gameRetrucoTest = new TrucoGame("TEST_RETRUCO", "1v1");
+gameRetrucoTest.addPlayer("P1", "Jogador 1", "s1");
+gameRetrucoTest.addPlayer("P2", "Jogador 2", "s2");
+gameRetrucoTest.startNewHand();
+
+// Jogador 1 chama Truco (Ok)
+assert(gameRetrucoTest.callTruco(1) === true, "Jogador 1 chama Truco.");
+// Jogador 2 aceita Truco normal (Quero)
+assert(gameRetrucoTest.respondTruco(0, "quero") === true, "Jogador 2 aceita o Truco.");
+
+// Jogador 2 tenta chamar Retruco em seu turno normal
+assert(gameRetrucoTest.callTruco(0) === true, "Jogador 2 pode chamar Retruco durante jogada normal.");
+
+// Teste de chamar Envido quando Truco está pendente
+const gameEnvidoPendingTruco = new TrucoGame("TEST_ENVIDO_PENDING_TRUCO", "1v1");
+gameEnvidoPendingTruco.addPlayer("P1", "Jogador 1", "s1");
+gameEnvidoPendingTruco.addPlayer("P2", "Jogador 2", "s2");
+gameEnvidoPendingTruco.startNewHand();
+
+gameEnvidoPendingTruco.players[0].hasFlor = false;
+gameEnvidoPendingTruco.players[1].hasFlor = false;
+
+// Jogador 1 (Mão - index 1) chama Truco (Ok)
+assert(gameEnvidoPendingTruco.callTruco(1) === true, "Jogador 1 chama Truco.");
+assert(gameEnvidoPendingTruco.hand.trucoResponsePending === true, "Truco fica pendente.");
+
+// Jogador 2 (Pé - index 0) deve ser capaz de chamar Envido antes de aceitar o Truco
+assert(gameEnvidoPendingTruco.callEnvido(0, "envido") === true, "Jogador 2 (Pé) pode chamar Envido com Truco pendente.");
+assert(gameEnvidoPendingTruco.hand.envidoResponsePending === true, "Envido fica pendente.");
+
+// Teste de Flor cancelando Envido e marcando como flor_sobre_envido
+const gameFlorOverEnvido = new TrucoGame("TEST_FLOR_OVER_ENVIDO", "1v1");
+gameFlorOverEnvido.addPlayer("P1", "Jogador 1", "s1");
+gameFlorOverEnvido.addPlayer("P2", "Jogador 2", "s2");
+gameFlorOverEnvido.startNewHand();
+
+// Jogador 1 (Mão - index 1) chama Envido (Ok)
+gameFlorOverEnvido.players[0].hasFlor = false;
+gameFlorOverEnvido.players[1].hasFlor = false;
+assert(gameFlorOverEnvido.callEnvido(1, "envido") === true, "Jogador 1 chama Envido.");
+
+// Jogador 2 tem Flor
+gameFlorOverEnvido.players[0].hasFlor = true;
+gameFlorOverEnvido.players[0].florScore = 25;
+
+// Jogador 2 (Pé - index 0) deve ser capaz de chamar Flor com Envido pendente
+assert(gameFlorOverEnvido.callFlor(0) === true, "Jogador 2 pode chamar Flor com Envido pendente.");
+assert(gameFlorOverEnvido.hand.envidoResponsePending === false, "Envido pendente foi cancelado.");
+assert(gameFlorOverEnvido.hand.voiceBubble[0] === '¡FLOR_SOBRE_ENVIDO!', "Balão de voz configurado como flor_sobre_envido.");
+
+// Teste de Admin definir cartas na mão do jogador
+const gameAdminTest = new TrucoGame("TEST_ADMIN_SET_CARDS", "1v1");
+gameAdminTest.addPlayer("P1", "Jogador 1", "s1");
+gameAdminTest.addPlayer("P2", "Jogador 2", "s2");
+gameAdminTest.startNewHand();
+
+const targetCards = [
+  { value: 1, suit: 'espadas' }, // Espadilha
+  { value: 7, suit: 'espadas' }, // 7 de Espadas
+  { value: 3, suit: 'copas' }    // 3 de Copas
+];
+
+assert(gameAdminTest.adminSetPlayerCards(0, targetCards) === true, "Admin define cartas do Jogador 2.");
+assert(gameAdminTest.hand.hands[0][0].value === 1 && gameAdminTest.hand.hands[0][0].suit === 'espadas', "Carta 1 foi alterada para Espadilha.");
+assert(gameAdminTest.hand.hands[0][1].value === 7 && gameAdminTest.hand.hands[0][1].suit === 'espadas', "Carta 2 foi alterada para 7 de Espadas.");
+assert(gameAdminTest.hand.hands[0][2].value === 3 && gameAdminTest.hand.hands[0][2].suit === 'copas', "Carta 3 foi alterada para 3 de Copas.");
+assert(gameAdminTest.players[0].envidoScore === 28, "Pontuação de Envido do Jogador 2 recalculada para 28.");
+
 console.log("\n================================================");
 console.log("🎉 TODOS OS TESTES PASSARAM COM SUCESSO! 🎉");
 console.log("================================================");

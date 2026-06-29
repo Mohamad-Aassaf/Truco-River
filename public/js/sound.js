@@ -10,7 +10,7 @@ class SoundManager {
     this.muted = false;
 
     // Música de fundo opcional (o usuário escolherá o arquivo depois)
-    this.bgMusicPath = '/js/truco.mp3';
+    this.bgMusicPath = '/js/musica.mp3';
   }
 
   initAudio() {
@@ -33,12 +33,12 @@ class SoundManager {
   changeMusic(newPath) {
     if (this.bgMusicPath === newPath) return;
     this.bgMusicPath = newPath;
-    
+
     if (this.bgMusic) {
       this.bgMusic.pause();
       this.bgMusic = null;
     }
-    
+
     if (this.audioCtx) {
       this.bgMusic = new Audio(this.bgMusicPath);
       this.bgMusic.loop = true;
@@ -219,40 +219,54 @@ class SoundManager {
   }
 
   // Reproduz o áudio correspondente ao canto falado
-  playVoiceChant(text) {
+  playVoiceChant(text, customConfig) {
     this.initAudio();
     if (this.muted) return;
 
     // Normaliza o texto removendo exclamações e passando para minúsculas
     const cleanText = text.replace(/¡|!/g, '').toLowerCase().trim();
-    
-    // Mapeia o texto limpo para o nome do arquivo mp3 correspondente
-    let filename = '';
-    if (cleanText.includes('retruco')) filename = 'retruco';
-    else if (cleanText.includes('vale quatro') || cleanText.includes('vale 4')) filename = 'vale4';
-    else if (cleanText.includes('truco')) filename = 'truco';
-    else if (cleanText.includes('real envido')) filename = 'real_envido';
-    else if (cleanText.includes('falta envido')) filename = 'falta_envido';
-    else if (cleanText.includes('envido')) filename = 'envido';
-    else if (cleanText.includes('contra-flor e o resto') || cleanText.includes('contra flor e o resto')) filename = 'contra_flor_resto';
-    else if (cleanText.includes('contra-flor') || cleanText.includes('contra flor')) filename = 'contra_flor';
-    else if (cleanText.includes('flor')) filename = 'flor';
-    else if (cleanText.includes('não quero') || cleanText.includes('nao quero')) filename = 'nao_quero';
-    else if (cleanText.includes('quero')) filename = 'quero';
-    else if (cleanText.includes('achique')) filename = 'achique';
-    else if (cleanText.includes('mazo') || cleanText.includes('baralho')) filename = 'mazo';
 
-    if (!filename) {
-      this.playChantAlertSound();
-      return;
+    // Determinar a chave da ação correspondente para obter o pitch e o path
+    let actionKey = '';
+    if (cleanText === 'flor_sobre_envido') actionKey = 'flor_sobre_envido';
+    else if (cleanText === 'retruco') actionKey = 'retruco';
+    else if (cleanText === 'vale quatro' || cleanText === 'vale 4') actionKey = 'vale4';
+    else if (cleanText === 'truco') actionKey = 'truco';
+    else if (cleanText === 'real envido') actionKey = 'real_envido';
+    else if (cleanText === 'falta envido') actionKey = 'falta_envido';
+    else if (cleanText === 'envido') actionKey = 'envido';
+    else if (cleanText === 'contra-flor e o resto' || cleanText === 'contra flor e o resto') actionKey = 'contra_flor_resto';
+    else if (cleanText === 'contra-flor' || cleanText === 'contra flor') actionKey = 'contra_flor';
+    else if (cleanText === 'flor') actionKey = 'flor';
+    else if (cleanText === 'não quero' || cleanText === 'nao quero') actionKey = 'nao_quero';
+    else if (cleanText === 'quero') actionKey = 'quero';
+    else if (cleanText === 'achique') actionKey = 'achique';
+    else if (cleanText === 'mazo' || cleanText === 'me vou ao mazo' || cleanText.includes('mazo')) actionKey = 'mazo';
+
+    let path = '';
+    let pitch = 1.0;
+
+    // Se temos uma configuração customizada para essa ação
+    if (customConfig && actionKey && customConfig[actionKey]) {
+      path = customConfig[actionKey].path;
+      pitch = parseFloat(customConfig[actionKey].pitch) || 1.0;
     }
 
-    const path = `/audio/${filename}.mp3`;
+    // Se não houver caminho customizado, determinar padrão
+    if (!path) {
+      if (!actionKey) {
+        this.playChantAlertSound();
+        return;
+      }
+      path = `/audio/${actionKey}.ogg`;
+    }
+
     const audio = new Audio(path);
     audio.volume = this.sfxVolume;
+    audio.playbackRate = pitch;
     audio.play().catch(err => {
-      // Se o usuário ainda não colocou as vozes em MP3, toca o som sintético como fallback
-      console.warn(`Áudio para voz '${filename}' não encontrado em '/audio/'. Usando sintetizador.`);
+      // Se o arquivo não existir, toca o som sintético como fallback
+      console.warn(`Áudio para voz '${path}' não encontrado. Usando sintetizador.`);
       this.playChantAlertSound();
     });
   }

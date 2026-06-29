@@ -217,6 +217,36 @@ class TrucoGame {
     this.log(`Mão iniciada. ${this.players[mãoPlayer].name} é o Mão.`);
   }
 
+  // Permite que um administrador defina manualmente as cartas na mão de um jogador para fins de teste
+  adminSetPlayerCards(playerIdx, cardsData) {
+    if (!this.hand) return false;
+    
+    // Converter a lista de valores/naipes em objetos de carta do motor
+    const newCards = cardsData.map(c => {
+      const val = parseInt(c.value);
+      const suit = c.suit;
+      return {
+        value: val,
+        suit: suit,
+        trucoRank: getTrucoRank(val, suit),
+        envidoPoints: getEnvidoPoints(val)
+      };
+    });
+    
+    // Substituir a mão do jogador
+    this.hand.hands[playerIdx] = newCards;
+    this.hand.originalHands[playerIdx] = JSON.parse(JSON.stringify(newCards));
+    
+    // Recalcular pontuação de Envido e Flor do jogador
+    const player = this.players[playerIdx];
+    player.envidoScore = calculateEnvidoScore(newCards);
+    player.florScore = calculateFlorScore(newCards);
+    player.hasFlor = player.florScore > 0;
+    
+    this.log(`Admin definiu as cartas de ${player.name}.`);
+    return true;
+  }
+
   // Verifica se o jogador já jogou alguma carta nesta mão
   hasPlayerPlayedCard(playerIdx) {
     if (!this.hand) return false;
@@ -312,11 +342,18 @@ class TrucoGame {
 
   // Chamadas de Envido
   callEnvido(playerIdx, type) {
-    if (!this.hand || this.hand.trucoResponsePending || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
+    if (!this.hand || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
+    
+    // Se o truco estiver pendente, apenas o time que deve responder ao truco pode chamar envido
+    if (this.hand.trucoResponsePending) {
+      const callingTeam = this.players[playerIdx].team;
+      if (callingTeam !== this.hand.trucoPendingTeam) return false;
+    }
     
     // Envido só pode ser chamado na primeira rodada
     if (this.hand.currentRound !== 0) return false;
     if (!this.hand.canCallEnvido) return false;
+    if (this.hasPlayerPlayedCard(playerIdx)) return false;
 
     // Validar transições permitidas de aumento de Envido
     if (this.hand.envidoHistory.length > 0) {
@@ -471,26 +508,34 @@ class TrucoGame {
     this.hand.canCallEnvido = false;
   }
 
-  // Chamadas de Flor
   callFlor(playerIdx) {
-    if (!this.hand || this.hand.trucoResponsePending || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
+    if (!this.hand || this.hand.florResponsePending) return false;
+    
+    // Se o truco estiver pendente, apenas o time que deve responder ao truco pode chamar flor
+    if (this.hand.trucoResponsePending) {
+      const callingTeam = this.players[playerIdx].team;
+      if (callingTeam !== this.hand.trucoPendingTeam) return false;
+    }
     if (this.hand.currentRound !== 0) return false;
     if (!this.hand.canCallEnvido) return false;
+    if (this.hasPlayerPlayedCard(playerIdx)) return false;
 
     const player = this.players[playerIdx];
     const team = player.team;
 
     if (!player.hasFlor) return false;
 
+    this.hand.florState = 'flor';
+    this.hand.florCallers.push(playerIdx);
+
     // Se houver aposta de Envido aberta e não resolvida, o canto de Flor cancela o Envido (ou sobrepõe).
     if (this.hand.envidoResponsePending) {
       this.hand.envidoResponsePending = false;
       this.log(`Envido cancelado devido ao canto de Flor.`);
+      this.hand.voiceBubble[playerIdx] = '¡FLOR_SOBRE_ENVIDO!';
+    } else {
+      this.hand.voiceBubble[playerIdx] = '¡FLOR!';
     }
-
-    this.hand.florState = 'flor';
-    this.hand.florCallers.push(playerIdx);
-    this.hand.voiceBubble[playerIdx] = '¡FLOR!';
     this.hand.florHistory.push('flor');
     
     // Por padrão, uma Flor sem oposição vale 3 pontos
@@ -645,8 +690,7 @@ class TrucoGame {
 
     this.log(`${this.players[playerIdx].name} jogou ${card.value} de ${card.suit}.`);
 
-    // Limpar o canto do Envido após a primeira jogada de carta da mesa inteira
-    this.hand.canCallEnvido = false;
+    // Próximo turno de carta ou fim da rodada
 
     // Próximo turno de carta ou fim da rodada
     this.nextTurn();
@@ -877,7 +921,7 @@ class TrucoGame {
         mode: this.mode,
         maxPoints: this.maxPoints || 24,
         maxPlayers: this.maxPlayers,
-        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, team: p.team, ready: p.ready })),
+        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, team: p.team, ready: p.ready, voiceConfig: p.voiceConfig })),
         score: this.score,
         state: this.state,
         logs: this.gameLogs,
@@ -909,7 +953,8 @@ class TrucoGame {
         isBot: p.isBot,
         team: p.team,
         hasFlor: p.hasFlor,
-        envidoScore: p.envidoScore // Mostrado apenas no final ou disputa resolvida
+        envidoScore: p.envidoScore, // Mostrado apenas no final ou disputa resolvida
+        voiceConfig: p.voiceConfig
       })),
       score: this.score,
       state: this.state,

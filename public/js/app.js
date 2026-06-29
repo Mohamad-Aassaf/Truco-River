@@ -3,6 +3,41 @@
 
 const socket = io();
 
+// Configuração padrão das vozes do usuário (com carregamento do localStorage)
+let myVoiceConfig = {
+  truco: { path: '/audio/truco.ogg', pitch: 1.0 },
+  retruco: { path: '/audio/retruco.ogg', pitch: 1.0 },
+  vale4: { path: '', pitch: 1.0 },
+  envido: { path: '/audio/envido.ogg', pitch: 1.0 },
+  real_envido: { path: '', pitch: 1.0 },
+  falta_envido: { path: '', pitch: 1.0 },
+  flor: { path: '', pitch: 1.0 },
+  contra_flor: { path: '', pitch: 1.0 },
+  contra_flor_resto: { path: '', pitch: 1.0 },
+  quero: { path: '/audio/quero.ogg', pitch: 1.0 },
+  nao_quero: { path: '', pitch: 1.0 },
+  achique: { path: '', pitch: 1.0 },
+  mazo: { path: '', pitch: 1.0 },
+  flor_sobre_envido: { path: '', pitch: 1.0 }
+};
+
+const VOICE_ACTIONS = [
+  'truco', 'retruco', 'vale4',
+  'envido', 'real_envido', 'falta_envido',
+  'flor', 'contra_flor', 'contra_flor_resto',
+  'quero', 'nao_quero', 'achique', 'mazo',
+  'flor_sobre_envido'
+];
+
+const savedVoiceConfig = localStorage.getItem('truco_voice_config');
+if (savedVoiceConfig) {
+  try {
+    myVoiceConfig = JSON.parse(savedVoiceConfig);
+  } catch (e) {
+    console.warn("Erro ao ler truco_voice_config do localStorage", e);
+  }
+}
+
 // Elementos da Interface
 const screenLobby = document.getElementById('screen-lobby');
 const screenWaiting = document.getElementById('screen-waiting');
@@ -73,6 +108,7 @@ let prevVoiceBubbles = {};
 let audioInitialized = false;
 let lastGameState = null; // Armazena a cópia local do estado do jogo
 let gameEndTimeout = null; // Controla a transição de fim de jogo
+let isClientAdminAuthenticated = false; // Controle de login no painel admin
 
 // SVGs das Cartas por Naipe (Design Premium Customizado)
 const SUIT_SVGS = {
@@ -159,7 +195,7 @@ deckOptions.forEach(btn => {
   } else {
     btn.classList.remove('active');
   }
-  
+
   btn.addEventListener('click', (e) => {
     deckOptions.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -204,7 +240,7 @@ document.querySelectorAll('#room-points-group .lobby-toggle-btn').forEach(btn =>
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('#room-points-group .lobby-toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    
+
     const val = btn.dataset.points;
     if (val === 'custom') {
       customPointsInputGroup.classList.remove('hide');
@@ -343,7 +379,7 @@ socket.on('available_rooms', (rooms) => {
         <button class="btn btn-secondary btn-sm join-list-btn" data-id="${room.id}" style="padding: 6px 12px; font-size: 0.75rem; margin-left: 10px;">Entrar</button>
       </div>
     `;
-    
+
     // Bind direto do botão entrar da lista
     li.querySelector('.join-list-btn').addEventListener('click', (e) => {
       initAudioContext();
@@ -367,12 +403,18 @@ socket.on('game_state', (gameState) => {
   lastGameState = gameState; // Armazena a cópia local para verificação nos botões
   myPlayerId = socket.id;
   currentRoomMode = gameState.mode;
-  
+
+  // Sincronizar configuração de voz local com o servidor se necessário
+  const me = gameState.players.find(p => p.id === myPlayerId || p.socketId === myPlayerId);
+  if (me && JSON.stringify(me.voiceConfig) !== JSON.stringify(myVoiceConfig)) {
+    socket.emit('update_voice_config', myVoiceConfig);
+  }
+
   if (gameEndTimeout) {
     clearTimeout(gameEndTimeout);
     gameEndTimeout = null;
   }
-  
+
   // Atualizar visualizações com base no estado do jogo
   if (gameState.state === 'lobby') {
     renderLobbyScreen(gameState);
@@ -409,12 +451,12 @@ function renderLobbyScreen(gameState) {
 
   // Renderizar slots de jogadores
   playersLobbyList.innerHTML = '';
-  
+
   // Preencher slots
   for (let i = 0; i < gameState.maxPlayers; i++) {
     const p = gameState.players[i];
     const div = document.createElement('div');
-    
+
     if (p) {
       div.className = `player-slot ${p.ready ? 'ready' : ''}`;
       div.innerHTML = `
@@ -476,7 +518,7 @@ function renderGameScreen(gameState) {
   // 2. Atualizar o Placar e Narrativa
   scoreValTeam0.textContent = String(gameState.score[0]).padStart(2, '0');
   scoreValTeam1.textContent = String(gameState.score[1]).padStart(2, '0');
-  
+
   // Desenhar os palitos gaúchos (pontos)
   drawMatchsticks(sticksTeam0, gameState.score[0]);
   drawMatchsticks(sticksTeam1, gameState.score[1]);
@@ -522,20 +564,20 @@ function renderGameScreen(gameState) {
   } else if ((gameState.state === 'hand_end' || gameState.state === 'game_end') && gameState.lastHandSummary) {
     // Fim de mão ou de jogo: manter as cartas jogadas na mesa para visualização e mostrar resultado
     renderPlayedCards(gameState.lastHandSummary.playedCards, gameState.players);
-    
+
     // Limpar mão local do jogador
     playerHand.innerHTML = '';
-    
+
     // Exibir balões de voz finais da última ação (ex: "Não Quero", "Mazo"), se houver
     if (gameState.lastHandSummary.voiceBubble) {
       renderVoiceBubbles(gameState.lastHandSummary.voiceBubble, gameState.players);
     }
-    
+
     // Exibir balão de resultado na barra superior
     const summary = gameState.lastHandSummary;
     const myTeam = gameState.players[mySeatIndex].team;
     const lastLog = gameState.logs && gameState.logs.length > 0 ? gameState.logs[gameState.logs.length - 1].msg : '';
-    
+
     if (gameState.state === 'game_end') {
       const isGameWinner = gameState.winner === myTeam;
       if (isGameWinner) {
@@ -564,7 +606,7 @@ function renderGameScreen(gameState) {
         `;
       }
     }
-    
+
     gameAlertBanner.classList.remove('hide');
     disableAllActionButtons();
     prevPlayedCardsCount = 0;
@@ -604,7 +646,7 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
 
   players.forEach((p, idx) => {
     let position = 'bottom';
-    
+
     if (currentRoomMode === '1v1') {
       // 1v1: Me = bottom, Oponente = top
       position = (idx === mySeatIndex) ? 'bottom' : 'top';
@@ -622,7 +664,7 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
     if (!seat) return;
 
     seat.classList.remove('hidden-seat');
-    
+
     // Atualizar info
     seat.querySelector('.seat-name').textContent = p.isBot ? `🤖 ${p.name}` : p.name;
 
@@ -645,7 +687,7 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
 // Desenha o marcador de fósforos rústicos de pontos
 function drawMatchsticks(container, score) {
   container.innerHTML = '';
-  
+
   if (score === 0) {
     container.innerHTML = '<span style="color: #7f8c8d; font-size: 0.8rem; font-style: italic;">Nenhum ponto</span>';
     return;
@@ -672,7 +714,7 @@ function drawMatchsticks(container, score) {
   if (remainder > 0) {
     const box = document.createElement('div');
     box.className = 'stick-group-5';
-    
+
     let html = '';
     if (remainder >= 1) html += '<div class="stick-line line-top"></div>';
     if (remainder >= 2) html += '<div class="stick-line line-right"></div>';
@@ -690,13 +732,13 @@ function renderLogs(logs) {
   logs.forEach(log => {
     const div = document.createElement('div');
     div.className = 'log-entry';
-    
+
     const timeStr = new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     div.innerHTML = `<span class="log-time">[${timeStr}]</span> ${log.msg}`;
-    
+
     gameLogs.appendChild(div);
   });
-  
+
   // Rolar para o final
   gameLogs.scrollTop = gameLogs.scrollHeight;
 }
@@ -735,7 +777,7 @@ const FIG_12_SVG = (color) => `
 function getCardCenterHTML(card) {
   const value = card.value;
   const suit = card.suit;
-  
+
   let color = '#333';
   if (suit === 'espadas') color = '#2c3e50';
   else if (suit === 'paus') color = '#1e8449';
@@ -806,7 +848,7 @@ function getCardImgSrc(card) {
     if (val === 10) val = 8;
     else if (val === 11) val = 9;
     else if (val === 12) val = 10;
-    
+
     return `/pixelDeck/pixelDeck/${suitFolder}/${imgPrefix}${val}.png`;
   } else {
     const suitFolder = getSuitFolder(card.suit);
@@ -817,7 +859,7 @@ function getCardImgSrc(card) {
 // Renderiza a mão do jogador local (3 cartas no bottom)
 function renderMyHand(cards, isMyTurn) {
   playerHand.innerHTML = '';
-  
+
   if (!cards || cards.length === 0) return;
 
   cards.forEach((card, idx) => {
@@ -936,12 +978,19 @@ function renderVoiceBubbles(voiceBubbles, players) {
 
     const bubble = document.getElementById(`bubble-${seat}`);
     if (bubble) {
-      bubble.textContent = text;
+      // Se for o áudio especial de flor sobre envido, mostra apenas "FLOR" no balão visual
+      let displayText = text;
+      if (text === '¡FLOR_SOBRE_ENVIDO!') {
+        displayText = '¡FLOR!';
+      }
+      bubble.textContent = displayText;
       bubble.classList.add('show');
 
       // Tocar som de grito se for um grito novo (usa voz)
       if (prevVoiceBubbles[playerIdx] !== text) {
-        window.soundManager.playVoiceChant(text);
+        const playerObj = players && players[playerIdx];
+        const customConfig = playerObj ? playerObj.voiceConfig : null;
+        window.soundManager.playVoiceChant(text, customConfig);
       }
     }
   });
@@ -963,9 +1012,9 @@ function updateAlertBanner(gameState) {
   const hand = gameState.hand;
   const myTeam = gameState.players[mySeatIndex].team;
 
-  // 1. Resposta pendente de Truco para o meu time
-  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
-    gameAlertText.textContent = `Time adversário gritou ${hand.trucoChant}! O que fazes?`;
+  // 1. Resposta pendente de Flor para o meu time
+  if (hand.florResponsePending && hand.florPendingTeam === myTeam) {
+    gameAlertText.textContent = `Flor cantada! Tens contra-flor para rebater?`;
     gameAlertBanner.classList.remove('hide');
     return;
   }
@@ -978,9 +1027,9 @@ function updateAlertBanner(gameState) {
     return;
   }
 
-  // 3. Resposta pendente de Flor para o meu time
-  if (hand.florResponsePending && hand.florPendingTeam === myTeam) {
-    gameAlertText.textContent = `Flor cantada! Tens contra-flor para rebater?`;
+  // 3. Resposta pendente de Truco para o meu time
+  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
+    gameAlertText.textContent = `Time adversário gritou ${hand.trucoChant}! O que fazes?`;
     gameAlertBanner.classList.remove('hide');
     return;
   }
@@ -1010,7 +1059,7 @@ function setupActionButtons(gameState) {
   const statusEl = document.getElementById('action-panel-status');
 
   // --- SE HOUVER APOSTA PENDENTE PARA O MEU TIME RESPONDER ---
-  
+
   if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
     if (statusEl) statusEl.classList.add('hide');
     groupResponse.classList.remove('hide');
@@ -1022,6 +1071,23 @@ function setupActionButtons(gameState) {
       showAndEnableButton(btnRetruco);
     } else if (hand.trucoState === 'retruco') {
       showAndEnableButton(btnVale4);
+    }
+
+    // Os adversários do Truco podem chamar Envido/Flor antes de aceitar o Truco
+    // Só na primeira rodada e se o jogador não jogou ainda
+    const myCards = hand.hands[mySeatIndex] || [];
+    const hasNotPlayedYet = myCards.length === 3;
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
+        groupEnvido.classList.remove('hide');
+        showAndEnableButton(btnEnvido);
+        showAndEnableButton(btnRealEnvido);
+        showAndEnableButton(btnFaltaEnvido);
+      }
+      if (myPlayer.hasFlor && hand.florState === 'none') {
+        groupFlor.classList.remove('hide');
+        showAndEnableButton(btnFlor);
+      }
     }
     return; // Impede outras ações simultâneas
   }
@@ -1035,10 +1101,10 @@ function setupActionButtons(gameState) {
     // Pode repicar o Envido se for a primeira rodada
     if (hand.currentRound === 0) {
       groupEnvido.classList.remove('hide');
-      
+
       const history = hand.envidoHistory || [];
       const lastCall = history[history.length - 1];
-      
+
       if (lastCall === 'envido') {
         const envidoCount = history.filter(c => c === 'envido').length;
         if (envidoCount < 2) {
@@ -1047,6 +1113,12 @@ function setupActionButtons(gameState) {
         showAndEnableButton(btnRealEnvido);
       } else if (lastCall === 'real_envido') {
         showAndEnableButton(btnFaltaEnvido);
+      }
+
+      // Pode cantar Flor se tiver Flor (cancela o Envido)
+      if (myPlayer.hasFlor && hand.florState === 'none') {
+        groupFlor.classList.remove('hide');
+        showAndEnableButton(btnFlor);
       }
     }
     return;
@@ -1061,37 +1133,48 @@ function setupActionButtons(gameState) {
     return;
   }
 
-  // --- SE FOR O MEU TURNO NORMAL DE JOGAR ---
-  if (isMyTurn) {
-    if (statusEl) statusEl.classList.add('hide');
+  // --- AÇÕES QUE PODEM SER CHAMADAS EM QUALQUER MOMENTO (INDEPENDENTE DE TURNO) ---
+  // Desde que não haja nenhuma resposta pendente na mesa
+  const noResponsePending = !hand.trucoResponsePending && !hand.envidoResponsePending && !hand.florResponsePending;
 
-    // 1. Botão de Truco
-    groupTruco.classList.remove('hide');
-    if (hand.trucoState === 'none') {
-      showAndEnableButton(btnTruco);
-    } else if (hand.trucoState === 'truco' && hand.trucoCallerTeam !== myTeam) {
-      showAndEnableButton(btnRetruco);
-    } else if (hand.trucoState === 'retruco' && hand.trucoCallerTeam !== myTeam) {
-      showAndEnableButton(btnVale4);
+  if (noResponsePending) {
+    // 1. Botão de Truco / Retruco / Vale 4
+    if (hand.trucoCallerTeam !== myTeam) {
+      groupTruco.classList.remove('hide');
+      if (hand.trucoState === 'none') {
+        showAndEnableButton(btnTruco);
+      } else if (hand.trucoState === 'truco') {
+        showAndEnableButton(btnRetruco);
+      } else if (hand.trucoState === 'retruco') {
+        showAndEnableButton(btnVale4);
+      }
     }
 
-    // 2. Botão de Envido / Real / Falta
-    if (hand.currentRound === 0 && hand.canCallEnvido && !myPlayer.hasFlor) {
-      groupEnvido.classList.remove('hide');
-      if (hand.envidoState === 'none') {
+    // Só na primeira rodada e se eu tiver 3 cartas (ou seja, não joguei ainda)
+    const myCards = hand.hands[mySeatIndex] || [];
+    const hasNotPlayedYet = myCards.length === 3;
+
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+      // 2. Botão de Envido / Real / Falta
+      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
+        groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
         showAndEnableButton(btnRealEnvido);
         showAndEnableButton(btnFaltaEnvido);
       }
-    }
 
-    // 3. Botão de Flor
-    if (hand.currentRound === 0 && hand.canCallEnvido && myPlayer.hasFlor && hand.florState === 'none') {
-      groupFlor.classList.remove('hide');
-      showAndEnableButton(btnFlor);
+      // 3. Botão de Flor
+      if (myPlayer.hasFlor && hand.florState === 'none') {
+        groupFlor.classList.remove('hide');
+        showAndEnableButton(btnFlor);
+      }
     }
+  }
 
-    // 4. Mazo (Sempre ativo no turno)
+  // --- SE FOR O MEU TURNO NORMAL DE JOGAR ---
+  if (isMyTurn) {
+    if (statusEl) statusEl.classList.add('hide');
+    // Mazo (Sempre ativo no turno)
     showAndEnableButton(btnFold);
   }
 }
@@ -1254,7 +1337,7 @@ socket.on('receive_chat', ({ sender, senderId, msg }) => {
     <span class="chat-text">${msg}</span>
   `;
   chatMessages.appendChild(div);
-  
+
   // Rolar para o final do chat
   chatMessages.scrollTop = chatMessages.scrollHeight;
 });
@@ -1266,3 +1349,214 @@ gameLeaveBtn.addEventListener('click', () => {
   }
 });
 
+// --- CONFIGURAÇÃO DE VOZES / PERSONALIZAÇÃO EVENTOS ---
+
+// Elementos da Configuração de Vozes
+const btnVoiceSettings = document.getElementById('voice-settings-btn');
+const modalVoiceSettings = document.getElementById('modal-voice-settings');
+const btnCloseVoiceSettings = document.getElementById('close-voice-settings');
+const btnSaveVoiceSettings = document.getElementById('save-voice-settings');
+
+// Sincronizar UI com as configurações locais
+function syncVoiceSettingsUI() {
+  VOICE_ACTIONS.forEach(action => {
+    const el = document.getElementById(`select-voice-${action}`);
+    if (el && myVoiceConfig[action]) {
+      el.value = myVoiceConfig[action].path;
+    }
+  });
+
+  // Atualizar botões de pitch ativos
+  document.querySelectorAll('.pitch-btn').forEach(btn => {
+    const action = btn.getAttribute('data-action');
+    const pitch = parseFloat(btn.getAttribute('data-pitch'));
+    if (myVoiceConfig[action] && Math.abs(myVoiceConfig[action].pitch - pitch) < 0.05) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+// Abrir modal de configurações
+if (btnVoiceSettings) {
+  btnVoiceSettings.addEventListener('click', () => {
+    syncVoiceSettingsUI();
+    modalVoiceSettings.classList.remove('hide');
+  });
+}
+
+// Fechar modal
+if (btnCloseVoiceSettings) {
+  btnCloseVoiceSettings.addEventListener('click', () => {
+    modalVoiceSettings.classList.add('hide');
+  });
+}
+
+// Evento nos botões de pitch para alternar classe ativo e atualizar localmente
+document.querySelectorAll('.pitch-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const action = btn.getAttribute('data-action');
+    const pitch = parseFloat(btn.getAttribute('data-pitch'));
+
+    // Desativar outros botões de pitch para a mesma ação
+    document.querySelectorAll(`.pitch-btn[data-action="${action}"]`).forEach(b => {
+      b.classList.remove('active');
+    });
+
+    btn.classList.add('active');
+    if (!myVoiceConfig[action]) myVoiceConfig[action] = { path: '', pitch: 1.0 };
+    myVoiceConfig[action].pitch = pitch;
+  });
+});
+
+// Eventos de mudança nos dropdowns de áudio base (dinâmico)
+VOICE_ACTIONS.forEach(action => {
+  const el = document.getElementById(`select-voice-${action}`);
+  if (el) {
+    el.addEventListener('change', (e) => {
+      if (!myVoiceConfig[action]) myVoiceConfig[action] = { path: '', pitch: 1.0 };
+      myVoiceConfig[action].path = e.target.value;
+    });
+  }
+});
+
+// Testar som individualmente (preview)
+document.querySelectorAll('.btn-preview-voice').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const action = btn.getAttribute('data-action');
+    const config = myVoiceConfig[action];
+
+    if (window.soundManager && config) {
+      window.soundManager.initAudio();
+
+      let path = config.path;
+      if (!path) {
+        // Fallback padrão se não selecionado
+        path = `/audio/${action}.ogg`;
+      }
+
+      const audio = new Audio(path);
+      audio.volume = window.soundManager.sfxVolume;
+      audio.playbackRate = config.pitch;
+      audio.play().catch(err => {
+        console.warn("Falha ao tocar preview de áudio", err);
+        window.soundManager.playChantAlertSound();
+      });
+    }
+  });
+});
+
+// Salvar e aplicar
+if (btnSaveVoiceSettings) {
+  btnSaveVoiceSettings.addEventListener('click', () => {
+    localStorage.setItem('truco_voice_config', JSON.stringify(myVoiceConfig));
+    modalVoiceSettings.classList.add('hide');
+
+    // Se o jogo estiver ativo, envia para o servidor
+    if (lastGameState) {
+      socket.emit('update_voice_config', myVoiceConfig);
+    }
+
+    // Tocar um feedback sonoro amigável
+    if (window.soundManager) {
+      window.soundManager.playVictorySound();
+    }
+  });
+}
+
+// --- PAINEL ADMIN (TESTES) EVENTOS ---
+const btnAdminPanel = document.getElementById('admin-panel-btn');
+const modalAdminPanel = document.getElementById('modal-admin-panel');
+const btnCloseAdminPanel = document.getElementById('close-admin-panel');
+const btnApplyAdminCards = document.getElementById('apply-admin-cards');
+
+const selectAdminCard1 = document.getElementById('select-admin-card1');
+const selectAdminCard2 = document.getElementById('select-admin-card2');
+const selectAdminCard3 = document.getElementById('select-admin-card3');
+
+// Lista completa das 40 cartas do baralho espanhol
+const ALL_DECK_CARDS = [];
+const suitsBr = { espadas: 'Espadas', paus: 'Paus', copas: 'Copas', ouros: 'Ouros' };
+const suitsEmoji = { espadas: '⚔️', paus: '🌿', copas: '❤️', ouros: '🪙' };
+
+['espadas', 'paus', 'copas', 'ouros'].forEach(suit => {
+  [1, 2, 3, 4, 5, 6, 7, 10, 11, 12].forEach(value => {
+    ALL_DECK_CARDS.push({ value, suit });
+  });
+});
+
+function populateAdminCardSelects() {
+  const selects = [selectAdminCard1, selectAdminCard2, selectAdminCard3];
+  selects.forEach(select => {
+    if (!select) return;
+    select.innerHTML = '';
+    ALL_DECK_CARDS.forEach(card => {
+      const opt = document.createElement('option');
+      opt.value = JSON.stringify(card);
+
+      let label = `${card.value} de ${suitsBr[card.suit]}`;
+      if (card.value === 1 && card.suit === 'espadas') label += ' (Espadilha)';
+      else if (card.value === 1 && card.suit === 'paus') label += ' (Bastião)';
+      else if (card.value === 7 && card.suit === 'espadas') label += ' (7 de Espadas)';
+      else if (card.value === 7 && card.suit === 'ouros') label += ' (7 de Ouros)';
+
+      opt.textContent = `${suitsEmoji[card.suit]} ${label}`;
+      select.appendChild(opt);
+    });
+  });
+}
+
+// Abrir modal Admin
+if (btnAdminPanel) {
+  btnAdminPanel.addEventListener('click', () => {
+    if (!lastGameState || lastGameState.state !== 'playing' || !lastGameState.hand) {
+      alert("Tens que estar jogando uma rodada para alterar as tuas cartas, jogador!");
+      return;
+    }
+    if (isClientAdminAuthenticated) {
+      populateAdminCardSelects();
+      modalAdminPanel.classList.remove('hide');
+    } else {
+      const password = prompt("Digite a senha de administrador para acessar o painel:");
+      if (password) {
+        socket.emit('validate_admin', { password });
+      }
+    }
+  });
+}
+
+// Escutar retorno de autenticação do administrador
+socket.on('admin_validated', () => {
+  isClientAdminAuthenticated = true;
+  populateAdminCardSelects();
+  modalAdminPanel.classList.remove('hide');
+});
+
+// Fechar modal Admin
+if (btnCloseAdminPanel) {
+  btnCloseAdminPanel.addEventListener('click', () => {
+    modalAdminPanel.classList.add('hide');
+  });
+}
+
+// Aplicar as cartas escolhidas
+if (btnApplyAdminCards) {
+  btnApplyAdminCards.addEventListener('click', () => {
+    const c1 = JSON.parse(selectAdminCard1.value);
+    const c2 = JSON.parse(selectAdminCard2.value);
+    const c3 = JSON.parse(selectAdminCard3.value);
+
+    socket.emit('game_action', {
+      action: 'admin_set_cards',
+      value: [c1, c2, c3]
+    });
+
+    modalAdminPanel.classList.add('hide');
+
+    // Tocar um feedback sonoro amigável
+    if (window.soundManager) {
+      window.soundManager.playVictorySound();
+    }
+  });
+}

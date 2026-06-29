@@ -18,10 +18,12 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'mateusraeder'; // Senha de administrador de sua escolha
 
 // Servir arquivos estáticos da pasta public
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/pixelDeck', express.static(path.join(__dirname, 'pixelDeck')));
+app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
 // Banco de dados em memória para salas ativas
 const activeGames = {};
@@ -72,11 +74,21 @@ function executeGameAction(game, playerIdx, decision) {
       game.callTruco(playerIdx);
       break;
     case 'truco_response':
-    case 'truco_raise':
       game.respondTruco(playerIdx, value);
       break;
+    case 'truco_raise':
+      if (game.hand && game.hand.trucoResponsePending) {
+        game.respondTruco(playerIdx, value);
+      } else {
+        game.callTruco(playerIdx);
+      }
+      break;
     case 'call_envido':
-      game.callEnvido(playerIdx, value);
+      if (game.hand && game.hand.envidoResponsePending) {
+        game.respondEnvido(playerIdx, value);
+      } else {
+        game.callEnvido(playerIdx, value);
+      }
       break;
     case 'envido_response':
     case 'envido_raise':
@@ -91,6 +103,9 @@ function executeGameAction(game, playerIdx, decision) {
       break;
     case 'fold':
       game.foldPlayer(playerIdx);
+      break;
+    case 'admin_set_cards':
+      game.adminSetPlayerCards(playerIdx, value);
       break;
   }
 }
@@ -144,6 +159,16 @@ io.on('connection', (socket) => {
 
   let currentRoomId = null;
 
+  // Validar senha de administrador
+  socket.on('validate_admin', ({ password }) => {
+    if (password === ADMIN_PASSWORD) {
+      socket.isAdmin = true;
+      socket.emit('admin_validated');
+    } else {
+      socket.emit('error_msg', 'Senha de administrador incorreta!');
+    }
+  });
+
   // Envia salas disponíveis ao conectar
   socket.emit('available_rooms', Object.keys(activeGames)
     .filter(id => !activeGames[id].isPrivate)
@@ -175,7 +200,7 @@ io.on('connection', (socket) => {
 
     currentRoomId = cleanRoomId;
     socket.join(cleanRoomId);
-    
+
     broadcastState(cleanRoomId);
     io.emit('available_rooms', Object.keys(activeGames)
       .filter(id => !activeGames[id].isPrivate)
@@ -237,14 +262,14 @@ io.on('connection', (socket) => {
     const p = game.players.find(player => player.socketId === socket.id);
     if (p) {
       p.ready = !p.ready;
-      
+
       // Se todos estiverem prontos e a sala estiver cheia, inicia o jogo
       const allReady = game.players.every(player => player.ready);
       if (allReady && game.players.length === game.maxPlayers) {
         game.startNewHand();
         runBotLogic(currentRoomId);
       }
-      
+
       broadcastState(currentRoomId);
     }
   });
@@ -257,12 +282,29 @@ io.on('connection', (socket) => {
     const playerIdx = game.players.findIndex(p => p.socketId === socket.id);
     if (playerIdx === -1) return;
 
+    // Proteger ação de administrador
+    if (decision && decision.action === 'admin_set_cards' && !socket.isAdmin) {
+      socket.emit('error_msg', 'Acesso negado: Você não é administrador.');
+      return;
+    }
+
     // Executa a jogada do humano
     executeGameAction(game, playerIdx, decision);
     broadcastState(currentRoomId);
 
     // Se o jogo continuar ativo, dispara a lógica de bots
     runBotLogic(currentRoomId);
+  });
+
+  // Atualizar configuração de voz do jogador
+  socket.on('update_voice_config', (voiceConfig) => {
+    const game = activeGames[currentRoomId];
+    if (!game) return;
+    const p = game.players.find(player => player.socketId === socket.id);
+    if (p) {
+      p.voiceConfig = voiceConfig;
+      broadcastState(currentRoomId);
+    }
   });
 
   // Enviar mensagem de chat no lobby
@@ -290,7 +332,7 @@ io.on('connection', (socket) => {
     game.winner = null;
     game.lastHandSummary = null;
     game.dealerIndex = 0;
-    
+
     // Volta para o lobby pronto para iniciar
     game.state = 'lobby';
     game.players.forEach(p => {
@@ -306,7 +348,7 @@ io.on('connection', (socket) => {
     if (currentRoomId && activeGames[currentRoomId]) {
       const game = activeGames[currentRoomId];
       game.removePlayer(socket.id);
-      
+
       // Se a sala ficar vazia de humanos, exclui a sala
       const humanCount = game.players.filter(p => !p.isBot).length;
       if (humanCount === 0) {

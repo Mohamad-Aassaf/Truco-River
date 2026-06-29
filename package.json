@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "stop": "taskkill /F /IM node.exe",
     "test": "node testEngine.js"
   },
   "dependencies": {
