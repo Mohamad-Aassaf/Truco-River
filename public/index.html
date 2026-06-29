@@ -178,9 +178,12 @@
 
       <!-- LADO ESQUERDO: PAINEL DE INFORMAÇÕES E PLACAR -->
       <div class="info-sidebar glassmorphism">
-        <div class="sidebar-header">
+        <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <button id="game-leave-btn" class="btn-sidebar-exit" title="Sair da partida e voltar ao lobby">
             <i class="fa-solid fa-right-from-bracket"></i> Abandonar
+          </button>
+          <button id="sidebar-close-btn" class="sidebar-close-btn mobile-only" title="Fechar menu lateral">
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
 
@@ -244,6 +247,20 @@
 
       <!-- LADO DIREITO: MESA DE JOGO -->
       <div class="table-area">
+        <!-- BOTÕES E INFO EXCLUSIVOS PARA MOBILE -->
+        <div class="mobile-header-bar mobile-only">
+          <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Ver Placar e Chat">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="mobile-score-badge">
+            <span class="mobile-score-lbl">Placar:</span>
+            <span class="score-team score-team0" id="mobile-score-us">00</span>
+            <span class="score-vs">x</span>
+            <span class="score-team score-team1" id="mobile-score-them">00</span>
+          </div>
+          <div style="width: 40px;"></div> <!-- Espaçador para equilibrar o layout -->
+        </div>
+
         <!-- BANNER DE ALERTA DE TURNO NO TOPO DA ARENA (TOTALMENTE FORA DA MESA) -->
         <div id="game-alert-banner" class="game-alert-banner hide">
           <span id="game-alert-text">É a sua vez, jogador!</span>
@@ -799,6 +816,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Overlay para fundo da gaveta do celular -->
+  <div id="sidebar-overlay" class="sidebar-overlay hide"></div>
 
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>

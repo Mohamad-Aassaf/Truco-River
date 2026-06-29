@@ -1290,79 +1290,293 @@ body {
   font-size: 1.3rem;
 }
 
+/* --- UTILITÁRIOS E BASES PARA MOBILE --- */
+.mobile-only {
+  display: none !important;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 998;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.hide {
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* --- RESPONSIVIDADE E AJUSTES CELULAR --- */
 @media (max-width: 850px) {
+  .mobile-only {
+    display: flex !important;
+  }
+  
   body {
-    overflow: auto;
+    overflow: hidden; /* Evita rolagem em toda a página */
   }
   
+  /* Layout Principal */
   .game-container {
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
+    flex-direction: row;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
   }
   
+  /* Gaveta Lateral (Sidebar Drawer) */
   .info-sidebar {
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-bottom: 2px solid var(--gold-dark);
+    position: fixed;
+    left: -100%;
+    top: 0;
+    width: 290px;
+    height: 100vh;
+    z-index: 999;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-right: 2px solid var(--gold-dark);
+    border-bottom: none;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at center, #2e1d0c 0%, #150a04 100%) !important;
+    box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+    padding: 15px;
+    box-sizing: border-box;
+  }
+  
+  .info-sidebar.open {
+    left: 0;
   }
   
   .matchstick-tracker-container {
     flex-direction: row;
     justify-content: space-around;
+    margin-bottom: 10px;
   }
   
   .logs-container {
-    max-height: 120px;
+    max-height: 140px;
+    flex-grow: 1;
   }
   
+  .chat-container {
+    max-height: 200px;
+    flex-grow: 1;
+    margin-top: 10px;
+  }
+  
+  /* Área da Mesa */
   .table-area {
-    min-height: 520px;
+    width: 100vw;
+    height: 100vh;
+    min-height: auto;
+    padding-top: 55px; /* Espaço para o cabeçalho do celular */
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
   }
   
+  /* Cabeçalho do Celular */
+  .mobile-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 15px;
+    background: rgba(40, 24, 10, 0.9);
+    border-bottom: 1.5px solid var(--gold-dark);
+    box-sizing: border-box;
+    height: 50px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+  }
+  
+  .sidebar-toggle-btn {
+    background: transparent;
+    border: 1.5px solid var(--gold-dark);
+    color: var(--gold);
+    border-radius: 8px;
+    font-size: 1.1rem;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .sidebar-toggle-btn:hover {
+    background: rgba(223, 177, 91, 0.15);
+  }
+  
+  .sidebar-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--gold);
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .mobile-score-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--gold-dark);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 0.9rem;
+    color: var(--gold);
+  }
+  
+  .mobile-score-lbl {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.7rem;
+    color: var(--text-light);
+    margin-right: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .mobile-score-badge .score-team {
+    font-weight: 800;
+  }
+  
+  .mobile-score-badge .score-team0 {
+    color: #60a5fa;
+  }
+  
+  .mobile-score-badge .score-team1 {
+    color: #f87171;
+  }
+  
+  /* Mesa e Elementos Internos */
   .truco-table {
-    margin: 15px;
-    margin-bottom: 110px;
-    border-width: 12px;
+    width: 95%;
+    max-width: 480px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+    border-width: 10px;
+    border-radius: 50%;
   }
   
+  /* Assentos dos Jogadores no Celular */
+  #seat-top {
+    top: 50px; /* Evita que fique debaixo da barra do topo */
+  }
+  
+  #seat-bottom {
+    bottom: 5px;
+  }
+  
+  #seat-left {
+    left: 5px;
+  }
+  
+  #seat-right {
+    right: 5px;
+  }
+  
+  /* Elementos de Jogo no Celular */
+  .table-center {
+    width: 75%;
+    height: 75%;
+  }
+  
+  .card-deck-stack {
+    width: 50px;
+    height: 75px;
+    left: 10px;
+  }
+  
+  .played-cards-arena {
+    padding: 5px 5px 5px 65px;
+  }
+  
+  .vaza-row {
+    padding: 4px 8px;
+    gap: 5px;
+  }
+  
+  .vaza-label {
+    width: auto;
+    border-right: none;
+    font-size: 0.65rem;
+    margin-right: 5px;
+  }
+  
+  .vaza-winner {
+    font-size: 0.65rem;
+    padding: 2px 4px;
+  }
+  
+  .played-card-slot {
+    width: 55px;
+    height: 82px;
+  }
+  
+  .played-card {
+    width: 55px;
+    height: 82px;
+  }
+  
+  /* Mão do Jogador */
   .player-hand-container {
-    bottom: -80px;
-    width: 250px;
+    bottom: -70px;
+    width: 200px;
   }
   
   .player-hand {
-    height: 140px;
+    height: 120px;
+    gap: -15px;
   }
   
   .card {
-    width: 75px;
-    height: 115px;
-    padding: 4px;
+    width: 65px;
+    height: 98px;
+    padding: 3px;
+    border-radius: 6px;
   }
   
   .card-corner {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
   }
   
   .suit-main-svg {
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
   }
   
+  /* Painel de Ações */
   .action-panel {
-    padding: 10px;
-    height: auto;
-    min-height: 80px;
+    bottom: 80px; /* Posiciona logo acima das pontas das cartas */
+    padding: 8px 10px;
+    gap: 6px;
+    border-radius: 12px;
+    max-width: 96%;
+    min-height: auto;
   }
   
   .action-btn {
-    padding: 8px 12px;
-    font-size: 0.75rem;
+    padding: 6px 10px;
+    font-size: 0.7rem;
+    border-radius: 6px;
   }
-
+  
   .lobby-actions-container {
     grid-template-columns: 1fr;
   }

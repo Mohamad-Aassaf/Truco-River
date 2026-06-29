@@ -62,6 +62,14 @@ const sticksTeam1 = document.getElementById('sticks-team1');
 const gameLogs = document.getElementById('game-logs');
 const phaseBadge = document.getElementById('phase-badge');
 
+// Elementos Mobile
+const infoSidebar = document.querySelector('.info-sidebar');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const mobileScoreUs = document.getElementById('mobile-score-us');
+const mobileScoreThem = document.getElementById('mobile-score-them');
+
 const seatBottom = document.getElementById('seat-bottom');
 const seatTop = document.getElementById('seat-top');
 const seatLeft = document.getElementById('seat-left');
@@ -518,6 +526,9 @@ function renderGameScreen(gameState) {
   // 2. Atualizar o Placar e Narrativa
   scoreValTeam0.textContent = String(gameState.score[0]).padStart(2, '0');
   scoreValTeam1.textContent = String(gameState.score[1]).padStart(2, '0');
+
+  if (mobileScoreUs) mobileScoreUs.textContent = String(gameState.score[0]).padStart(2, '0');
+  if (mobileScoreThem) mobileScoreThem.textContent = String(gameState.score[1]).padStart(2, '0');
 
   // Desenhar os palitos gaúchos (pontos)
   drawMatchsticks(sticksTeam0, gameState.score[0]);
@@ -1558,5 +1569,31 @@ if (btnApplyAdminCards) {
     if (window.soundManager) {
       window.soundManager.playVictorySound();
     }
+  });
+}
+
+// Toggle da Gaveta Lateral (Mobile)
+if (sidebarToggleBtn && infoSidebar) {
+  sidebarToggleBtn.addEventListener('click', () => {
+    infoSidebar.classList.add('open');
+    if (sidebarOverlay) {
+      sidebarOverlay.classList.remove('hide');
+    }
+  });
+}
+
+if (sidebarCloseBtn && infoSidebar) {
+  sidebarCloseBtn.addEventListener('click', () => {
+    infoSidebar.classList.remove('open');
+    if (sidebarOverlay) {
+      sidebarOverlay.classList.add('hide');
+    }
+  });
+}
+
+if (sidebarOverlay && infoSidebar) {
+  sidebarOverlay.addEventListener('click', () => {
+    infoSidebar.classList.remove('open');
+    sidebarOverlay.classList.add('hide');
   });
 }
