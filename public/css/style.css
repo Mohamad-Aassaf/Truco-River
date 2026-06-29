@@ -168,6 +168,8 @@ body {
   width: 100vw;
   height: 100vh;
   position: relative;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .screen.active {
@@ -182,6 +184,7 @@ body {
   padding: 35px;
   text-align: center;
   border: 2px solid var(--gold-dark);
+  margin: auto;
 }
 
 .rustic-title {
@@ -382,6 +385,7 @@ body {
   padding: 35px;
   text-align: center;
   border: 2px solid var(--gold-dark);
+  margin: auto;
 }
 
 .room-title {
@@ -1235,6 +1239,7 @@ body {
   text-align: center;
   border: 3px solid var(--gold);
   animation: zoomIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  margin: auto;
 }
 
 @keyframes zoomIn {
