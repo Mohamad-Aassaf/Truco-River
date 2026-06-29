@@ -1,0 +1,14 @@
+{
+  "name": "truco-river",
+  "version": "1.0.0",
+  "description": "Jogo de Truco Gaúcho Multiplayer 100% Funcional",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node testEngine.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

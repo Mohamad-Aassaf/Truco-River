@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Truco River</title>
+
+  <!-- Fontes Premium do Google -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Outfit:wght@300;400;600;800&display=swap"
+    rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- CSS Customizado -->
+  <link rel="stylesheet" href="/css/style.css?v=1.5">
+</head>
+
+<body>
+
+  <!-- CONTROLES FLUTUANTES DE ÁUDIO -->
+  <div class="audio-controls-panel">
+    <button id="toggle-audio-btn" class="audio-btn" title="Ligar/Desligar Som">
+      <i class="fa-solid fa-volume-high"></i>
+    </button>
+    <div class="volume-slider-container">
+      <i class="fa-solid fa-music text-xs"></i>
+      <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3">
+    </div>
+  </div>
+
+  <!-- TELA 1: LOBBY INICIAL / CONEXÃO -->
+  <div id="screen-lobby" class="screen active">
+    <div class="lobby-card glassmorphism">
+      <h1 class="rustic-title">Truco River</h1>
+
+      <div class="input-group">
+        <label for="username"><i class="fa-solid fa-user"></i> Nome do Jogador:</label>
+        <input type="text" id="username" placeholder="Ex: Jogador 1" maxlength="18">
+      </div>
+
+      <div class="input-group">
+        <label><i class="fa-solid fa-images"></i> Estilo das Cartas:</label>
+        <div class="deck-selector-container">
+          <button type="button" class="deck-option active" data-deck="traditional">Tradicional</button>
+          <button type="button" class="deck-option" data-deck="pixel">Pixel Art</button>
+        </div>
+        <div class="deck-preview-container">
+          <div class="deck-preview-card">
+            <img id="deck-preview-img" src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="Preview">
+          </div>
+        </div>
+      </div>
+
+      <div class="lobby-actions-container">
+        <!-- Criar Sala -->
+        <div class="lobby-action-box">
+          <h3>Criar Nova Partida</h3>
+          <div class="mode-select">
+            <button class="mode-btn active" data-mode="1v1">Individual (1v1)</button>
+            <button class="mode-btn" data-mode="2v2">Em Dupla (2v2)</button>
+          </div>
+          
+          <!-- Tipo de Acesso da Sala -->
+          <div class="option-title"><i class="fa-solid fa-lock-open"></i> Acesso da Sala:</div>
+          <div class="lobby-option-group" id="room-privacy-group">
+            <button type="button" class="lobby-toggle-btn active" data-private="false">Pública</button>
+            <button type="button" class="lobby-toggle-btn" data-private="true">Privada</button>
+          </div>
+
+          <!-- Limite de Pontos -->
+          <div class="option-title"><i class="fa-solid fa-star"></i> Limite de Pontos da Partida:</div>
+          <div class="lobby-option-group" id="room-points-group">
+            <button type="button" class="lobby-toggle-btn active" data-points="24">24 (Clássico)</button>
+            <button type="button" class="lobby-toggle-btn" data-points="30">30</button>
+            <button type="button" class="lobby-toggle-btn" data-points="custom">Custom</button>
+          </div>
+          
+          <div class="input-group hide" id="custom-points-input-group" style="margin-bottom: 12px;">
+            <input type="number" id="custom-points" placeholder="Ex: 18" min="1" max="100" value="24">
+          </div>
+
+          <div class="input-group">
+            <input type="text" id="new-room-id" placeholder="Código da Sala (Ex: SUL)" maxlength="6">
+          </div>
+          <button id="create-room-btn" class="btn btn-primary">Criar Sala</button>
+        </div>
+
+        <!-- Linha divisória -->
+        <div class="divider">ou</div>
+
+        <!-- Entrar em Sala -->
+        <div class="lobby-action-box">
+          <h3>Entrar em Sala</h3>
+          <div class="input-group">
+            <input type="text" id="join-room-id" placeholder="Código da Sala" maxlength="6">
+          </div>
+          <button id="join-room-btn" class="btn btn-secondary">Entrar na Sala</button>
+        </div>
+      </div>
+
+      <!-- Salas Disponíveis -->
+      <div class="available-rooms-section">
+        <h3>Salas no Lobby</h3>
+        <ul id="rooms-list" class="rooms-list">
+          <li class="empty-list-msg">Nenhuma sala criada no momento. Crie uma acima!</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELA 2: SALA DE ESPERA / PRE-GAME -->
+  <div id="screen-waiting" class="screen">
+    <div class="waiting-card glassmorphism">
+      <h2 id="waiting-room-title" class="room-title">Sala: ----</h2>
+      <p id="waiting-room-subtitle" class="room-subtitle">Modo: Individual</p>
+
+      <div class="lobby-slots">
+        <h3>Jogadores no Lobby:</h3>
+        <div id="players-lobby-list" class="players-lobby-list">
+          <!-- Jogadores renderizados dinamicamente -->
+        </div>
+      </div>
+
+      <div class="waiting-actions">
+        <button id="add-bot-btn" class="btn btn-info"><i class="fa-solid fa-robot"></i> Adicionar Bot</button>
+        <button id="ready-btn" class="btn btn-success"><i class="fa-solid fa-check"></i> Pronto</button>
+        <button id="leave-room-btn" class="btn btn-danger"><i class="fa-solid fa-arrow-right-from-bracket"></i>
+          Abandonar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELA 3: ARENA DE JOGO -->
+  <div id="screen-game" class="screen">
+    <div class="game-container">
+
+      <!-- LADO ESQUERDO: PAINEL DE INFORMAÇÕES E PLACAR -->
+      <div class="info-sidebar glassmorphism">
+        <div class="sidebar-header">
+          <button id="game-leave-btn" class="btn-sidebar-exit" title="Sair da partida e voltar ao lobby">
+            <i class="fa-solid fa-right-from-bracket"></i> Abandonar
+          </button>
+        </div>
+        
+        <h3 class="sidebar-title">Marcador de Pontos</h3>
+
+        <!-- Placar Numérico -->
+        <div class="scoreboard-digital">
+          <div class="team-score score-team0">
+            <span class="team-name">Nós (T0)</span>
+            <span id="score-val-team0" class="score-number">00</span>
+          </div>
+          <div class="vs-badge">VS</div>
+          <div class="team-score score-team1">
+            <span class="team-name">Eles (T1)</span>
+            <span id="score-val-team1" class="score-number">00</span>
+          </div>
+        </div>
+
+        <!-- Marcador Tradicional de Palitos (Pontos) Gaúchos -->
+        <div class="matchstick-tracker-container">
+          <div class="matchstick-box">
+            <h4>Nós (T0)</h4>
+            <div id="sticks-team0" class="sticks-grid">
+              <!-- Renderização de fósforos agrupados de 5 em 5 -->
+            </div>
+          </div>
+          <div class="matchstick-box">
+            <h4>Eles (T1)</h4>
+            <div id="sticks-team1" class="sticks-grid">
+              <!-- Renderização de fósforos -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Botoes e Logs de Fim de Mão -->
+        <div class="game-phase-indicator">
+          <span id="phase-badge" class="badge">Partida Iniciada</span>
+        </div>
+
+        <!-- LOGS DA PARTIDA -->
+        <div class="logs-container">
+          <h4>Narrativa da Partida</h4>
+          <div id="game-logs" class="game-logs">
+            <!-- Mensagens do servidor -->
+          </div>
+        </div>
+
+        <!-- CHAT DO LOBBY -->
+        <div class="chat-container">
+          <h4>Conversa do Lobby</h4>
+          <div id="chat-messages" class="chat-messages">
+            <!-- Mensagens do chat -->
+          </div>
+          <form id="chat-form" class="chat-form">
+            <input type="text" id="chat-input" placeholder="Conversar com os jogadores..." maxlength="60" autocomplete="off">
+            <button type="submit" id="chat-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+          </form>
+        </div>
+      </div>
+
+      <!-- LADO DIREITO: MESA DE JOGO -->
+      <div class="table-area">
+        <!-- BANNER DE ALERTA DE TURNO NO TOPO DA ARENA (TOTALMENTE FORA DA MESA) -->
+        <div id="game-alert-banner" class="game-alert-banner hide">
+          <span id="game-alert-text">É a sua vez, jogador!</span>
+        </div>
+
+        <!-- A MESA REDONDA -->
+        <div class="truco-table">
+          <div class="felt-surface"></div>
+
+          <!-- ASSENTOS DOS JOGADORES -->
+          <!-- Player 0: Bottom (Você) -->
+          <div id="seat-bottom" class="player-seat active-seat">
+            <div class="avatar-card">
+              <span class="seat-name">Você</span>
+              <span class="seat-role badge">Mão</span>
+            </div>
+            <div class="voice-bubble" id="bubble-bottom"></div>
+          </div>
+
+          <!-- Player 1: Top (No 1v1 é o oponente. No 2v2 é o parceiro) -->
+          <div id="seat-top" class="player-seat">
+            <div class="avatar-card">
+              <span class="seat-name">Oponente</span>
+              <span class="seat-role badge">Pé</span>
+            </div>
+            <div class="voice-bubble" id="bubble-top"></div>
+          </div>
+
+          <!-- Player 2: Left (Apenas no 2v2 - Oponente) -->
+          <div id="seat-left" class="player-seat hidden-seat">
+            <div class="avatar-card">
+              <span class="seat-name">Eles 1</span>
+              <span class="seat-role badge">Mão</span>
+            </div>
+            <div class="voice-bubble" id="bubble-left"></div>
+          </div>
+
+          <!-- Player 3: Right (Apenas no 2v2 - Oponente) -->
+          <div id="seat-right" class="player-seat hidden-seat">
+            <div class="avatar-card">
+              <span class="seat-name">Eles 2</span>
+              <span class="seat-role badge">Pé</span>
+            </div>
+            <div class="voice-bubble" id="bubble-right"></div>
+          </div>
+
+          <!-- CENTRO DA MESA: DECK E CARTAS JOGADAS -->
+          <div class="table-center">
+
+            <!-- Monte de Cartas (Baralho de Amostra/Decoração) -->
+            <div class="card-deck-stack">
+              <div class="deck-card back"></div>
+              <div class="deck-card back"></div>
+              <div class="deck-card back"></div>
+            </div>
+
+            <!-- Cartas Jogadas por Rodada -->
+            <div class="played-cards-arena">
+              <!-- Cartas jogadas na rodada 1 -->
+              <div class="vaza-row" data-vaza="0">
+                <div class="vaza-label">1ª Rodada</div>
+                <div class="vaza-winner" id="vaza-winner-0"></div>
+                <div class="vaza-slots">
+                  <div class="played-card-slot" id="slot-v0-bottom"></div>
+                  <div class="played-card-slot" id="slot-v0-left"></div>
+                  <div class="played-card-slot" id="slot-v0-top"></div>
+                  <div class="played-card-slot" id="slot-v0-right"></div>
+                </div>
+              </div>
+
+              <!-- Cartas jogadas na rodada 2 -->
+              <div class="vaza-row" data-vaza="1">
+                <div class="vaza-label">2ª Rodada</div>
+                <div class="vaza-winner" id="vaza-winner-1"></div>
+                <div class="vaza-slots">
+                  <div class="played-card-slot" id="slot-v1-bottom"></div>
+                  <div class="played-card-slot" id="slot-v1-left"></div>
+                  <div class="played-card-slot" id="slot-v1-top"></div>
+                  <div class="played-card-slot" id="slot-v1-right"></div>
+                </div>
+              </div>
+
+              <!-- Cartas jogadas na rodada 3 -->
+              <div class="vaza-row" data-vaza="2">
+                <div class="vaza-label">3ª Rodada</div>
+                <div class="vaza-winner" id="vaza-winner-2"></div>
+                <div class="vaza-slots">
+                  <div class="played-card-slot" id="slot-v2-bottom"></div>
+                  <div class="played-card-slot" id="slot-v2-left"></div>
+                  <div class="played-card-slot" id="slot-v2-top"></div>
+                  <div class="played-card-slot" id="slot-v2-right"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- CONTROLE DE CARTAS DO JOGADOR (SUA MÃO) -->
+          <div class="player-hand-container">
+            <div id="player-hand" class="player-hand">
+              <!-- Cartas do próprio jogador renderizadas com SVG/CSS 3D -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- PAINEL DE BOTÕES DE AÇÃO DO JOGADOR -->
+        <div id="action-panel" class="action-panel">
+          <!-- Banner explicativo de vez -->
+          <div id="action-panel-status" class="action-panel-status hide">Vez do adversário...</div>
+          <!-- Apostas Normais de Truco -->
+          <div class="action-group" id="group-truco">
+            <button id="btn-truco" class="action-btn btn-truco">Truco!</button>
+            <button id="btn-retruco" class="action-btn btn-truco hide">Retruco!</button>
+            <button id="btn-vale4" class="action-btn btn-truco hide">Vale 4!</button>
+          </div>
+
+          <!-- Apostas de Envido -->
+          <div class="action-group" id="group-envido">
+            <button id="btn-envido" class="action-btn btn-envido">Envido</button>
+            <button id="btn-real-envido" class="action-btn btn-envido">Real Envido</button>
+            <button id="btn-falta-envido" class="action-btn btn-envido">Falta Envido</button>
+          </div>
+
+          <!-- Canto de Flor -->
+          <div class="action-group" id="group-flor">
+            <button id="btn-flor" class="action-btn btn-flor">Flor!</button>
+          </div>
+
+          <!-- Respostas Contextuais (Quero/Não Quero) -->
+          <div class="action-group hide" id="group-response">
+            <button id="btn-quero" class="action-btn btn-success">Quero!</button>
+            <button id="btn-nao-quero" class="action-btn btn-danger">Não Quero!</button>
+          </div>
+
+          <!-- Respostas Especiais de Flor (Contra-Flor) -->
+          <div class="action-group hide" id="group-flor-response">
+            <button id="btn-contra-flor" class="action-btn btn-flor">Contra-Flor!</button>
+            <button id="btn-contra-flor-resto" class="action-btn btn-flor">Contra-Flor e o Resto!</button>
+            <button id="btn-achique" class="action-btn btn-danger">Achique!</button>
+          </div>
+
+          <!-- Ir ao Baralho -->
+          <div class="action-group">
+            <button id="btn-fold" class="action-btn btn-dark">Ir ao Baralho (Mazo)</button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TELA 4: OVERLAY DE FIM DE JOGO -->
+  <div id="screen-game-end" class="screen">
+    <div class="game-end-card glassmorphism">
+      <i class="fa-solid fa-trophy trophy-icon animate-bounce"></i>
+      <h2 id="victory-title" class="victory-title">TIME 0 VENCEU!</h2>
+      <p class="victory-subtitle">Parabéns aos novos campeões do truco!</p>
+
+      <div class="final-score-box">
+        <div class="final-score">
+          <span>Time 0 (Nós):</span>
+          <strong id="final-score-t0">24</strong>
+        </div>
+        <div class="final-score">
+          <span>Time 1 (Eles):</span>
+          <strong id="final-score-t1">15</strong>
+        </div>
+      </div>
+
+      <button id="restart-game-btn" class="btn btn-primary btn-large">Jogar Novamente</button>
+    </div>
+  </div>
+
+  <!-- BIBLIOTECAS CLIENTE -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/sound.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+
+</html>
