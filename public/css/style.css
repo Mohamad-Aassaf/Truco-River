@@ -1451,7 +1451,8 @@ body {
     box-sizing: border-box;
     overflow: hidden;
     display: flex;
-    justify-content: center;
+    flex-direction: column; /* Layout vertical no celular */
+    justify-content: flex-start; /* Alinha os itens no topo */
     align-items: center;
     position: relative;
   }
@@ -1537,12 +1538,12 @@ body {
   /* Mesa e Elementos Internos */
   .truco-table {
     flex: none;
-    width: 90vw;
-    max-width: 400px;
+    width: 82vw;
+    max-width: 320px;
     height: auto !important;
     aspect-ratio: 1 / 1;
-    margin: 20px auto 0 auto; /* Empurra para baixo do cabeçalho */
-    border-width: 10px;
+    margin: 10px auto 0 auto; /* Empurra para baixo do cabeçalho */
+    border-width: 8px;
     border-radius: 50%;
   }
   
@@ -1616,8 +1617,11 @@ body {
   
   /* Mão do Jogador */
   .player-hand-container {
-    bottom: 10px;
-    width: 250px;
+    bottom: 110px; /* Posicionado acima dos botões */
+    width: 260px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 250;
   }
   
   .player-hand {
@@ -1642,12 +1646,15 @@ body {
   }
   
   .action-panel {
-    bottom: 120px; /* Posiciona logo acima das cartas totalmente visíveis */
+    bottom: 15px; /* Posição fixa na base da tela */
     padding: 8px 10px;
     gap: 6px;
     border-radius: 12px;
     max-width: 96%;
     min-height: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 350;
   }
   
   .action-btn {
