@@ -39,6 +39,8 @@ class SoundManager {
       this.bgMusic = null;
     }
 
+    if (!newPath) return;
+
     if (this.audioCtx) {
       this.bgMusic = new Audio(this.bgMusicPath);
       this.bgMusic.loop = true;

@@ -469,7 +469,7 @@ socket.on('game_state', (gameState) => {
   } else if (gameState.state === 'playing' || gameState.state === 'hand_end') {
     renderGameScreen(gameState);
     if (window.soundManager) {
-      window.soundManager.changeMusic('/js/musga.mp3');
+      window.soundManager.changeMusic(null);
     }
   } else if (gameState.state === 'game_end') {
     // Renderiza a mesa de jogo para mostrar o estado final do jogo por 6 segundos
@@ -479,7 +479,7 @@ socket.on('game_state', (gameState) => {
       gameEndTimeout = null;
     }, 6000);
     if (window.soundManager) {
-      window.soundManager.changeMusic('/js/musga.mp3');
+      window.soundManager.changeMusic(null);
     }
   }
 });
