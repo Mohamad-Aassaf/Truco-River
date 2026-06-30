@@ -1480,7 +1480,14 @@ body {
   }
   
   #seat-bottom {
-    bottom: 5px;
+    bottom: 115px;
+    left: 15px;
+    transform: none;
+  }
+  #seat-bottom .voice-bubble {
+    bottom: 175px;
+    left: 15px;
+    transform: none;
   }
   
   #seat-left {
@@ -1536,13 +1543,13 @@ body {
   
   /* Mão do Jogador */
   .player-hand-container {
-    bottom: -70px;
-    width: 200px;
+    bottom: 10px;
+    width: 250px;
   }
   
   .player-hand {
-    height: 120px;
-    gap: -15px;
+    height: 100px;
+    gap: -12px;
   }
   
   .card {
@@ -1561,9 +1568,8 @@ body {
     height: 24px;
   }
   
-  /* Painel de Ações */
   .action-panel {
-    bottom: 80px; /* Posiciona logo acima das pontas das cartas */
+    bottom: 120px; /* Posiciona logo acima das cartas totalmente visíveis */
     padding: 8px 10px;
     gap: 6px;
     border-radius: 12px;
@@ -2109,11 +2115,13 @@ body[data-deck-style="pixel"] .card.hidden {
 }
 
 /* --- GOOGLE ADSENSE SIDEBARS (LOBBY) --- */
-#screen-lobby {
-  gap: 30px;
-  padding: 20px;
+#screen-lobby.active {
+  display: flex;
+  justify-content: center;
   align-items: center;
-  overflow-x: hidden;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
 }
 
 .lobby-ad-side {
@@ -2131,10 +2139,25 @@ body[data-deck-style="pixel"] .card.hidden {
   font-style: italic;
   flex-shrink: 0;
   text-align: center;
+  z-index: 10;
 }
 
-/* Ocultar anúncios em telas pequenas para preservar a área central do jogo */
-@media (max-width: 1150px) {
+.lobby-ad-side.left-ad {
+  position: fixed;
+  left: 25px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.lobby-ad-side.right-ad {
+  position: fixed;
+  right: 25px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Ocultar anúncios se a tela for menor que 1250px para não prejudicar o layout central */
+@media (max-width: 1250px) {
   .lobby-ad-side {
     display: none !important;
   }
