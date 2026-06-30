@@ -70,6 +70,15 @@ const sidebarOverlay = document.getElementById('sidebar-overlay');
 const mobileScoreUs = document.getElementById('mobile-score-us');
 const mobileScoreThem = document.getElementById('mobile-score-them');
 
+// Novos Controles de Configurações Mobile
+const mobileSettingsToggleBtn = document.getElementById('mobile-settings-toggle-btn');
+const modalMobileSettings = document.getElementById('modal-mobile-settings');
+const closeMobileSettings = document.getElementById('close-mobile-settings');
+const mobileMuteBtn = document.getElementById('mobile-mute-btn');
+const mobileVolumeSlider = document.getElementById('mobile-volume-slider');
+const mobileVoiceBtn = document.getElementById('mobile-voice-btn');
+const mobileAdminBtn = document.getElementById('mobile-admin-btn');
+
 const seatBottom = document.getElementById('seat-bottom');
 const seatTop = document.getElementById('seat-top');
 const seatLeft = document.getElementById('seat-left');
@@ -99,6 +108,15 @@ const groupEnvido = document.getElementById('group-envido');
 const groupFlor = document.getElementById('group-flor');
 const groupResponse = document.getElementById('group-response');
 const groupFlorResponse = document.getElementById('group-flor-response');
+
+// Novos Elementos do Envido Mobile
+const btnEnvidoMobileTrigger = document.getElementById('btn-envido-mobile-trigger');
+const groupEnvidoMobileSub = document.getElementById('group-envido-mobile-sub');
+const btnEnvidoSubEnvido = document.getElementById('btn-envido-sub-envido');
+const btnRealEnvidoSubReal = document.getElementById('btn-envido-sub-real');
+const btnFaltaEnvidoSubFalta = document.getElementById('btn-envido-sub-falta');
+const btnEnvidoSubFlor = document.getElementById('btn-envido-sub-flor');
+const btnEnvidoSubBack = document.getElementById('btn-envido-sub-back');
 
 // Elementos do Chat e Sair da Partida
 const chatMessages = document.getElementById('chat-messages');
@@ -1225,6 +1243,50 @@ function setupActionButtons(gameState) {
     // Mazo (Sempre ativo no turno)
     showAndEnableButton(btnFold);
   }
+
+  // --- ADAPTAÇÃO DO ENVIDO/FLOR PARA CELULAR ---
+  const isMobile = window.innerWidth <= 850;
+  if (isMobile) {
+    // 1. Oculta os botões normais do desktop
+    groupEnvido.classList.add('hide');
+    groupFlor.classList.add('hide');
+
+    // 2. Verifica se existia alguma opção de Envido ou Flor ativa no painel
+    const hasEnvidoOption = !btnEnvido.classList.contains('hide') || 
+                             !btnRealEnvido.classList.contains('hide') || 
+                             !btnFaltaEnvido.classList.contains('hide');
+    const hasFlorOption = !btnFlor.classList.contains('hide');
+
+    if (hasEnvidoOption || hasFlorOption) {
+      // 3. Exibe apenas o botão gatilho no mobile
+      if (btnEnvidoMobileTrigger) {
+        btnEnvidoMobileTrigger.classList.remove('hide');
+        btnEnvidoMobileTrigger.disabled = false;
+      }
+      
+      // 4. Copia os estados ativos/inativos dos botões reais para o sub-menu
+      const updateSubMenuButton = (desktopBtn, subBtn) => {
+        if (!desktopBtn || !subBtn) return;
+        if (desktopBtn.classList.contains('hide')) {
+          subBtn.classList.add('hide');
+        } else {
+          subBtn.classList.remove('hide');
+          subBtn.disabled = desktopBtn.disabled;
+        }
+      };
+
+      updateSubMenuButton(btnEnvido, btnEnvidoSubEnvido);
+      updateSubMenuButton(btnRealEnvido, btnRealEnvidoSubReal);
+      updateSubMenuButton(btnFaltaEnvido, btnFaltaEnvidoSubFalta);
+      updateSubMenuButton(btnFlor, btnEnvidoSubFlor);
+    } else {
+      if (btnEnvidoMobileTrigger) btnEnvidoMobileTrigger.classList.add('hide');
+      if (groupEnvidoMobileSub) groupEnvidoMobileSub.classList.add('hide');
+    }
+  } else {
+    if (btnEnvidoMobileTrigger) btnEnvidoMobileTrigger.classList.add('hide');
+    if (groupEnvidoMobileSub) groupEnvidoMobileSub.classList.add('hide');
+  }
 }
 
 function disableAllActionButtons(gameState) {
@@ -1238,27 +1300,31 @@ function disableAllActionButtons(gameState) {
   btnContraFlorResto.classList.add('hide');
   btnAchique.classList.add('hide');
 
-  // Mostrar os botões padrão de ações, mas desativados
-  groupTruco.classList.remove('hide');
-  btnTruco.classList.remove('hide');
+  // Esconder por padrão
+  groupTruco.classList.add('hide');
+  btnTruco.classList.add('hide');
   btnTruco.disabled = true;
-  btnRetruco.classList.add('hide'); // Esconder aumentos do oponente
+  btnRetruco.classList.add('hide');
   btnVale4.classList.add('hide');
 
-  groupEnvido.classList.remove('hide');
-  btnEnvido.classList.remove('hide');
+  groupEnvido.classList.add('hide');
+  btnEnvido.classList.add('hide');
   btnEnvido.disabled = true;
-  btnRealEnvido.classList.remove('hide');
+  btnRealEnvido.classList.add('hide');
   btnRealEnvido.disabled = true;
-  btnFaltaEnvido.classList.remove('hide');
+  btnFaltaEnvido.classList.add('hide');
   btnFaltaEnvido.disabled = true;
 
-  groupFlor.classList.remove('hide');
-  btnFlor.classList.remove('hide');
+  groupFlor.classList.add('hide');
+  btnFlor.classList.add('hide');
   btnFlor.disabled = true;
 
-  btnFold.classList.remove('hide');
+  btnFold.classList.add('hide');
   btnFold.disabled = true;
+
+  // Esconder botões mobile por padrão
+  if (btnEnvidoMobileTrigger) btnEnvidoMobileTrigger.classList.add('hide');
+  if (groupEnvidoMobileSub) groupEnvidoMobileSub.classList.add('hide');
 
   // Mostrar status de vez do adversário
   const statusEl = document.getElementById('action-panel-status');
@@ -1329,10 +1395,55 @@ btnContraFlor.addEventListener('click', () => socket.emit('game_action', { actio
 btnContraFlorResto.addEventListener('click', () => socket.emit('game_action', { action: 'flor_response', value: 'contra_flor_resto' }));
 btnAchique.addEventListener('click', () => socket.emit('game_action', { action: 'flor_response', value: 'nao_quero' }));
 
-// Ir ao baralho
 btnFold.addEventListener('click', () => {
   socket.emit('game_action', { action: 'fold' });
 });
+
+// --- ENVIDO MOBILE SUB-MENU INTERACTION ---
+if (btnEnvidoMobileTrigger) {
+  btnEnvidoMobileTrigger.addEventListener('click', () => {
+    groupTruco.classList.add('hide');
+    groupResponse.classList.add('hide');
+    groupFlorResponse.classList.add('hide');
+    btnFold.classList.add('hide');
+    btnEnvidoMobileTrigger.classList.add('hide');
+    groupEnvidoMobileSub.classList.remove('hide');
+  });
+}
+
+if (btnEnvidoSubBack) {
+  btnEnvidoSubBack.addEventListener('click', () => {
+    groupEnvidoMobileSub.classList.add('hide');
+    if (lastGameState) {
+      setupActionButtons(lastGameState);
+    }
+  });
+}
+
+if (btnEnvidoSubEnvido) {
+  btnEnvidoSubEnvido.addEventListener('click', () => {
+    btnEnvido.click();
+    groupEnvidoMobileSub.classList.add('hide');
+  });
+}
+if (btnRealEnvidoSubReal) {
+  btnRealEnvidoSubReal.addEventListener('click', () => {
+    btnRealEnvido.click();
+    groupEnvidoMobileSub.classList.add('hide');
+  });
+}
+if (btnFaltaEnvidoSubFalta) {
+  btnFaltaEnvidoSubFalta.addEventListener('click', () => {
+    btnFaltaEnvido.click();
+    groupEnvidoMobileSub.classList.add('hide');
+  });
+}
+if (btnEnvidoSubFlor) {
+  btnEnvidoSubFlor.addEventListener('click', () => {
+    btnFlor.click();
+    groupEnvidoMobileSub.classList.add('hide');
+  });
+}
 
 // --- RENDERIZAÇÃO DA TELA DE VITÓRIA ---
 
@@ -1632,5 +1743,69 @@ if (sidebarOverlay && infoSidebar) {
   sidebarOverlay.addEventListener('click', () => {
     infoSidebar.classList.remove('open');
     sidebarOverlay.classList.add('hide');
+  });
+}
+
+// Controles de Configurações Mobile
+if (mobileSettingsToggleBtn) {
+  mobileSettingsToggleBtn.addEventListener('click', () => {
+    initAudioContext();
+    if (modalMobileSettings) {
+      modalMobileSettings.classList.remove('hide');
+      if (window.soundManager) {
+        if (window.soundManager.muted) {
+          mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+        } else {
+          mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+        }
+        mobileVolumeSlider.value = window.soundManager.musicVolume;
+      }
+    }
+  });
+}
+
+if (closeMobileSettings) {
+  closeMobileSettings.addEventListener('click', () => {
+    modalMobileSettings.classList.add('hide');
+  });
+}
+
+if (mobileMuteBtn) {
+  mobileMuteBtn.addEventListener('click', () => {
+    initAudioContext();
+    window.soundManager.toggleMute();
+    if (window.soundManager.muted) {
+      mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+      audioBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+    } else {
+      mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+      audioBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    }
+  });
+}
+
+if (mobileVolumeSlider) {
+  mobileVolumeSlider.addEventListener('input', (e) => {
+    initAudioContext();
+    const vol = parseFloat(e.target.value);
+    window.soundManager.setMusicVolume(vol);
+    const desktopSlider = document.getElementById('music-volume');
+    if (desktopSlider) desktopSlider.value = vol;
+  });
+}
+
+if (mobileVoiceBtn) {
+  mobileVoiceBtn.addEventListener('click', () => {
+    modalMobileSettings.classList.add('hide');
+    const voiceSettingsBtn = document.getElementById('voice-settings-btn');
+    if (voiceSettingsBtn) voiceSettingsBtn.click();
+  });
+}
+
+if (mobileAdminBtn) {
+  mobileAdminBtn.addEventListener('click', () => {
+    modalMobileSettings.classList.add('hide');
+    const adminPanelBtn = document.getElementById('admin-panel-btn');
+    if (adminPanelBtn) adminPanelBtn.click();
   });
 }

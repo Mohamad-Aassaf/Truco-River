@@ -21,7 +21,7 @@
      crossorigin="anonymous"></script>
 
   <!-- CSS Customizado -->
-  <link rel="stylesheet" href="/css/style.css?v=1.8">
+  <link rel="stylesheet" href="/css/style.css?v=1.9">
 </head>
 
 <body>
@@ -265,16 +265,21 @@
       <div class="table-area">
         <!-- BOTÕES E INFO EXCLUSIVOS PARA MOBILE -->
         <div class="mobile-header-bar mobile-only">
-          <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Ver Placar e Chat">
-            <i class="fa-solid fa-bars"></i>
-          </button>
+          <div class="mobile-header-left" style="display: flex; gap: 8px; align-items: center;">
+            <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Ver Placar e Chat">
+              <i class="fa-solid fa-bars"></i>
+            </button>
+            <button id="mobile-settings-toggle-btn" class="sidebar-toggle-btn" title="Ajustes do Jogo">
+              <i class="fa-solid fa-gear"></i>
+            </button>
+          </div>
           <div class="mobile-score-badge">
             <span class="mobile-score-lbl">Placar:</span>
             <span class="score-team score-team0" id="mobile-score-us">00</span>
             <span class="score-vs">x</span>
             <span class="score-team score-team1" id="mobile-score-them">00</span>
           </div>
-          <div style="width: 40px;"></div> <!-- Espaçador para equilibrar o layout -->
+          <div style="width: 80px;"></div> <!-- Espaçador para equilibrar o layout -->
         </div>
 
         <!-- BANNER DE ALERTA DE TURNO NO TOPO DA ARENA (TOTALMENTE FORA DA MESA) -->
@@ -423,6 +428,18 @@
           <div class="action-group">
             <button id="btn-fold" class="action-btn btn-dark">Ir ao Baralho (Mazo)</button>
           </div>
+
+          <!-- Botão Principal de Envido/Flor (Mobile Only) -->
+          <button id="btn-envido-mobile-trigger" class="action-btn btn-envido mobile-only hide">Envido / Flor...</button>
+
+          <!-- Sub-grupo de Envido/Flor (Mobile Only) -->
+          <div id="group-envido-mobile-sub" class="action-group mobile-only hide" style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;">
+            <button id="btn-envido-sub-envido" class="action-btn btn-envido hide">Envido</button>
+            <button id="btn-envido-sub-real" class="action-btn btn-envido hide">Real Envido</button>
+            <button id="btn-envido-sub-falta" class="action-btn btn-envido hide">Falta Envido</button>
+            <button id="btn-envido-sub-flor" class="action-btn btn-flor hide">Flor</button>
+            <button id="btn-envido-sub-back" class="action-btn btn-dark"><i class="fa-solid fa-arrow-left"></i> Voltar</button>
+          </div>
         </div>
 
       </div>
@@ -449,6 +466,39 @@
       </div>
 
       <button id="restart-game-btn" class="btn btn-primary btn-large">Jogar Novamente</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIGURAÇÕES MÓVEIS (MOBILE ONLY) -->
+  <div id="modal-mobile-settings" class="modal-overlay hide">
+    <div class="modal-card" style="max-width: 320px;">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-gear"></i> Ajustes do Jogo</h2>
+        <button id="close-mobile-settings" class="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Controle de Som (Volume) -->
+        <div class="settings-section">
+          <label style="font-weight: 600; font-size: 0.9rem; color: var(--gold); display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: 'Outfit', sans-serif;">
+            <i class="fa-solid fa-volume-high"></i> Volume Geral
+          </label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button id="mobile-mute-btn" class="btn btn-sm btn-secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; justify-content: center; align-items: center;">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <input type="range" id="mobile-volume-slider" min="0" max="1" step="0.1" value="0.3" style="flex: 1; accent-color: var(--gold); height: 5px;">
+          </div>
+        </div>
+
+        <!-- Botões de Ação de Configurações -->
+        <button id="mobile-voice-btn" class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+          <i class="fa-solid fa-microphone"></i> Configurar Vozes
+        </button>
+
+        <button id="mobile-admin-btn" class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+          <i class="fa-solid fa-screwdriver-wrench"></i> Painel Admin
+        </button>
+      </div>
     </div>
   </div>
 
