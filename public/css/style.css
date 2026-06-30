@@ -117,43 +117,52 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(223, 177, 91, 0.3);
+  background: none;
+  border: none;
+  padding: 0;
 }
 
 .audio-btn {
-  background: none;
-  border: none;
+  background: rgba(10, 6, 3, 0.65);
+  border: 1.5px solid rgba(223, 177, 91, 0.35);
   color: var(--gold);
   font-size: 1.1rem;
   cursor: pointer;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   display: flex;
   justify-content: center;
   align-items: center;
   border-radius: 50%;
-  transition: background 0.3s;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
 .audio-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(223, 177, 91, 0.2);
+  border-color: rgba(223, 177, 91, 0.75);
+  transform: scale(1.05);
 }
 
 .volume-slider-container {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: #ccc;
   width: 0;
   overflow: hidden;
-  transition: width 0.4s;
+  transition: width 0.4s ease, padding 0.4s ease;
+  background: rgba(10, 6, 3, 0.75);
+  border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  padding: 0; /* Começa com zero para não mostrar borda vazia */
+  border: 0 solid transparent;
 }
 
 .audio-controls-panel:hover .volume-slider-container {
-  width: 90px;
+  width: 100px;
+  padding: 6px 12px;
+  border: 1px solid rgba(223, 177, 91, 0.35);
 }
 
 .volume-slider-container input[type="range"] {
@@ -507,7 +516,67 @@ body {
   flex-shrink: 0;
 }
 
-/* Placar Digital */
+/* Painel Unificado de Pontuação */
+.scoreboard-card {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  border: 1px solid rgba(223, 177, 91, 0.15);
+  padding: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.score-mode-selector {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 10px;
+  gap: 4px;
+  border: 1px solid rgba(223, 177, 91, 0.1);
+}
+
+.score-mode-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #999;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.score-mode-btn:hover {
+  color: #ddd;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.score-mode-btn.active {
+  color: var(--wood-dark);
+  background: var(--gold);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.score-view-pane {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.score-view-pane.hide {
+  display: none !important;
+}
+
 .scoreboard-digital {
   display: flex;
   align-items: center;
@@ -516,7 +585,7 @@ body {
   border-radius: 12px;
   padding: 10px;
   border: 1px solid rgba(223, 177, 91, 0.2);
-  margin-bottom: 12px;
+  margin-bottom: 0;
   flex-shrink: 0;
 }
 
@@ -557,17 +626,15 @@ body {
   opacity: 0.6;
 }
 
-/* Rastreador de Palitos (Tentos) Gaúchos */
 .matchstick-tracker-container {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  background: rgba(0,0,0,0.3);
-  padding: 15px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.05);
+  background: none;
+  padding: 5px 0 0 0;
+  border: none;
   flex-grow: 0;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .matchstick-box {
@@ -726,7 +793,7 @@ body {
   flex: 1;
   position: relative;
   margin: 15px;
-  margin-bottom: 185px; /* Aumentado para acomodar a mão e botões flutuantes abaixo */
+  margin-bottom: 295px; /* Aumentado para acomodar a mão e botões flutuantes abaixo no PC */
   border-radius: 50% / 40%;
   background: radial-gradient(circle, #1a7a42 0%, #0d3d20 100%);
   border: 24px solid var(--felt-border);
@@ -815,12 +882,15 @@ body {
 
 /* Posições dos assentos baseados na perspectiva do jogador local (Bottom) */
 #seat-bottom {
-  bottom: -20px;
+  bottom: 15px;
   left: 50%;
   transform: translateX(-50%);
 }
 #seat-bottom .voice-bubble {
-  bottom: 165px;
+  top: -55px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: auto;
 }
 
 #seat-top {
@@ -902,7 +972,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-around;
-  padding: 10px 40px 10px 120px; /* espaço para o deck à esquerda */
+  padding: 10px 40px 10px 155px; /* espaço para o deck à esquerda aumentado no PC */
 }
 
 .vaza-row {
@@ -977,11 +1047,11 @@ body {
 /* --- MÃO DO JOGADOR LOCAL --- */
 .player-hand-container {
   position: absolute;
-  bottom: -125px;
+  bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 250; /* Sempre no topo das cartas na mesa e painel de botões */
-  width: 450px;
+  width: 380px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -992,14 +1062,14 @@ body {
   display: flex;
   justify-content: center;
   gap: -12px; /* Sobreposição de cartas */
-  height: 240px;
+  height: 190px;
   align-items: flex-end;
 }
 
 /* --- CARTAS (ESTRUTURA DE IMAGEM DO BARALHO) --- */
 .card {
-  width: 140px;
-  height: 210px;
+  width: 120px;
+  height: 180px;
   background: #1c2833;
   border-radius: 10px;
   border: 2px solid var(--gold-dark);
@@ -1138,7 +1208,7 @@ body {
 /* --- PAINEL DE BOTÕES DE AÇÃO FLUTUANTE (NÃO TAPA AS CARTAS) --- */
 .action-panel {
   position: absolute;
-  bottom: 12px;
+  bottom: 205px; /* Elevado acima das cartas totalmente visíveis do PC */
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.9);

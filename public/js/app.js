@@ -214,7 +214,44 @@ deckOptions.forEach(btn => {
   });
 });
 
-// Chamar no carregamento
+// --- ALTERNADOR DO MARCADOR DE PONTOS (PLACAR VS PALITOS) ---
+const btnScoreDigital = document.getElementById('btn-score-digital');
+const btnScoreSticks = document.getElementById('btn-score-sticks');
+const viewScoreDigital = document.getElementById('view-score-digital');
+const viewScoreSticks = document.getElementById('view-score-sticks');
+
+let currentScoreView = localStorage.getItem('truco_score_view') || 'digital';
+
+function updateScoreViewMode() {
+  if (!btnScoreDigital || !btnScoreSticks) return;
+  if (currentScoreView === 'sticks') {
+    btnScoreSticks.classList.add('active');
+    btnScoreDigital.classList.remove('active');
+    viewScoreSticks.classList.remove('hide');
+    viewScoreDigital.classList.add('hide');
+  } else {
+    btnScoreDigital.classList.add('active');
+    btnScoreSticks.classList.remove('active');
+    viewScoreDigital.classList.remove('hide');
+    viewScoreSticks.classList.add('hide');
+  }
+}
+
+if (btnScoreDigital && btnScoreSticks) {
+  btnScoreDigital.addEventListener('click', () => {
+    currentScoreView = 'digital';
+    localStorage.setItem('truco_score_view', currentScoreView);
+    updateScoreViewMode();
+  });
+
+  btnScoreSticks.addEventListener('click', () => {
+    currentScoreView = 'sticks';
+    localStorage.setItem('truco_score_view', currentScoreView);
+    updateScoreViewMode();
+  });
+}
+
+updateScoreViewMode();
 updateDeckPreview();
 updateBodyDeckStyle();
 
@@ -607,12 +644,12 @@ function renderGameScreen(gameState) {
       const ptsText = summary.pointsWon === 1 ? '1 ponto' : `${summary.pointsWon} pontos`;
       if (isWinner) {
         gameAlertText.innerHTML = `
-          <div style="color: #2ecc71; font-weight: 800; text-shadow: 0 0 10px rgba(46, 204, 113, 0.4); font-size: 1.4rem;">¡GANHAMOS A RODADA! (+${ptsText})</div>
+          <div style="color: #2ecc71; font-weight: 800; text-shadow: 0 0 10px rgba(46, 204, 113, 0.4); font-size: 1.4rem;">¡VENCEMOS A MÃO! (+${ptsText})</div>
           <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
         `;
       } else {
         gameAlertText.innerHTML = `
-          <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.4); font-size: 1.4rem;">¡ELES GANHARAM A RODADA! (+${ptsText})</div>
+          <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.4); font-size: 1.4rem;">¡ELES VENCERAM A MÃO! (+${ptsText})</div>
           <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
         `;
       }

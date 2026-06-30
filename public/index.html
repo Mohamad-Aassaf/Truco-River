@@ -189,31 +189,47 @@
 
         <h3 class="sidebar-title">Marcador de Pontos</h3>
 
-        <!-- Placar Numérico -->
-        <div class="scoreboard-digital">
-          <div class="team-score score-team0">
-            <span class="team-name">Nós (T0)</span>
-            <span id="score-val-team0" class="score-number">00</span>
+        <!-- Painel Unificado de Pontuação com Alternador -->
+        <div class="scoreboard-card">
+          <div class="score-mode-selector">
+            <button id="btn-score-digital" class="score-mode-btn active" title="Placar Digital">
+              <i class="fa-solid fa-calculator"></i> Placar
+            </button>
+            <button id="btn-score-sticks" class="score-mode-btn" title="Palitos Tradicionais">
+              <i class="fa-solid fa-grip-lines-vertical"></i> Palitos
+            </button>
           </div>
-          <div class="vs-badge">VS</div>
-          <div class="team-score score-team1">
-            <span class="team-name">Eles (T1)</span>
-            <span id="score-val-team1" class="score-number">00</span>
-          </div>
-        </div>
 
-        <!-- Marcador Tradicional de Palitos (Pontos) Gaúchos -->
-        <div class="matchstick-tracker-container">
-          <div class="matchstick-box">
-            <h4>Nós (T0)</h4>
-            <div id="sticks-team0" class="sticks-grid">
-              <!-- Renderização de fósforos agrupados de 5 em 5 -->
+          <!-- Pane 1: Placar Numérico -->
+          <div id="view-score-digital" class="score-view-pane">
+            <div class="scoreboard-digital">
+              <div class="team-score score-team0">
+                <span class="team-name">Nós (T0)</span>
+                <span id="score-val-team0" class="score-number">00</span>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="team-score score-team1">
+                <span class="team-name">Eles (T1)</span>
+                <span id="score-val-team1" class="score-number">00</span>
+              </div>
             </div>
           </div>
-          <div class="matchstick-box">
-            <h4>Eles (T1)</h4>
-            <div id="sticks-team1" class="sticks-grid">
-              <!-- Renderização de fósforos -->
+
+          <!-- Pane 2: Marcador Tradicional de Palitos -->
+          <div id="view-score-sticks" class="score-view-pane hide">
+            <div class="matchstick-tracker-container">
+              <div class="matchstick-box">
+                <h4>Nós (T0)</h4>
+                <div id="sticks-team0" class="sticks-grid">
+                  <!-- Renderização de fósforos agrupados de 5 em 5 -->
+                </div>
+              </div>
+              <div class="matchstick-box">
+                <h4>Eles (T1)</h4>
+                <div id="sticks-team1" class="sticks-grid">
+                  <!-- Renderização de fósforos -->
+                </div>
+              </div>
             </div>
           </div>
         </div>
