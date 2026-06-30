@@ -1,0 +1,94 @@
+================================================================================
+                    REGRAS OFICIAIS DO TRUCO GAÚCHO & DIRETRIZES
+================================================================================
+
+Este arquivo serve como documentação de referência para o motor de jogo, regras e
+arquitetura de responsividade. NÃO ALTERE ou remova estas regras sem validar a
+coerência das rodadas e as jogadas dos bots.
+
+--------------------------------------------------------------------------------
+1. HIERARQUIA DAS CARTAS (Do maior para o menor rank)
+--------------------------------------------------------------------------------
+Rank | Carta                | Apelido Gaúcho | Valor no Envido
+-----|----------------------|----------------|----------------
+14   | 1 de Espadas         | Espadilha      | 1
+13   | 1 de Paus            | Bastião        | 1
+12   | 7 de Espadas         | Manilha/Sete   | 7
+11   | 7 de Ouros           | Sete de Ouros  | 7
+10   | Todos os 3           | Sete Cobiçado  | 3
+9    | Todos os 2           | Sete Cobiçado  | 2
+8    | 1 de Copas / 1 Ouros | Ancho Falso    | 1
+7    | Todos os 12          | Reis           | 0
+6    | Todos os 11          | Cavalo         | 0
+5    | Todos os 10          | Valete         | 0
+4    | 7 Copas / 7 Paus     | Sete Falso     | 7
+3    | Todos os 6           | Seis           | 6
+2    | Todos os 5           | Cinco          | 5
+1    | Todos os 4           | Quatro (Pior)  | 4
+
+* Nota: O baralho usado é o espanhol de 40 cartas (sem os 8, 9 e coringas).
+
+--------------------------------------------------------------------------------
+2. ESTRUTURA DA MÃO E CRITÉRIOS DE DESEMPATE (VAZAS)
+--------------------------------------------------------------------------------
+- Uma "Mão" completa é disputada em até 3 rodadas (vazas).
+- O time que vencer 2 rodadas ganha a mão.
+- Casos de Empate (Parda):
+  * Se a 1ª rodada empatar, o time que vencer a 2ª rodada ganha a Mão.
+  * Se a 1ª rodada for ganha pelo Time A, a 2ª pelo Time B, e a 3ª empatar, o
+    Time A vence a Mão (quem ganhou a primeira).
+  * Se todas as 3 rodadas empatarem (parda tripla), o jogador que é o "Mão"
+    (primeiro a jogar no turno, à esquerda do Doador) vence a Mão para seu time.
+
+--------------------------------------------------------------------------------
+3. GRITOS E APOSTAS DE TRUCO (Alternância e Valores)
+--------------------------------------------------------------------------------
+* O Truco é a aposta nas cartas da vaza. As opções de aumento devem sempre 
+  alternar entre os times (um time nunca pode aumentar seu próprio grito pendente).
+
+Nível  | Grito          | Pontos se Aceito | Pontos se Recusado (Correr)
+-------|----------------|------------------|----------------------------
+Base   | Sem grito      | 1 ponto          | -
+Nível 1| ¡TRUCO!        | 2 pontos         | 1 ponto
+Nível 2| ¡RETRUCO!      | 3 pontos         | 2 pontos
+Nível 3| ¡VALE QUATRO!  | 4 pontos         | 3 pontos
+
+* Fluxo de Resposta:
+  Ao receber um grito, o time defensor tem 3 opções:
+  1. Quero (Aceita o nível atual).
+  2. Não Quero (Corre, o adversário leva os pontos do nível anterior).
+  3. Aumentar (Chama o próximo nível: Truco -> Retruco -> Vale 4). A palavra 
+     muda de time a cada aumento.
+
+--------------------------------------------------------------------------------
+4. TENTOS DO ENVIDO (Cálculo e Aumentos)
+--------------------------------------------------------------------------------
+* O Envido é cantado apenas na 1ª rodada, antes do jogador jogar sua primeira carta.
+* Cálculo dos Pontos de Envido:
+  - Se possuir 2 cartas do mesmo naipe: 20 + soma dos valores faciais das duas 
+    cartas (cartas 10, 11 e 12 valem 0 pontos faciais).
+  - Se possuir 3 cartas de naipes diferentes: Vale o valor da carta mais alta
+    (cartas 10, 11 e 12 valem 0).
+  - Se possuir Flor (3 cartas do mesmo naipe): Envido é cancelado e vale a Flor.
+
+* Aumentos do Envido:
+  Grito         | Pontos se Aceito | Pontos se Recusado
+  --------------|------------------|--------------------
+  Envido        | 2 pontos         | 1 ponto
+  Real Envido   | 3 pontos         | 1 ponto (ou valor acumulado)
+  Falta Envido  | Pontos para fechar| 1 ponto (ou valor acumulado)
+                | o jogo do líder  |
+
+--------------------------------------------------------------------------------
+5. DIRETRIZES DE RESPONSIVIDADE E FRONTEND (MUITO IMPORTANTE)
+--------------------------------------------------------------------------------
+1. NUNCA utilize a unidade `vh` no CSS. Priorize `%`, Flexbox e `min-height: 100%`.
+2. Mantenha os arquivos CSS com controle de versão na importação (ex: `style.css?v=1.9`)
+   para forçar a quebra de cache em navegadores mobile.
+3. No Mobile, posicione o painel de botões na base (`bottom: 15px`) e as cartas 
+   do jogador flutuando acima dele (`bottom: 110px`), com tudo centralizado.
+4. Esconda a pilha de baralho decorativa no mobile para que o feltro de rodadas
+   fique perfeitamente centralizado na mesa redonda.
+5. No celular, use um menu compacto (ícone ⚙️) no cabeçalho para agrupar
+   o volume de som, configuração de vozes e painel de administração.
+================================================================================

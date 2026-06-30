@@ -1,7 +1,9 @@
 // public/js/app.js
 // Controlador do Cliente para o Truco Gaúcho
 
-const socket = io();
+const socket = window.location.hostname.includes('vercel.app') 
+  ? io('https://truco-river.onrender.com') 
+  : io();
 
 // Configuração padrão das vozes do usuário (com carregamento do localStorage)
 let myVoiceConfig = {
@@ -1134,8 +1136,10 @@ function setupActionButtons(gameState) {
 
     // Opções de Aumentar Truco
     if (hand.trucoState === 'truco') {
+      groupTruco.classList.remove('hide');
       showAndEnableButton(btnRetruco);
     } else if (hand.trucoState === 'retruco') {
+      groupTruco.classList.remove('hide');
       showAndEnableButton(btnVale4);
     }
 
