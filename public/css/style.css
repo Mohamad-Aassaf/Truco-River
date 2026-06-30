@@ -1466,36 +1466,39 @@ body {
   
   /* Mesa e Elementos Internos */
   .truco-table {
-    width: 95%;
-    max-width: 480px;
+    flex: none;
+    width: 90vw;
+    max-width: 400px;
+    height: auto !important;
     aspect-ratio: 1 / 1;
-    margin: 0 auto;
+    margin: 20px auto 0 auto; /* Empurra para baixo do cabeçalho */
     border-width: 10px;
     border-radius: 50%;
   }
   
   /* Assentos dos Jogadores no Celular */
   #seat-top {
-    top: 50px; /* Evita que fique debaixo da barra do topo */
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
   }
   
   #seat-bottom {
-    bottom: 115px;
-    left: 15px;
-    transform: none;
-  }
-  #seat-bottom .voice-bubble {
-    bottom: 175px;
-    left: 15px;
-    transform: none;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
   }
   
   #seat-left {
-    left: 5px;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
   }
   
   #seat-right {
-    right: 5px;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
   }
   
   /* Elementos de Jogo no Celular */
