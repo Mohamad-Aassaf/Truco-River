@@ -840,6 +840,40 @@ body {
   min-width: 90px;
 }
 
+.seat-cards {
+  display: flex;
+  gap: 3px;
+  margin-top: 5px;
+  justify-content: center;
+}
+
+.mini-card-badge {
+  background: #fff;
+  color: #000;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  border: 1px solid var(--gold-dark);
+  text-transform: uppercase;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Outfit', sans-serif;
+}
+
+.mini-card-badge.gold { border-color: #d4af37; color: #b8860b; }
+.mini-card-badge.sword { border-color: #2980b9; color: #2980b9; }
+.mini-card-badge.club { border-color: #27ae60; color: #27ae60; }
+.mini-card-badge.cup { border-color: #c0392b; color: #c0392b; }
+
+.mini-card-badge.hidden-card {
+  background: var(--blue-accent);
+  color: white;
+  border-color: #1a5276;
+}
+
 .player-seat.active-seat .avatar-card {
   border-color: var(--gold);
   box-shadow: 0 0 12px rgba(223, 177, 91, 0.7);
@@ -1295,7 +1329,7 @@ body {
   color: white;
 }
 
-.hide {
+.hide, .mobile-only.hide {
   display: none !important;
 }
 
@@ -1693,6 +1727,10 @@ body {
     left: 50%;
     transform: translateX(-50%);
     z-index: 350;
+  }
+
+  .action-group {
+    display: contents !important;
   }
   
   .action-btn {

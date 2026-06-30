@@ -21,7 +21,7 @@
      crossorigin="anonymous"></script>
 
   <!-- CSS Customizado -->
-  <link rel="stylesheet" href="/css/style.css?v=1.9">
+  <link rel="stylesheet" href="/css/style.css?v=2.0">
 </head>
 
 <body>
@@ -99,8 +99,8 @@
           <!-- Limite de Pontos -->
           <div class="option-title"><i class="fa-solid fa-star"></i> Limite de Pontos da Partida:</div>
           <div class="lobby-option-group" id="room-points-group">
+            <button type="button" class="lobby-toggle-btn" data-points="15">15</button>
             <button type="button" class="lobby-toggle-btn active" data-points="24">24 (Clássico)</button>
-            <button type="button" class="lobby-toggle-btn" data-points="30">30</button>
             <button type="button" class="lobby-toggle-btn" data-points="custom">Custom</button>
           </div>
 
@@ -163,7 +163,12 @@
         </div>
       </div>
 
-      <div class="waiting-actions">
+      <div class="waiting-actions" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center;">
+        <select id="bot-difficulty-select" style="background: rgba(0, 0, 0, 0.6); color: white; border: 1px solid var(--gold-dark); border-radius: 6px; padding: 10px 14px; font-size: 0.9rem; cursor: pointer; font-family: 'Outfit', sans-serif;">
+          <option value="easy">Bot Fácil</option>
+          <option value="medium" selected>Bot Médio</option>
+          <option value="hard">Bot Difícil</option>
+        </select>
         <button id="add-bot-btn" class="btn btn-info"><i class="fa-solid fa-robot"></i> Adicionar Bot</button>
         <button id="ready-btn" class="btn btn-success"><i class="fa-solid fa-check"></i> Pronto</button>
         <button id="leave-room-btn" class="btn btn-danger"><i class="fa-solid fa-arrow-right-from-bracket"></i>
@@ -204,12 +209,12 @@
           <div id="view-score-digital" class="score-view-pane">
             <div class="scoreboard-digital">
               <div class="team-score score-team0">
-                <span class="team-name">Nós (T0)</span>
+                <span class="team-name">Nós (Time 1)</span>
                 <span id="score-val-team0" class="score-number">00</span>
               </div>
               <div class="vs-badge">VS</div>
               <div class="team-score score-team1">
-                <span class="team-name">Eles (T1)</span>
+                <span class="team-name">Eles (Time 2)</span>
                 <span id="score-val-team1" class="score-number">00</span>
               </div>
             </div>
@@ -219,13 +224,13 @@
           <div id="view-score-sticks" class="score-view-pane hide">
             <div class="matchstick-tracker-container">
               <div class="matchstick-box">
-                <h4>Nós (T0)</h4>
+                <h4>Nós (Time 1)</h4>
                 <div id="sticks-team0" class="sticks-grid">
                   <!-- Renderização de fósforos agrupados de 5 em 5 -->
                 </div>
               </div>
               <div class="matchstick-box">
-                <h4>Eles (T1)</h4>
+                <h4>Eles (Time 2)</h4>
                 <div id="sticks-team1" class="sticks-grid">
                   <!-- Renderização de fósforos -->
                 </div>
@@ -297,6 +302,7 @@
             <div class="avatar-card">
               <span class="seat-name">Você</span>
               <span class="seat-role badge">Mão</span>
+              <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-bottom"></div>
           </div>
@@ -306,6 +312,7 @@
             <div class="avatar-card">
               <span class="seat-name">Oponente</span>
               <span class="seat-role badge">Pé</span>
+              <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-top"></div>
           </div>
@@ -315,6 +322,7 @@
             <div class="avatar-card">
               <span class="seat-name">Eles 1</span>
               <span class="seat-role badge">Mão</span>
+              <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-left"></div>
           </div>
@@ -324,6 +332,7 @@
             <div class="avatar-card">
               <span class="seat-name">Eles 2</span>
               <span class="seat-role badge">Pé</span>
+              <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-right"></div>
           </div>
@@ -451,16 +460,16 @@
   <div id="screen-game-end" class="screen">
     <div class="game-end-card glassmorphism">
       <i class="fa-solid fa-trophy trophy-icon animate-bounce"></i>
-      <h2 id="victory-title" class="victory-title">TIME 0 VENCEU!</h2>
+      <h2 id="victory-title" class="victory-title">FIM DE JOGO!</h2>
       <p class="victory-subtitle">Parabéns aos novos campeões do truco!</p>
 
       <div class="final-score-box">
         <div class="final-score">
-          <span>Time 0 (Nós):</span>
+          <span>Nós (Time 1):</span>
           <strong id="final-score-t0">24</strong>
         </div>
         <div class="final-score">
-          <span>Time 1 (Eles):</span>
+          <span>Eles (Time 2):</span>
           <strong id="final-score-t1">15</strong>
         </div>
       </div>

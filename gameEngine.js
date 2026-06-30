@@ -116,7 +116,7 @@ class TrucoGame {
     if (this.gameLogs.length > 50) this.gameLogs.shift();
   }
 
-  addPlayer(id, name, socketId, isBot = false) {
+  addPlayer(id, name, socketId, isBot = false, difficulty = 'medium') {
     if (this.players.length >= this.maxPlayers) return false;
     
     // Determinar time:
@@ -129,6 +129,7 @@ class TrucoGame {
       name,
       socketId,
       isBot,
+      difficulty,
       team,
       ready: isBot // Bots estão sempre prontos
     });
@@ -327,7 +328,11 @@ class TrucoGame {
     } else if (response === 'nao_quero') {
       // Não aceitou / Correu / Mazo. O time adversário ganha os pontos anteriores.
       const winnerTeam = team === 0 ? 1 : 0;
-      const pointsWon = this.hand.trucoPoints; // Se era Truco (ainda valendo 1), ganha 1. Se era Retruco (valendo 2), ganha 2.
+      
+      let pointsWon = 1;
+      if (this.hand.trucoState === 'truco') pointsWon = 1;
+      else if (this.hand.trucoState === 'retruco') pointsWon = 2;
+      else if (this.hand.trucoState === 'vale4') pointsWon = 3;
       
       this.hand.voiceBubble[playerIdx] = '¡NÃO QUERO!';
       this.log(`Time ${team} não aceitou. Time ${winnerTeam} ganha ${pointsWon} ponto(s).`);
@@ -707,10 +712,15 @@ class TrucoGame {
     this.hand.voiceBubble[playerIdx] = '¡ME VOU AO MAZO!';
     this.log(`${player.name} foi ao Mazo.`);
     
+    // Se for na primeira rodada e o time correr/ir ao mazo, vale no mínimo 2 pontos
+    let pointsWon = this.hand.trucoPoints;
+    if (this.hand.currentRound === 0 && pointsWon < 2) {
+      pointsWon = 2;
+    }
+    
     if (this.mode === '1v1') {
-      // No 1v1, ir ao mazo concede os pontos atuais do Truco ao oponente imediatamente
       const opponentTeam = team === 0 ? 1 : 0;
-      this.endHand(opponentTeam, this.hand.trucoPoints);
+      this.endHand(opponentTeam, pointsWon);
     } else {
       // No 2v2:
       this.hand.foldedPlayers.add(playerIdx);
@@ -719,7 +729,7 @@ class TrucoGame {
       // Se ambos os jogadores da equipe dobraram, a outra equipe vence
       if (this.hand.foldedPlayers.has(partnerIdx)) {
         const opponentTeam = team === 0 ? 1 : 0;
-        this.endHand(opponentTeam, this.hand.trucoPoints);
+        this.endHand(opponentTeam, pointsWon);
       } else {
         // Se apenas um dobrou, o jogo continua apenas com o parceiro.
         // Avança o turno se for o jogador que dobrou
@@ -870,7 +880,7 @@ class TrucoGame {
 
   endHand(winnerTeam, points) {
     this.score[winnerTeam] += points;
-    this.log(`Fim da mão. Time ${winnerTeam} ganha ${points} ponto(s). Placar: Time 0 [${this.score[0]}] x [${this.score[1]}] Time 1`);
+    this.log(`Fim da mão. Time ${winnerTeam + 1} ganha ${points} ponto(s). Placar: Time 1 [${this.score[0]}] x [${this.score[1]}] Time 2`);
 
     // Guardar dados da última mão para histórico do cliente
     this.lastHandSummary = {
@@ -901,13 +911,13 @@ class TrucoGame {
     if (this.score[0] >= limit) {
       this.state = 'game_end';
       this.winner = 0;
-      this.log(`FIM DE JOGO! TIME 0 VENCEU A PARTIDA!`);
+      this.log(`FIM DE JOGO! TIME 1 VENCEU A PARTIDA!`);
       return true;
     }
     if (this.score[1] >= limit) {
       this.state = 'game_end';
       this.winner = 1;
-      this.log(`FIM DE JOGO! TIME 1 VENCEU A PARTIDA!`);
+      this.log(`FIM DE JOGO! TIME 2 VENCEU A PARTIDA!`);
       return true;
     }
     return false;
@@ -924,17 +934,19 @@ class TrucoGame {
         players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, team: p.team, ready: p.ready, voiceConfig: p.voiceConfig })),
         score: this.score,
         state: this.state,
+        winner: this.winner,
         logs: this.gameLogs,
         dealerIndex: this.dealerIndex,
         lastHandSummary: this.lastHandSummary
       };
     }
 
-    // Ocultar cartas dos outros jogadores
+    // Ocultar cartas dos outros jogadores (revelando parceiro no 2v2)
     const maskedHands = {};
     Object.keys(this.hand.hands).forEach(key => {
       const idx = parseInt(key);
-      if (idx === playerIdx) {
+      const isPartner = this.mode === '2v2' && this.players[idx] && this.players[playerIdx] && this.players[idx].team === this.players[playerIdx].team;
+      if (idx === playerIdx || isPartner) {
         maskedHands[idx] = this.hand.hands[idx];
       } else {
         // Mapear apenas para representar que o jogador tem cartas, mas sem revelar o valor/naipe
@@ -958,6 +970,7 @@ class TrucoGame {
       })),
       score: this.score,
       state: this.state,
+      winner: this.winner,
       logs: this.gameLogs,
       dealerIndex: this.dealerIndex,
       lastHandSummary: this.lastHandSummary,

@@ -363,7 +363,8 @@ document.getElementById('join-room-btn').addEventListener('click', () => {
 
 // Adicionar Bot
 document.getElementById('add-bot-btn').addEventListener('click', () => {
-  socket.emit('add_bot');
+  const difficulty = document.getElementById('bot-difficulty-select').value;
+  socket.emit('add_bot', { difficulty });
 });
 
 // Pronto
@@ -523,17 +524,36 @@ function renderLobbyScreen(gameState) {
     const div = document.createElement('div');
 
     if (p) {
+      const isMe = p.id === myPlayerId;
+      const changeTeamBtnHtml = (isMe && gameState.mode === '2v2') 
+        ? `<button id="change-team-btn" class="btn btn-secondary btn-sm" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Trocar de Time</button>` 
+        : '';
+
       div.className = `player-slot ${p.ready ? 'ready' : ''}`;
       div.innerHTML = `
         <span class="player-slot-name">
           ${p.isBot ? '<i class="fa-solid fa-robot"></i>' : '<i class="fa-solid fa-user"></i>'}
-          ${p.name} ${p.id === myPlayerId ? '(Você)' : ''}
-          <span style="font-size: 0.75rem; opacity: 0.6;">(Time ${p.team})</span>
+          ${p.name} ${isMe ? '(Você)' : ''}
+          <span style="font-size: 0.75rem; opacity: 0.7; font-weight: 700; color: ${p.team === 0 ? '#60a5fa' : '#f87171'};">
+            (Time ${p.team + 1})
+          </span>
+          ${changeTeamBtnHtml}
         </span>
         <span class="status-badge ${p.ready ? 'ready' : 'waiting'}">
           ${p.ready ? 'Pronto' : 'Aguardando'}
         </span>
       `;
+      
+      if (isMe && gameState.mode === '2v2') {
+        setTimeout(() => {
+          const btn = document.getElementById('change-team-btn');
+          if (btn) {
+            btn.addEventListener('click', () => {
+              socket.emit('switch_team');
+            });
+          }
+        }, 0);
+      }
     } else {
       div.className = 'player-slot';
       div.innerHTML = `
@@ -603,8 +623,7 @@ function renderGameScreen(gameState) {
     phaseBadge.style.background = '#d4af37';
   }
 
-  // 3. Mapear Posições na Mesa (Bottom é sempre você)
-  setupSeatsLayout(gameState.players, gameState.dealerIndex, gameState.hand ? gameState.hand.currentPlayer : -1);
+  setupSeatsLayout(gameState.players, gameState.dealerIndex, gameState.hand ? gameState.hand.currentPlayer : -1, gameState.hand);
 
   // 4. Se a mão estiver ativa
   if (gameState.hand) {
@@ -690,7 +709,7 @@ function renderGameScreen(gameState) {
 }
 
 // Mapeia e atualiza visualmente os assentos de cada jogador
-function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
+function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = null) {
   // Ocultar todos por padrão
   seatLeft.classList.add('hidden-seat');
   seatRight.classList.add('hidden-seat');
@@ -700,6 +719,8 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
     seat.classList.remove('active-seat');
     seat.querySelector('.seat-role').classList.remove('ready');
     seat.querySelector('.seat-role').textContent = '';
+    const seatCardsEl = seat.querySelector('.seat-cards');
+    if (seatCardsEl) seatCardsEl.innerHTML = '';
   });
 
   const getSeatElement = (mappedPos) => {
@@ -711,6 +732,19 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
   };
 
   const maxPlayers = players.length;
+
+  const suitSymbols = {
+    'espadas': '⚔️',
+    'paus': '♣',
+    'copas': '♥',
+    'ouros': '🪙'
+  };
+  const suitClasses = {
+    'espadas': 'sword',
+    'paus': 'club',
+    'copas': 'cup',
+    'ouros': 'gold'
+  };
 
   players.forEach((p, idx) => {
     let position = 'bottom';
@@ -748,6 +782,23 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx) {
     // Sinalizar de quem é o turno
     if (idx === currentPlayerIdx) {
       seat.classList.add('active-seat');
+    }
+
+    // Renderizar mini-cartas do jogador na mesa
+    const seatCardsEl = seat.querySelector('.seat-cards');
+    if (seatCardsEl && activeHand && activeHand.hands && activeHand.hands[idx]) {
+      const playerCards = activeHand.hands[idx];
+      let cardsHtml = '';
+      playerCards.forEach(card => {
+        if (card.hidden) {
+          cardsHtml += `<span class="mini-card-badge hidden-card">🎴</span>`;
+        } else {
+          const sym = suitSymbols[card.suit] || '';
+          const cls = suitClasses[card.suit] || '';
+          cardsHtml += `<span class="mini-card-badge ${cls}">${card.value}${sym}</span>`;
+        }
+      });
+      seatCardsEl.innerHTML = cardsHtml;
     }
   });
 }
@@ -1340,7 +1391,18 @@ function disableAllActionButtons(gameState) {
       } else if (gameState.state === 'game_end') {
         statusEl.textContent = 'Partida terminada!';
       } else {
-        statusEl.textContent = 'Vez do adversário jogar...';
+        if (gameState.mode === '2v2' && gameState.hand) {
+          const currPlayer = gameState.hand.currentPlayer;
+          const currTeam = gameState.players[currPlayer] ? gameState.players[currPlayer].team : -1;
+          const myTeam = gameState.players[mySeatIndex] ? gameState.players[mySeatIndex].team : -2;
+          if (currTeam === myTeam) {
+            statusEl.textContent = 'Vez do seu parceiro jogar...';
+          } else {
+            statusEl.textContent = 'Vez do adversário jogar...';
+          }
+        } else {
+          statusEl.textContent = 'Vez do adversário jogar...';
+        }
       }
     } else {
       statusEl.textContent = 'Vez do adversário jogar...';

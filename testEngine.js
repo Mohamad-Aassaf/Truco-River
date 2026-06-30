@@ -230,6 +230,32 @@ assert(gameAdminTest.hand.hands[0][1].value === 7 && gameAdminTest.hand.hands[0]
 assert(gameAdminTest.hand.hands[0][2].value === 3 && gameAdminTest.hand.hands[0][2].suit === 'copas', "Carta 3 foi alterada para 3 de Copas.");
 assert(gameAdminTest.players[0].envidoScore === 28, "Pontuação de Envido do Jogador 2 recalculada para 28.");
 
+// Teste de desistir de Retruco ou Vale 4 dar pontos corretos
+const gameTrucoDeclineTest = new TrucoGame("TEST_TRUCO_DECLINE", "1v1");
+gameTrucoDeclineTest.addPlayer("P1", "Jogador 1", "s1"); // Team 0
+gameTrucoDeclineTest.addPlayer("P2", "Jogador 2", "s2"); // Team 1
+gameTrucoDeclineTest.startNewHand();
+
+// Jogador 1 chama Truco
+gameTrucoDeclineTest.callTruco(0);
+// Jogador 2 aumenta para Retruco
+gameTrucoDeclineTest.respondTruco(1, 'retruco');
+// Jogador 1 recusa o Retruco (nao_quero)
+gameTrucoDeclineTest.respondTruco(0, 'nao_quero');
+// Deve dar 2 pontos para o Time 1
+assert(gameTrucoDeclineTest.score[1] === 2, "Recusar Retruco deve conceder 2 pontos ao oponente.");
+
+// Teste de ir ao baralho na primeira rodada dar 2 pontos
+const gameMazoFirstRoundTest = new TrucoGame("TEST_MAZO_FIRST_ROUND", "1v1");
+gameMazoFirstRoundTest.addPlayer("P1", "Jogador 1", "s1"); // Team 0
+gameMazoFirstRoundTest.addPlayer("P2", "Jogador 2", "s2"); // Team 1
+gameMazoFirstRoundTest.startNewHand();
+
+// Jogador 1 vai ao mazo na primeira rodada
+gameMazoFirstRoundTest.foldPlayer(0);
+// Deve dar 2 pontos para o Time 1
+assert(gameMazoFirstRoundTest.score[1] === 2, "Ir ao mazo na primeira rodada sem truco aceito deve conceder 2 pontos ao oponente.");
+
 console.log("\n================================================");
 console.log("🎉 TODOS OS TESTES PASSARAM COM SUCESSO! 🎉");
 console.log("================================================");

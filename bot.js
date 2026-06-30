@@ -1,5 +1,5 @@
 // bot.js
-// Inteligência Artificial do Truco Gaúcho
+// Inteligência Artificial do Truco Gaúcho com Dificuldade (Fácil, Médio, Difícil)
 
 // Avalia o peso médio das cartas na mão do bot
 function evaluateHandStrength(handCards) {
@@ -9,8 +9,13 @@ function evaluateHandStrength(handCards) {
 }
 
 // Retorna a melhor carta para jogar
-function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, players, maxPlayers) {
+function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, players, maxPlayers, difficulty = 'medium') {
   if (handCards.length === 1) return 0; // Só resta uma carta
+
+  // Bot fácil tem 30% de chance de jogar uma carta totalmente aleatória
+  if (difficulty === 'easy' && Math.random() < 0.3) {
+    return Math.floor(Math.random() * handCards.length);
+  }
 
   const myTeam = players[playerIdx].team;
   
@@ -26,10 +31,6 @@ function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, playe
       return sorted[Math.floor(sorted.length / 2)].i;
     } else if (currentRound === 1) {
       // Segunda rodada:
-      // Se nosso time ganhou a primeira rodada, joga a mais baixa para 'fazer caranguejo' (guardar a maior para a última)
-      // Se nosso time perdeu ou empatou, joga a maior carta
-      // Para fins de simplificação, verifica o vencedor da primeira rodada:
-      // (vamos assumir que se o bot começa jogando, ele pode olhar o resultado da rodada 0 no playedCards)
       const r0Plays = playedCards.filter(p => p.round === 0);
       let r0WinnerTeam = -1;
       if (r0Plays.length > 0) {
@@ -47,14 +48,14 @@ function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, playe
       }
 
       if (r0WinnerTeam === myTeam) {
-        // Ganhamos a primeira, joga a mais baixa
+        // Ganhamos a primeira, joga a mais baixa (estratégia de reter a maior)
         let minIdx = 0;
         for (let i = 1; i < handCards.length; i++) {
           if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
         }
         return minIdx;
       } else {
-        // Perdemos ou empatou, joga a maior
+        // Perdemos ou empatou, joga a maior para tentar salvar
         let maxIdx = 0;
         for (let i = 1; i < handCards.length; i++) {
           if (handCards[i].trucoRank > handCards[maxIdx].trucoRank) maxIdx = i;
@@ -72,7 +73,6 @@ function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, playe
   }
 
   // Se já há cartas jogadas na rodada
-  // Identifica a maior carta na mesa até agora
   let bestPlay = roundPlays[0];
   let isTie = false;
   for (let i = 1; i < roundPlays.length; i++) {
@@ -99,7 +99,6 @@ function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, playe
   }
 
   // Senão, o adversário está ganhando ou está empatado. O bot precisa bater a carta dele se puder.
-  // Encontra a menor carta da mão do bot que ganhe da maior da mesa
   let chosenIdx = -1;
   let minWinningRank = 99;
 
@@ -132,28 +131,54 @@ function handleBotAction(game, playerIdx) {
 
   const player = game.players[playerIdx];
   const handCards = game.hand.hands[playerIdx];
+  const difficulty = player.difficulty || 'medium';
 
   // 1. RESPONDER A TRUCO PENDENTE
   if (game.hand.trucoResponsePending && game.hand.trucoPendingTeam === player.team) {
     const strength = evaluateHandStrength(handCards);
     const maxRank = handCards.length > 0 ? Math.max(...handCards.map(c => c.trucoRank)) : 0;
-    
-    // Probabilidade baseada na força das cartas
-    // Ranks altos: 14 (As Espadas), 13 (As Paus), 12 (7 Espadas), 11 (7 Ouros), 10 (3), 9 (2)
-    // Se o bot tem cartas muito fortes, ele pode aceitar ou aumentar
+
+    if (difficulty === 'easy') {
+      // Bot Fácil: age muito aleatoriamente
+      const rand = Math.random();
+      if (rand < 0.4) {
+        return { action: 'truco_response', value: 'quero' };
+      } else if (rand < 0.7) {
+        return { action: 'truco_response', value: 'nao_quero' };
+      } else {
+        // Tenta aumentar sem critério
+        const nextAction = game.hand.trucoState === 'truco' ? 'retruco' : 'vale4';
+        return { action: 'truco_raise', value: nextAction };
+      }
+    }
+
+    if (difficulty === 'hard') {
+      // Bot Difícil: joga muito calculado
+      if (maxRank >= 11 || strength >= 7) {
+        // Aceita e tem 50% de chance de aumentar se a mão for extremamente forte
+        if (Math.random() < 0.5 && (game.hand.trucoState === 'truco' || game.hand.trucoState === 'retruco') && maxRank >= 12) {
+          return { action: 'truco_raise', value: game.hand.trucoState === 'truco' ? 'retruco' : 'vale4' };
+        }
+        return { action: 'truco_response', value: 'quero' };
+      }
+      // Se não tem cartas boas, foge 95% das vezes (sem blefar no aceito)
+      if (Math.random() < 0.05 && game.hand.trucoState === 'truco') {
+        return { action: 'truco_response', value: 'quero' }; // Blefe raríssimo
+      }
+      return { action: 'truco_response', value: 'nao_quero' };
+    }
+
+    // Bot Médio (Padrão original)
     if (maxRank >= 11) {
-      // Aceita e tem 30% de chance de retrucar (se já não estiver no limite)
       if (Math.random() < 0.3 && (game.hand.trucoState === 'truco' || game.hand.trucoState === 'retruco')) {
         return { action: 'truco_raise', value: game.hand.trucoState === 'truco' ? 'retruco' : 'vale4' };
       }
       return { action: 'truco_response', value: 'quero' };
     } else if (maxRank >= 9 || strength >= 6) {
-      // Cartas médias/boas: aceita
       return { action: 'truco_response', value: 'quero' };
     } else {
-      // Cartas fracas: 80% de chance de correr, 20% blefe
       if (Math.random() < 0.20 && game.hand.trucoState === 'truco') {
-        return { action: 'truco_response', value: 'quero' }; // Blefe!
+        return { action: 'truco_response', value: 'quero' }; // Blefe
       }
       return { action: 'truco_response', value: 'nao_quero' };
     }
@@ -165,29 +190,45 @@ function handleBotAction(game, playerIdx) {
     const history = game.hand.envidoHistory;
     const currentCall = history[history.length - 1];
 
+    if (difficulty === 'easy') {
+      // Fácil: 50% de chance de aceitar ou recusar sem olhar pontuação
+      return { action: 'envido_response', value: Math.random() < 0.5 ? 'quero' : 'nao_quero' };
+    }
+
+    if (difficulty === 'hard') {
+      // Difícil: aceita apenas com pontuação ideal
+      if (currentCall === 'envido') {
+        if (envidoScore >= 27) {
+          if (envidoScore >= 31 && Math.random() < 0.5) return { action: 'envido_raise', value: 'real_envido' };
+          return { action: 'envido_response', value: 'quero' };
+        }
+        return { action: 'envido_response', value: 'nao_quero' };
+      } else if (currentCall === 'real_envido') {
+        if (envidoScore >= 29) {
+          if (envidoScore >= 32 && Math.random() < 0.4) return { action: 'envido_raise', value: 'falta_envido' };
+          return { action: 'envido_response', value: 'quero' };
+        }
+        return { action: 'envido_response', value: 'nao_quero' };
+      } else if (currentCall === 'falta_envido') {
+        return { action: 'envido_response', value: envidoScore >= 30 ? 'quero' : 'nao_quero' };
+      }
+    }
+
+    // Médio
     if (currentCall === 'envido') {
       if (envidoScore >= 26) {
-        // Se pontos forem muito altos, pode querer aumentar
-        if (envidoScore >= 30 && Math.random() < 0.4) {
-          return { action: 'envido_raise', value: 'real_envido' };
-        }
+        if (envidoScore >= 30 && Math.random() < 0.4) return { action: 'envido_raise', value: 'real_envido' };
         return { action: 'envido_response', value: 'quero' };
       }
       return { action: 'envido_response', value: 'nao_quero' };
     } else if (currentCall === 'real_envido') {
       if (envidoScore >= 28) {
-        if (envidoScore >= 31 && Math.random() < 0.3) {
-          return { action: 'envido_raise', value: 'falta_envido' };
-        }
+        if (envidoScore >= 31 && Math.random() < 0.3) return { action: 'envido_raise', value: 'falta_envido' };
         return { action: 'envido_response', value: 'quero' };
       }
       return { action: 'envido_response', value: 'nao_quero' };
     } else if (currentCall === 'falta_envido') {
-      // Aceita se tiver pontos excelentes
-      if (envidoScore >= 29) {
-        return { action: 'envido_response', value: 'quero' };
-      }
-      return { action: 'envido_response', value: 'nao_quero' };
+      return { action: 'envido_response', value: envidoScore >= 29 ? 'quero' : 'nao_quero' };
     }
   }
 
@@ -198,6 +239,10 @@ function handleBotAction(game, playerIdx) {
       const history = game.hand.florHistory;
       const currentCall = history[history.length - 1];
 
+      if (difficulty === 'easy') {
+        return { action: 'flor_response', value: Math.random() < 0.7 ? 'quero' : 'nao_quero' };
+      }
+
       if (currentCall === 'flor') {
         if (florScore >= 30 && Math.random() < 0.4) {
           return { action: 'flor_raise', value: 'contra_flor_resto' };
@@ -206,18 +251,11 @@ function handleBotAction(game, playerIdx) {
         }
         return { action: 'flor_response', value: 'quero' };
       } else if (currentCall === 'contra_flor') {
-        if (florScore >= 30) {
-          return { action: 'flor_response', value: 'quero' };
-        }
-        return { action: 'flor_response', value: 'nao_quero' };
+        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 29 : 28) ? 'quero' : 'nao_quero' };
       } else if (currentCall === 'contra_flor_resto') {
-        if (florScore >= 32) {
-          return { action: 'flor_response', value: 'quero' };
-        }
-        return { action: 'flor_response', value: 'nao_quero' }; // Achique
+        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 31 : 30) ? 'quero' : 'nao_quero' };
       }
     } else {
-      // Se de alguma forma caiu aqui e o bot não tem flor, ele diz não quero automaticamente
       return { action: 'flor_response', value: 'nao_quero' };
     }
   }
@@ -231,29 +269,51 @@ function handleBotAction(game, playerIdx) {
       return { action: 'call_flor' };
     } else if (!player.hasFlor && game.hand.envidoState === 'none') {
       const envidoScore = player.envidoScore;
-      // Bot canta Envido se tiver pontos muito bons
-      if (envidoScore >= 29 && Math.random() < 0.7) {
-        return { action: 'call_envido', value: 'real_envido' };
-      } else if (envidoScore >= 27 && Math.random() < 0.6) {
-        return { action: 'call_envido', value: 'envido' };
+      
+      if (difficulty === 'easy') {
+        // Fácil canta envido aleatório com 25% de chance
+        if (Math.random() < 0.25) {
+          return { action: 'call_envido', value: Math.random() < 0.5 ? 'envido' : 'real_envido' };
+        }
+      } else if (difficulty === 'hard') {
+        // Difícil só canta com pontuações altíssimas
+        if (envidoScore >= 30 && Math.random() < 0.8) {
+          return { action: 'call_envido', value: 'real_envido' };
+        } else if (envidoScore >= 28 && Math.random() < 0.7) {
+          return { action: 'call_envido', value: 'envido' };
+        }
+      } else {
+        // Médio
+        if (envidoScore >= 29 && Math.random() < 0.7) {
+          return { action: 'call_envido', value: 'real_envido' };
+        } else if (envidoScore >= 27 && Math.random() < 0.6) {
+          return { action: 'call_envido', value: 'envido' };
+        }
       }
     }
   }
 
   // 5. CHAMAR TRUCO
-  // O bot pode gritar Truco se tiver cartas fortes e o Truco estiver disponível
   if (game.hand.trucoState !== 'vale4' && game.hand.trucoCallerTeam !== player.team) {
     const maxRank = Math.max(...handCards.map(c => c.trucoRank));
     const strength = evaluateHandStrength(handCards);
-    
-    // Condições para pedir truco:
-    // Se tem uma carta muito forte (rank >= 11) ou força média alta
-    // Chance aleatória para não ser 100% previsível
     let wantTruco = false;
-    if (maxRank >= 13 && Math.random() < 0.7) wantTruco = true;
-    else if (maxRank >= 10 && Math.random() < 0.4) wantTruco = true;
-    else if (strength >= 8 && Math.random() < 0.3) wantTruco = true;
-    
+
+    if (difficulty === 'easy') {
+      // Fácil pede truco aleatório 15% das vezes
+      if (Math.random() < 0.15) wantTruco = true;
+    } else if (difficulty === 'hard') {
+      // Difícil é super agressivo com manilhas reais e super conservador sem elas
+      if (maxRank >= 13 && Math.random() < 0.95) wantTruco = true;
+      else if (maxRank >= 11 && Math.random() < 0.5) wantTruco = true;
+      else if (strength >= 8.5 && Math.random() < 0.4) wantTruco = true;
+    } else {
+      // Médio
+      if (maxRank >= 13 && Math.random() < 0.7) wantTruco = true;
+      else if (maxRank >= 10 && Math.random() < 0.4) wantTruco = true;
+      else if (strength >= 8 && Math.random() < 0.3) wantTruco = true;
+    }
+
     if (wantTruco) {
       return { action: 'call_truco' };
     }
@@ -266,7 +326,8 @@ function handleBotAction(game, playerIdx) {
     game.hand.currentRound,
     playerIdx,
     game.players,
-    game.maxPlayers
+    game.maxPlayers,
+    difficulty
   );
 
   return { action: 'play_card', value: cardIdx };

@@ -243,13 +243,18 @@ io.on('connection', (socket) => {
   });
 
   // Adicionar Bot
-  socket.on('add_bot', () => {
+  socket.on('add_bot', (data) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby') return;
 
+    const difficulty = (data && data.difficulty) ? data.difficulty : 'medium';
+
     if (game.players.length < game.maxPlayers) {
       const botNum = game.players.filter(p => p.isBot).length + 1;
-      game.addPlayer(`bot_${Date.now()}`, `Bot River ${botNum}`, null, true);
+      let diffSuffix = 'Médio';
+      if (difficulty === 'easy') diffSuffix = 'Fácil';
+      if (difficulty === 'hard') diffSuffix = 'Difícil';
+      game.addPlayer(`bot_${Date.now()}`, `Bot River ${botNum} (${diffSuffix})`, null, true, difficulty);
       broadcastState(currentRoomId);
     }
   });
@@ -271,6 +276,29 @@ io.on('connection', (socket) => {
       }
 
       broadcastState(currentRoomId);
+    }
+  });
+
+  // Trocar de time no lobby
+  socket.on('switch_team', () => {
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'lobby') return;
+
+    const p = game.players.find(player => player.socketId === socket.id);
+    if (p) {
+      const nextTeam = p.team === 0 ? 1 : 0;
+      // Contar quantos jogadores já estão no time de destino
+      const teamCount = game.players.filter(player => player.team === nextTeam).length;
+      if (teamCount < 2) {
+        p.team = nextTeam;
+        broadcastState(currentRoomId);
+      } else {
+        socket.emit('receive_chat', {
+          sender: 'Sistema',
+          senderId: 'system',
+          msg: 'O time de destino já está cheio (máximo 2 jogadores)!'
+        });
+      }
     }
   });
 
