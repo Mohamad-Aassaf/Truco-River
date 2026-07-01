@@ -127,8 +127,13 @@ assert(gameEnvidoTest.callEnvido(1, "envido") === true, "Jogador Mão pode chama
 // Simular resposta (Zera envidoResponsePending para simular aumento via callEnvido)
 gameEnvidoTest.hand.envidoResponsePending = false;
 
-// Jogador 2 (Pé - index 0) tenta chamar Falta Envido direto em resposta (Não deve ser permitido)
-assert(gameEnvidoTest.callEnvido(0, "falta_envido") === false, "Não pode chamar Falta Envido diretamente em resposta a Envido.");
+// Jogador 2 (Pé - index 0) chama Falta Envido direto em resposta (Agora é permitido)
+assert(gameEnvidoTest.callEnvido(0, "falta_envido") === true, "Deve ser permitido chamar Falta Envido diretamente em resposta a Envido.");
+
+// Resetar o estado de envido pendente para continuar outros testes
+gameEnvidoTest.hand.envidoHistory = ['envido'];
+gameEnvidoTest.hand.envidoState = 'envido';
+gameEnvidoTest.hand.envidoResponsePending = false;
 
 // Jogador 2 (Pé - index 0) chama Real Envido em resposta (Ok)
 assert(gameEnvidoTest.callEnvido(0, "real_envido") === true, "Pode aumentar de Envido para Real Envido.");

@@ -50,7 +50,11 @@ const usernameInput = document.getElementById('username');
 const newRoomIdInput = document.getElementById('new-room-id');
 const joinRoomIdInput = document.getElementById('join-room-id');
 const roomsList = document.getElementById('rooms-list');
-const deckPreviewImg = document.getElementById('deck-preview-img');
+const deckPreviewImg1 = document.getElementById('deck-preview-img-1');
+const deckPreviewImg2 = document.getElementById('deck-preview-img-2');
+const deckPreviewImg3 = document.getElementById('deck-preview-img-3');
+const prevPreviewBtn = document.getElementById('prev-preview-btn');
+const nextPreviewBtn = document.getElementById('next-preview-btn');
 const deckOptions = document.querySelectorAll('.deck-option');
 
 const waitingRoomTitle = document.getElementById('waiting-room-title');
@@ -200,16 +204,75 @@ const SUIT_MINIS = {
 // Estilo das Cartas (Tradicional ou Pixel)
 let currentDeckStyle = localStorage.getItem('truco_deck_style') || 'traditional';
 
+const DECK_PREVIEWS = {
+  traditional: [
+    [
+      '/Baralho_Espanhol_Organizado/Espadas/1.png',
+      '/Baralho_Espanhol_Organizado/Espadas/7.png',
+      '/Baralho_Espanhol_Organizado/Copas/3.png'
+    ],
+    [
+      '/Baralho_Espanhol_Organizado/Paus/1.png',
+      '/Baralho_Espanhol_Organizado/Ouros/7.png',
+      '/Baralho_Espanhol_Organizado/Espadas/3.png'
+    ],
+    [
+      '/Baralho_Espanhol_Organizado/Reis/12.png',
+      '/Baralho_Espanhol_Organizado/Cavalos/11.png',
+      '/Baralho_Espanhol_Organizado/Valetes/10.png'
+    ]
+  ],
+  pixel: [
+    [
+      '/pixelDeck/pixelDeck/Espada/espada1.png',
+      '/pixelDeck/pixelDeck/Espada/espada7.png',
+      '/pixelDeck/pixelDeck/Copa/copa3.png'
+    ],
+    [
+      '/pixelDeck/pixelDeck/Basto/basto1.png',
+      '/pixelDeck/pixelDeck/Oro/oro7.png',
+      '/pixelDeck/pixelDeck/Espada/espada3.png'
+    ],
+    [
+      '/pixelDeck/pixelDeck/Oro/oro10.png',
+      '/pixelDeck/pixelDeck/Basto/basto9.png',
+      '/pixelDeck/pixelDeck/Copa/copa8.png'
+    ]
+  ]
+};
+
+let currentPreviewSlideIndex = 0;
+
 function updateDeckPreview() {
-  if (deckPreviewImg) {
-    if (currentDeckStyle === 'pixel') {
-      deckPreviewImg.src = '/pixelDeck/pixelDeck/Espada/espada1.png';
-      deckPreviewImg.style.imageRendering = 'pixelated';
-    } else {
-      deckPreviewImg.src = '/Baralho_Espanhol_Organizado/Espadas/1.png';
-      deckPreviewImg.style.imageRendering = 'auto';
+  const slide = DECK_PREVIEWS[currentDeckStyle][currentPreviewSlideIndex];
+  if (slide) {
+    if (deckPreviewImg1) {
+      deckPreviewImg1.src = slide[0];
+      deckPreviewImg1.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
+    }
+    if (deckPreviewImg2) {
+      deckPreviewImg2.src = slide[1];
+      deckPreviewImg2.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
+    }
+    if (deckPreviewImg3) {
+      deckPreviewImg3.src = slide[2];
+      deckPreviewImg3.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
     }
   }
+}
+
+if (prevPreviewBtn) {
+  prevPreviewBtn.addEventListener('click', () => {
+    currentPreviewSlideIndex = (currentPreviewSlideIndex - 1 + 3) % 3;
+    updateDeckPreview();
+  });
+}
+
+if (nextPreviewBtn) {
+  nextPreviewBtn.addEventListener('click', () => {
+    currentPreviewSlideIndex = (currentPreviewSlideIndex + 1) % 3;
+    updateDeckPreview();
+  });
 }
 
 function updateBodyDeckStyle() {
@@ -328,15 +391,10 @@ if (customPointsInput) {
 document.getElementById('create-room-btn').addEventListener('click', () => {
   initAudioContext();
   const name = usernameInput.value.trim() || 'Jogador Anônimo';
-  const code = newRoomIdInput.value.trim().toUpperCase();
-
-  if (!code) {
-    alert('Bota um código na sala, jogador!');
-    return;
-  }
+  const roomName = newRoomIdInput.value.trim();
 
   socket.emit('create_room', {
-    roomId: code,
+    roomName: roomName,
     mode: selectedRoomMode,
     playerName: name,
     maxPoints: selectedRoomPoints,
@@ -435,10 +493,11 @@ socket.on('available_rooms', (rooms) => {
   rooms.forEach(room => {
     const li = document.createElement('li');
     li.className = 'room-item';
+    const displayRoomName = room.roomName || `Sala ${room.id}`;
     li.innerHTML = `
       <div class="room-info">
-        <span class="room-code-badge">${room.id}</span>
-        <span class="room-mode">${room.mode === '1v1' ? 'Individual' : 'Dupla'}</span>
+        <span class="room-code-badge" style="font-weight: 700;">${displayRoomName}</span>
+        <span class="room-mode" style="font-size: 0.75rem; color: #bbb;">Cod: ${room.id} | ${room.mode === '1v1' ? '1v1' : '2v2'}</span>
       </div>
       <div>
         <span class="room-slots">${room.playersCount}/${room.maxPlayers} jogadores</span>
@@ -461,6 +520,15 @@ socket.on('available_rooms', (rooms) => {
 // Erros do servidor
 socket.on('error_msg', (msg) => {
   alert(msg);
+});
+
+// Expulsão da sala
+socket.on('kicked', () => {
+  alert('Você foi removido da sala pelo criador.');
+  screenLobby.classList.add('active');
+  screenWaiting.classList.remove('active');
+  screenGame.classList.remove('active');
+  screenGameEnd.classList.remove('active');
 });
 
 // --- RECEBIMENTO DO ESTADO DE JOGO (SOCKET PRINCIPAL) ---
@@ -512,8 +580,8 @@ function renderLobbyScreen(gameState) {
   screenGame.classList.remove('active');
   screenGameEnd.classList.remove('active');
 
-  waitingRoomTitle.textContent = `Sala: ${gameState.id}`;
-  waitingRoomSubtitle.textContent = `Modo: ${gameState.mode === '1v1' ? 'Individual (1v1)' : 'Em Dupla (2v2)'} | Pontos para vencer: ${gameState.maxPoints}`;
+  waitingRoomTitle.textContent = `${gameState.roomName}`;
+  waitingRoomSubtitle.textContent = `Código para Entrar: ${gameState.id} | Modo: ${gameState.mode === '1v1' ? 'Individual (1v1)' : 'Em Dupla (2v2)'} | Limite: ${gameState.maxPoints} pts`;
 
   // Renderizar slots de jogadores
   playersLobbyList.innerHTML = '';
@@ -525,8 +593,14 @@ function renderLobbyScreen(gameState) {
 
     if (p) {
       const isMe = p.id === myPlayerId;
+      const isHost = gameState.players[0] && gameState.players[0].id === myPlayerId;
+      
       const changeTeamBtnHtml = (isMe && gameState.mode === '2v2') 
         ? `<button id="change-team-btn" class="btn btn-secondary btn-sm" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Trocar de Time</button>` 
+        : '';
+
+      const kickBtnHtml = (isHost && !isMe)
+        ? `<button class="kick-player-btn btn btn-danger btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 6px; font-size: 0.7rem; line-height: 1; border-radius: 4px;" title="Remover"><i class="fa-solid fa-user-xmark"></i> Remover</button>`
         : '';
 
       div.className = `player-slot ${p.ready ? 'ready' : ''}`;
@@ -538,6 +612,7 @@ function renderLobbyScreen(gameState) {
             (Time ${p.team + 1})
           </span>
           ${changeTeamBtnHtml}
+          ${kickBtnHtml}
         </span>
         <span class="status-badge ${p.ready ? 'ready' : 'waiting'}">
           ${p.ready ? 'Pronto' : 'Aguardando'}
@@ -550,6 +625,17 @@ function renderLobbyScreen(gameState) {
           if (btn) {
             btn.addEventListener('click', () => {
               socket.emit('switch_team');
+            });
+          }
+        }, 0);
+      }
+
+      if (isHost && !isMe) {
+        setTimeout(() => {
+          const btn = div.querySelector('.kick-player-btn');
+          if (btn) {
+            btn.addEventListener('click', () => {
+              socket.emit('kick_player', { playerId: p.id });
             });
           }
         }, 0);
@@ -606,6 +692,17 @@ function renderGameScreen(gameState) {
 
   if (mobileScoreUs) mobileScoreUs.textContent = String(gameState.score[0]).padStart(2, '0');
   if (mobileScoreThem) mobileScoreThem.textContent = String(gameState.score[1]).padStart(2, '0');
+
+  // Atualizar limite de pontos
+  const limit = gameState.maxPoints || 24;
+  const vsBadge = document.querySelector('.vs-badge');
+  if (vsBadge) {
+    vsBadge.innerHTML = `VS<br><span style="font-size: 0.62rem; opacity: 0.7; font-weight: 700; white-space: nowrap;">Até ${limit} pts</span>`;
+  }
+  const mobileLimit = document.getElementById('mobile-score-limit');
+  if (mobileLimit) {
+    mobileLimit.textContent = `(${limit} pts)`;
+  }
 
   // Desenhar os palitos gaúchos (pontos)
   drawMatchsticks(sticksTeam0, gameState.score[0]);
@@ -791,7 +888,7 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
       let cardsHtml = '';
       playerCards.forEach(card => {
         if (card.hidden) {
-          cardsHtml += `<span class="mini-card-badge hidden-card">🎴</span>`;
+          cardsHtml += `<span class="mini-card-badge hidden-card"></span>`;
         } else {
           const sym = suitSymbols[card.suit] || '';
           const cls = suitClasses[card.suit] || '';
@@ -1232,6 +1329,7 @@ function setupActionButtons(gameState) {
           showAndEnableButton(btnEnvido);
         }
         showAndEnableButton(btnRealEnvido);
+        showAndEnableButton(btnFaltaEnvido);
       } else if (lastCall === 'real_envido') {
         showAndEnableButton(btnFaltaEnvido);
       }
@@ -1520,7 +1618,8 @@ function renderGameEndScreen(gameState) {
   screenGameEnd.classList.add('active');
 
   const winner = gameState.winner;
-  const isMyTeamWinner = gameState.players[mySeatIndex].team === winner;
+  const myTeam = (mySeatIndex !== -1 && gameState.players[mySeatIndex]) ? gameState.players[mySeatIndex].team : 0;
+  const isMyTeamWinner = myTeam === winner;
 
   if (isMyTeamWinner) {
     document.getElementById('victory-title').textContent = 'Vitória Campeira!';
@@ -1873,5 +1972,53 @@ if (mobileAdminBtn) {
     modalMobileSettings.classList.add('hide');
     const adminPanelBtn = document.getElementById('admin-panel-btn');
     if (adminPanelBtn) adminPanelBtn.click();
+  });
+}
+
+// Controle de tamanho vertical dos contêineres logs e chat
+const btnIncreaseLogs = document.getElementById('btn-increase-logs');
+const btnDecreaseLogs = document.getElementById('btn-decrease-logs');
+const btnIncreaseChat = document.getElementById('btn-increase-chat');
+const btnDecreaseChat = document.getElementById('btn-decrease-chat');
+
+const logsContainer = document.querySelector('.logs-container');
+const chatContainer = document.querySelector('.chat-container');
+
+if (btnIncreaseLogs && logsContainer) {
+  btnIncreaseLogs.addEventListener('click', (e) => {
+    e.stopPropagation();
+    let currentHeight = logsContainer.offsetHeight;
+    if (currentHeight < 500) {
+      logsContainer.style.height = (currentHeight + 30) + 'px';
+    }
+  });
+}
+if (btnDecreaseLogs && logsContainer) {
+  btnDecreaseLogs.addEventListener('click', (e) => {
+    e.stopPropagation();
+    let currentHeight = logsContainer.offsetHeight;
+    if (currentHeight > 80) {
+      logsContainer.style.height = (currentHeight - 30) + 'px';
+    }
+  });
+}
+if (btnIncreaseChat && chatContainer) {
+  btnIncreaseChat.addEventListener('click', (e) => {
+    e.stopPropagation();
+    let currentHeight = chatContainer.offsetHeight;
+    if (currentHeight < 600) {
+      chatContainer.style.height = (currentHeight + 30) + 'px';
+      chatContainer.style.minHeight = 'auto';
+    }
+  });
+}
+if (btnDecreaseChat && chatContainer) {
+  btnDecreaseChat.addEventListener('click', (e) => {
+    e.stopPropagation();
+    let currentHeight = chatContainer.offsetHeight;
+    if (currentHeight > 100) {
+      chatContainer.style.height = (currentHeight - 30) + 'px';
+      chatContainer.style.minHeight = 'auto';
+    }
   });
 }

@@ -140,14 +140,47 @@ class TrucoGame {
 
   removePlayer(socketId) {
     const idx = this.players.findIndex(p => p.socketId === socketId);
-    if (idx !== -1) {
-      const p = this.players[idx];
+    if (idx === -1) return null;
+    
+    const p = this.players[idx];
+    
+    if (this.state === 'playing') {
+      const team = p.team;
+      const opponentTeam = team === 0 ? 1 : 0;
+      
+      if (this.mode === '1v1') {
+        const opponentIdx = idx === 0 ? 1 : 0;
+        this.winner = opponentTeam;
+        this.state = 'game_end';
+        const oppName = this.players[opponentIdx] ? this.players[opponentIdx].name : 'Oponente';
+        this.log(`${p.name} abandonou a partida. ${oppName} venceu por desistência!`);
+        this.players.splice(idx, 1);
+      } else {
+        // 2v2:
+        const partnerIdx = (idx + 2) % 4;
+        const partner = this.players[partnerIdx];
+        
+        if (!partner || partner.isBot || !partner.socketId) {
+          this.winner = opponentTeam;
+          this.state = 'game_end';
+          this.log(`Todos os jogadores do Time ${team + 1} saíram. Time ${opponentTeam + 1} venceu por desistência!`);
+          this.players.splice(idx, 1);
+        } else {
+          // Substituir por Bot Médio
+          p.isBot = true;
+          p.name = `Bot ${p.name}`;
+          p.socketId = null;
+          p.difficulty = 'medium';
+          p.ready = true;
+          this.log(`${p.name.replace('Bot ', '')} saiu. Um Bot Médio assumiu seu lugar na dupla.`);
+        }
+      }
+    } else {
       this.players.splice(idx, 1);
       this.log(`${p.name} saiu do jogo.`);
-      this.state = 'lobby'; // Retorna para o lobby se alguém sair
-      return p;
+      this.state = 'lobby';
     }
-    return null;
+    return p;
   }
 
   startNewHand() {
@@ -369,7 +402,7 @@ class TrucoGame {
       } else if (type === 'real_envido') {
         if (lastCall !== 'envido') return false;
       } else if (type === 'falta_envido') {
-        if (lastCall !== 'real_envido') return false;
+        if (lastCall !== 'real_envido' && lastCall !== 'envido') return false;
       }
     }
 
@@ -928,6 +961,7 @@ class TrucoGame {
     if (!this.hand) {
       return {
         id: this.id,
+        roomName: this.roomName || this.id,
         mode: this.mode,
         maxPoints: this.maxPoints || 24,
         maxPlayers: this.maxPlayers,
@@ -956,6 +990,7 @@ class TrucoGame {
 
     return {
       id: this.id,
+      roomName: this.roomName || this.id,
       mode: this.mode,
       maxPoints: this.maxPoints || 24,
       maxPlayers: this.maxPlayers,

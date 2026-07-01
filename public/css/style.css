@@ -733,7 +733,7 @@ body {
 
 /* Histórico de Narrativa */
 .logs-container {
-  height: 110px; /* Reduzido para dar mais espaço para o chat */
+  height: 150px;
   margin-bottom: 12px;
   display: flex;
   flex-direction: column;
@@ -850,28 +850,42 @@ body {
 .mini-card-badge {
   background: #fff;
   color: #000;
-  border-radius: 3px;
-  padding: 1px 4px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  border: 1px solid var(--gold-dark);
-  text-transform: uppercase;
-  max-width: 48px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 4px;
+  width: 25px;
+  height: 38px;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  border: 1.5px solid #bdc3c7;
   font-family: 'Outfit', sans-serif;
+  position: relative;
+  text-align: center;
+  transition: transform 0.15s ease;
 }
 
-.mini-card-badge.gold { border-color: #d4af37; color: #b8860b; }
-.mini-card-badge.sword { border-color: #2980b9; color: #2980b9; }
-.mini-card-badge.club { border-color: #27ae60; color: #27ae60; }
-.mini-card-badge.cup { border-color: #c0392b; color: #c0392b; }
+.mini-card-badge:hover {
+  transform: translateY(-2px);
+}
+
+.mini-card-badge.gold { border-color: #f1c40f; color: #b8860b; }
+.mini-card-badge.sword { border-color: #3498db; color: #2980b9; }
+.mini-card-badge.club { border-color: #2ecc71; color: #27ae60; }
+.mini-card-badge.cup { border-color: #e74c3c; color: #c0392b; }
 
 .mini-card-badge.hidden-card {
-  background: var(--blue-accent);
-  color: white;
-  border-color: #1a5276;
+  background: repeating-linear-gradient(
+    45deg,
+    #2980b9,
+    #2980b9 3px,
+    #1f618d 3px,
+    #1f618d 6px
+  );
+  border: 1.5px solid #154360;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .player-seat.active-seat .avatar-card {
@@ -1329,7 +1343,7 @@ body {
   color: white;
 }
 
-.hide, .mobile-only.hide {
+.hide, .mobile-only.hide, .hide *, .mobile-only.hide * {
   display: none !important;
 }
 
@@ -1780,7 +1794,7 @@ body {
 /* Contêiner do Chat */
 .chat-container {
   flex: 2; /* Aumentado para priorizar a expansão do chat */
-  min-height: 250px; /* Aumentado para visualizar melhor o histórico */
+  min-height: 210px;
   display: flex;
   flex-direction: column;
   background: rgba(0, 0, 0, 0.65);

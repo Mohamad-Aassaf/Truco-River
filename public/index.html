@@ -73,10 +73,14 @@
           <button type="button" class="deck-option active" data-deck="traditional">Tradicional</button>
           <button type="button" class="deck-option" data-deck="pixel">Pixel Art</button>
         </div>
-        <div class="deck-preview-container">
-          <div class="deck-preview-card">
-            <img id="deck-preview-img" src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="Preview">
+        <div class="deck-preview-container" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 10px;">
+          <button type="button" id="prev-preview-btn" class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 1rem; border-radius: 6px; cursor: pointer;">&lt;</button>
+          <div class="deck-preview-cards" style="display: flex; gap: 8px;">
+            <img id="deck-preview-img-1" class="preview-card-img" style="width: 60px; height: 90px; border-radius: 6px; border: 1.5px solid var(--gold-dark); transition: transform 0.2s;" src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="card1">
+            <img id="deck-preview-img-2" class="preview-card-img" style="width: 60px; height: 90px; border-radius: 6px; border: 1.5px solid var(--gold-dark); transition: transform 0.2s;" src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="card2">
+            <img id="deck-preview-img-3" class="preview-card-img" style="width: 60px; height: 90px; border-radius: 6px; border: 1.5px solid var(--gold-dark); transition: transform 0.2s;" src="/Baralho_Espanhol_Organizado/Copas/3.png" alt="card3">
           </div>
+          <button type="button" id="next-preview-btn" class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 1rem; border-radius: 6px; cursor: pointer;">&gt;</button>
         </div>
       </div>
 
@@ -109,7 +113,7 @@
           </div>
 
           <div class="input-group">
-            <input type="text" id="new-room-id" placeholder="Código da Sala (Ex: SUL)" maxlength="6">
+            <input type="text" id="new-room-id" placeholder="Nome da Sala (Opcional)" maxlength="20">
           </div>
           <button id="create-room-btn" class="btn btn-primary">Criar Sala</button>
         </div>
@@ -246,7 +250,13 @@
 
         <!-- LOGS DA PARTIDA -->
         <div class="logs-container">
-          <h4>Narrativa da Partida</h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px;">
+            <h4 style="margin: 0; border: none; padding: 0;">Narrativa da Partida</h4>
+            <div class="resize-controls" style="display: flex; gap: 4px;">
+              <button type="button" class="resize-btn" id="btn-increase-logs" title="Aumentar" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-plus"></i></button>
+              <button type="button" class="resize-btn" id="btn-decrease-logs" title="Diminuir" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-minus"></i></button>
+            </div>
+          </div>
           <div id="game-logs" class="game-logs">
             <!-- Mensagens do servidor -->
           </div>
@@ -254,7 +264,13 @@
 
         <!-- CHAT DO LOBBY -->
         <div class="chat-container">
-          <h4>Conversa do Lobby</h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px; border-bottom: 1px solid rgba(223, 177, 91, 0.1); padding-bottom: 4px;">
+            <h4 style="margin: 0; border: none; padding: 0;">Conversa do Lobby</h4>
+            <div class="resize-controls" style="display: flex; gap: 4px;">
+              <button type="button" class="resize-btn" id="btn-increase-chat" title="Aumentar" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-plus"></i></button>
+              <button type="button" class="resize-btn" id="btn-decrease-chat" title="Diminuir" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-minus"></i></button>
+            </div>
+          </div>
           <div id="chat-messages" class="chat-messages">
             <!-- Mensagens do chat -->
           </div>
@@ -283,6 +299,7 @@
             <span class="score-team score-team0" id="mobile-score-us">00</span>
             <span class="score-vs">x</span>
             <span class="score-team score-team1" id="mobile-score-them">00</span>
+            <span id="mobile-score-limit" style="font-size: 0.72rem; opacity: 0.6; margin-left: 6px;">(24 pts)</span>
           </div>
           <div style="width: 80px;"></div> <!-- Espaçador para equilibrar o layout -->
         </div>

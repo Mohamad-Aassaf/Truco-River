@@ -28,6 +28,18 @@ app.use('/audio', express.static(path.join(__dirname, 'audio')));
 // Banco de dados em memória para salas ativas
 const activeGames = {};
 
+function generateUniqueRoomId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  do {
+    code = '';
+    for (let i = 0; i < 5; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+  } while (activeGames[code]);
+  return code;
+}
+
 // Função auxiliar para enviar o estado do jogo personalizado para cada jogador
 function broadcastState(roomId) {
   const game = activeGames[roomId];
@@ -180,32 +192,31 @@ io.on('connection', (socket) => {
     })));
 
   // Criar Sala
-  socket.on('create_room', ({ roomId, mode, playerName, maxPoints, isPrivate }) => {
-    const cleanRoomId = roomId.trim().toUpperCase();
-    if (activeGames[cleanRoomId]) {
-      socket.emit('error_msg', 'Sala já existe com esse código.');
-      return;
-    }
-
-    if (!cleanRoomId) {
-      socket.emit('error_msg', 'Código de sala inválido.');
-      return;
+  socket.on('create_room', ({ roomName, mode, playerName, maxPoints, isPrivate }) => {
+    const roomId = generateUniqueRoomId();
+    
+    let finalRoomName = roomName ? roomName.trim() : '';
+    if (!finalRoomName) {
+      const pName = playerName ? playerName.trim() : 'Jogador Anônimo';
+      finalRoomName = `Sala de ${pName}`;
     }
 
     const points = parseInt(maxPoints) || 24;
-    const game = new TrucoGame(cleanRoomId, mode, points);
+    const game = new TrucoGame(roomId, mode, points);
+    game.roomName = finalRoomName;
     game.isPrivate = !!isPrivate;
-    activeGames[cleanRoomId] = game;
+    activeGames[roomId] = game;
     game.addPlayer(socket.id, playerName, socket.id);
 
-    currentRoomId = cleanRoomId;
-    socket.join(cleanRoomId);
+    currentRoomId = roomId;
+    socket.join(roomId);
 
-    broadcastState(cleanRoomId);
+    broadcastState(roomId);
     io.emit('available_rooms', Object.keys(activeGames)
       .filter(id => !activeGames[id].isPrivate)
       .map(id => ({
         id,
+        roomName: activeGames[id].roomName || id,
         mode: activeGames[id].mode,
         playersCount: activeGames[id].players.length,
         maxPlayers: activeGames[id].maxPlayers
@@ -300,6 +311,43 @@ io.on('connection', (socket) => {
         });
       }
     }
+  });
+
+  // Expulsar bot ou jogador
+  socket.on('kick_player', ({ playerId }) => {
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'lobby') return;
+
+    const senderIsHost = game.players[0] && game.players[0].socketId === socket.id;
+    if (!senderIsHost) return;
+
+    const targetIdx = game.players.findIndex(p => p.id === playerId);
+    if (targetIdx === -1 || targetIdx === 0) return;
+
+    const targetPlayer = game.players[targetIdx];
+    if (targetPlayer.isBot) {
+      game.players.splice(targetIdx, 1);
+      game.log(`${targetPlayer.name} foi removido pelo criador da sala.`);
+    } else {
+      const targetSocket = io.sockets.sockets.get(targetPlayer.socketId);
+      if (targetSocket) {
+        targetSocket.emit('kicked');
+        targetSocket.leave(currentRoomId);
+      }
+      game.players.splice(targetIdx, 1);
+      game.log(`${targetPlayer.name} foi expulso da sala.`);
+    }
+
+    broadcastState(currentRoomId);
+    io.emit('available_rooms', Object.keys(activeGames)
+      .filter(id => !activeGames[id].isPrivate)
+      .map(id => ({
+        id,
+        roomName: activeGames[id].roomName || id,
+        mode: activeGames[id].mode,
+        playersCount: activeGames[id].players.length,
+        maxPlayers: activeGames[id].maxPlayers
+      })));
   });
 
   // Ações de jogo enviadas do cliente
