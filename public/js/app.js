@@ -76,8 +76,9 @@ const sidebarOverlay = document.getElementById('sidebar-overlay');
 const mobileScoreUs = document.getElementById('mobile-score-us');
 const mobileScoreThem = document.getElementById('mobile-score-them');
 
-// Novos Controles de Configurações Mobile
+// Novos Controles de Configurações Mobile / Desktop Unificados
 const mobileSettingsToggleBtn = document.getElementById('mobile-settings-toggle-btn');
+const desktopSettingsToggleBtn = document.getElementById('mobile-settings-toggle-btn-desktop');
 const modalMobileSettings = document.getElementById('modal-mobile-settings');
 const closeMobileSettings = document.getElementById('close-mobile-settings');
 const mobileMuteBtn = document.getElementById('mobile-mute-btn');
@@ -598,8 +599,9 @@ function renderLobbyScreen(gameState) {
       const isMe = p.id === myPlayerId;
       const isHost = gameState.players[0] && gameState.players[0].id === myPlayerId;
       
-      const changeTeamBtnHtml = (isMe && gameState.mode === '2v2') 
-        ? `<button id="change-team-btn" class="btn btn-secondary btn-sm" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Trocar de Time</button>` 
+      const canChangeTeam = gameState.mode === '2v2' && (isMe || (isHost && p.isBot));
+      const changeTeamBtnHtml = canChangeTeam
+        ? `<button class="change-team-btn btn btn-secondary btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Mudar Time</button>` 
         : '';
 
       const kickBtnHtml = (isHost && !isMe)
@@ -622,12 +624,12 @@ function renderLobbyScreen(gameState) {
         </span>
       `;
       
-      if (isMe && gameState.mode === '2v2') {
+      if (canChangeTeam) {
         setTimeout(() => {
-          const btn = document.getElementById('change-team-btn');
+          const btn = div.querySelector('.change-team-btn');
           if (btn) {
             btn.addEventListener('click', () => {
-              socket.emit('switch_team');
+              socket.emit('switch_team', { targetId: p.id });
             });
           }
         }, 0);
@@ -893,9 +895,13 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
         if (card.hidden) {
           cardsHtml += `<span class="mini-card-badge hidden-card"></span>`;
         } else {
-          const sym = suitSymbols[card.suit] || '';
           const cls = suitClasses[card.suit] || '';
-          cardsHtml += `<span class="mini-card-badge ${cls}">${card.value}${sym}</span>`;
+          const svgMarkup = SUIT_SVGS[card.suit] || '';
+          cardsHtml += `
+            <span class="mini-card-badge ${cls}">
+              <span>${card.value}</span>
+              <div class="mini-card-suit-wrapper">${svgMarkup}</div>
+            </span>`;
         }
       });
       seatCardsEl.innerHTML = cardsHtml;
@@ -951,6 +957,11 @@ function renderLogs(logs) {
   logs.forEach(log => {
     const div = document.createElement('div');
     div.className = 'log-entry';
+    if (log.team === 0) {
+      div.classList.add('team-0');
+    } else if (log.team === 1) {
+      div.classList.add('team-1');
+    }
 
     const timeStr = new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     div.innerHTML = `<span class="log-time">[${timeStr}]</span> ${log.msg}`;
@@ -1103,17 +1114,12 @@ function renderMyHand(cards, isMyTurn) {
   });
 }
 
-// Desenha as cartas jogadas por rodada no centro da mesa
+// Desenha as cartas jogadas por rodada no centro da mesa (Estilo Blyts - Pilhas)
 function renderPlayedCards(playedCards, players, gameState) {
   clearPlayedCardSlots();
 
-  // Limpar e atualizar os vencedores das rodadas
+  // Limpar e atualizar os marcadores de rodadas (bolinhas)
   for (let r = 0; r < 3; r++) {
-    const winnerEl = document.getElementById(`vaza-winner-${r}`);
-    if (winnerEl) {
-      winnerEl.textContent = '';
-      winnerEl.className = 'vaza-winner';
-    }
     const dotEl = document.getElementById(`round-dot-${r}`);
     if (dotEl) {
       dotEl.className = 'round-dot';
@@ -1122,13 +1128,8 @@ function renderPlayedCards(playedCards, players, gameState) {
 
   if (gameState && gameState.hand && gameState.hand.roundWinners) {
     gameState.hand.roundWinners.forEach((winnerIdx, r) => {
-      const winnerEl = document.getElementById(`vaza-winner-${r}`);
       const dotEl = document.getElementById(`round-dot-${r}`);
       if (winnerIdx === -1) {
-        if (winnerEl) {
-          winnerEl.textContent = 'Empate';
-          winnerEl.className = 'vaza-winner tie';
-        }
         if (dotEl) {
           dotEl.className = 'round-dot tie';
         }
@@ -1136,11 +1137,6 @@ function renderPlayedCards(playedCards, players, gameState) {
         const winnerPlayer = gameState.players[winnerIdx];
         const myTeam = gameState.players[mySeatIndex].team;
         const isUs = winnerPlayer.team === myTeam;
-        
-        if (winnerEl) {
-          winnerEl.textContent = isUs ? 'Nós' : 'Eles';
-          winnerEl.className = isUs ? 'vaza-winner win-us' : 'vaza-winner win-them';
-        }
         if (dotEl) {
           dotEl.className = isUs ? 'round-dot win-us' : 'round-dot win-them';
         }
@@ -1163,15 +1159,28 @@ function renderPlayedCards(playedCards, players, gameState) {
       else if (diff === 3) seat = 'right';
     }
 
-    const round = play.round; // 0, 1 ou 2
-    const slotId = `slot-v${round}-${seat}`;
-    const slot = document.getElementById(slotId);
-
+    const slot = document.getElementById(`arena-slot-${seat}`);
     if (slot) {
       const card = play.card;
+      const round = play.round; // 0, 1 ou 2
+      
       // Cria a carta miniatura para a mesa
       const cardEl = document.createElement('div');
       cardEl.className = `played-card ${card.suit}`;
+      
+      // Calcular deslocamento tridimensional e rotação para efeito de pilha (Cascata para baixo e direita)
+      const isMobile = window.innerWidth <= 850;
+      const stepX = isMobile ? 10 : 22;
+      const stepY = isMobile ? 6 : 14;
+      
+      let offsetX = round * stepX;
+      let offsetY = round * stepY;
+      let rotate = (round - 1) * 8; // -8deg, 0deg, 8deg
+      
+      cardEl.style.position = 'absolute';
+      cardEl.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotate}deg)`;
+      cardEl.style.zIndex = 10 + round;
+      
       cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
       slot.appendChild(cardEl);
     }
@@ -1179,8 +1188,10 @@ function renderPlayedCards(playedCards, players, gameState) {
 }
 
 function clearPlayedCardSlots() {
-  document.querySelectorAll('.played-card-slot').forEach(slot => {
-    slot.innerHTML = '';
+  const seats = ['bottom', 'left', 'top', 'right'];
+  seats.forEach(seat => {
+    const el = document.getElementById(`arena-slot-${seat}`);
+    if (el) el.innerHTML = '';
   });
 }
 
@@ -1284,6 +1295,9 @@ function setupActionButtons(gameState) {
   const myPlayer = gameState.players[mySeatIndex];
   const myTeam = myPlayer.team;
   const isMyTurn = hand.currentPlayer === mySeatIndex;
+  
+  // Regra do Pé: no 2v2 apenas os pés (índices 2 e 3) controlam o Envido
+  const isPe = (gameState.mode === '1v1') || (mySeatIndex === 2 || mySeatIndex === 3);
 
   const statusEl = document.getElementById('action-panel-status');
 
@@ -1308,7 +1322,7 @@ function setupActionButtons(gameState) {
     // Só na primeira rodada e se o jogador não jogou ainda
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isPe) {
       if (!myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
@@ -1323,7 +1337,7 @@ function setupActionButtons(gameState) {
     return; // Impede outras ações simultâneas
   }
 
-  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam) {
+  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && isPe) {
     if (statusEl) statusEl.classList.add('hide');
     groupResponse.classList.remove('hide');
     showAndEnableButton(btnQuero);
@@ -1386,7 +1400,7 @@ function setupActionButtons(gameState) {
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
 
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isPe) {
       // 2. Botão de Envido / Real / Falta
       if (!myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
@@ -1924,22 +1938,27 @@ if (sidebarOverlay && infoSidebar) {
   });
 }
 
-// Controles de Configurações Mobile
-if (mobileSettingsToggleBtn) {
-  mobileSettingsToggleBtn.addEventListener('click', () => {
-    initAudioContext();
-    if (modalMobileSettings) {
-      modalMobileSettings.classList.remove('hide');
-      if (window.soundManager) {
-        if (window.soundManager.muted) {
-          mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-        } else {
-          mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-        }
-        mobileVolumeSlider.value = window.soundManager.musicVolume;
+// Controles de Configurações Mobile / Desktop
+const openSettingsFunc = () => {
+  initAudioContext();
+  if (modalMobileSettings) {
+    modalMobileSettings.classList.remove('hide');
+    if (window.soundManager) {
+      if (window.soundManager.muted) {
+        mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+      } else {
+        mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
       }
+      mobileVolumeSlider.value = window.soundManager.musicVolume;
     }
-  });
+  }
+};
+
+if (mobileSettingsToggleBtn) {
+  mobileSettingsToggleBtn.addEventListener('click', openSettingsFunc);
+}
+if (desktopSettingsToggleBtn) {
+  desktopSettingsToggleBtn.addEventListener('click', openSettingsFunc);
 }
 
 if (closeMobileSettings) {

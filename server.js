@@ -291,23 +291,41 @@ io.on('connection', (socket) => {
   });
 
   // Trocar de time no lobby
-  socket.on('switch_team', () => {
+  socket.on('switch_team', (data) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby') return;
 
-    const p = game.players.find(player => player.socketId === socket.id);
+    const targetId = (data && data.targetId) ? data.targetId : null;
+    const isHost = game.players[0] && game.players[0].socketId === socket.id;
+
+    let p;
+    if (targetId) {
+      p = game.players.find(player => player.id === targetId);
+      // Se for outro jogador humano (não o próprio remetente), impede
+      if (p && p.id !== socket.id && !p.isBot) {
+        return;
+      }
+      // Se for bot, apenas o host pode mudar
+      if (p && p.id !== socket.id && p.isBot && !isHost) {
+        return;
+      }
+    } else {
+      p = game.players.find(player => player.socketId === socket.id);
+    }
+
     if (p) {
       const nextTeam = p.team === 0 ? 1 : 0;
       // Contar quantos jogadores já estão no time de destino
+      const maxPerTeam = game.maxPlayers / 2;
       const teamCount = game.players.filter(player => player.team === nextTeam).length;
-      if (teamCount < 2) {
+      if (teamCount < maxPerTeam) {
         p.team = nextTeam;
         broadcastState(currentRoomId);
       } else {
         socket.emit('receive_chat', {
           sender: 'Sistema',
           senderId: 'system',
-          msg: 'O time de destino já está cheio (máximo 2 jogadores)!'
+          msg: `O time de destino já está cheio (máximo ${maxPerTeam} jogadores)!`
         });
       }
     }

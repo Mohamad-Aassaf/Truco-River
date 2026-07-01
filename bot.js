@@ -9,8 +9,13 @@ function evaluateHandStrength(handCards) {
 }
 
 // Retorna a melhor carta para jogar
-function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, players, maxPlayers, difficulty = 'medium') {
+function selectCardToPlay(handCards, game, playerIdx, difficulty = 'medium') {
   if (handCards.length === 1) return 0; // Só resta uma carta
+
+  const maxPlayers = game.maxPlayers;
+  const players = game.players;
+  const playedCards = game.hand.playedCards;
+  const currentRound = game.hand.currentRound;
 
   // Bot fácil tem 30% de chance de jogar uma carta totalmente aleatória
   if (difficulty === 'easy' && Math.random() < 0.3) {
@@ -22,11 +27,28 @@ function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, playe
   // Filtrar jogadas da rodada atual
   const roundPlays = playedCards.filter(p => p.round === currentRound);
 
+  // Inteligência de dupla: descobrir as cartas do parceiro
+  let partnerCards = [];
+  if (maxPlayers === 4) {
+    const partnerIdx = (playerIdx + 2) % 4;
+    partnerCards = game.hand.hands[partnerIdx] || [];
+  }
+  const partnerMaxRank = partnerCards.length > 0 ? Math.max(...partnerCards.map(c => c.trucoRank)) : 0;
+
   // Se ninguém jogou ainda nesta rodada
   if (roundPlays.length === 0) {
     if (currentRound === 0) {
-      // Primeira rodada: joga a carta intermediária (média) para testar o terreno
-      // Ordena por rank e pega a do meio
+      // Primeira rodada:
+      // Se o parceiro tiver uma carta muito forte (Ex: rank >= 13), o bot poupa sua própria carta alta e descarta a mais baixa
+      if (partnerMaxRank >= 13) {
+        let minIdx = 0;
+        for (let i = 1; i < handCards.length; i++) {
+          if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
+        }
+        return minIdx;
+      }
+      
+      // Caso contrário, joga a carta intermediária (média) para testar o terreno
       const sorted = [...handCards].map((c, i) => ({ c, i })).sort((a, b) => a.c.trucoRank - b.c.trucoRank);
       return sorted[Math.floor(sorted.length / 2)].i;
     } else if (currentRound === 1) {
@@ -48,14 +70,24 @@ function selectCardToPlay(handCards, playedCards, currentRound, playerIdx, playe
       }
 
       if (r0WinnerTeam === myTeam) {
-        // Ganhamos a primeira, joga a mais baixa (estratégia de reter a maior)
+        // Ganhamos a primeira, descarta a mais baixa
         let minIdx = 0;
         for (let i = 1; i < handCards.length; i++) {
           if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
         }
         return minIdx;
       } else {
-        // Perdemos ou empatou, joga a maior para tentar salvar
+        // Perdemos ou empatou a primeira, precisa salvar a rodada
+        // Se o parceiro tem uma carta forte garantida (rank >= 12), descarta a mais baixa e deixa para o parceiro
+        if (partnerMaxRank >= 12) {
+          let minIdx = 0;
+          for (let i = 1; i < handCards.length; i++) {
+            if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
+          }
+          return minIdx;
+        }
+        
+        // Senão, joga a maior para tentar salvar
         let maxIdx = 0;
         for (let i = 1; i < handCards.length; i++) {
           if (handCards[i].trucoRank > handCards[maxIdx].trucoRank) maxIdx = i;
@@ -322,11 +354,8 @@ function handleBotAction(game, playerIdx) {
   // 6. JOGAR CARTA
   const cardIdx = selectCardToPlay(
     handCards,
-    game.hand.playedCards,
-    game.hand.currentRound,
+    game,
     playerIdx,
-    game.players,
-    game.maxPlayers,
     difficulty
   );
 

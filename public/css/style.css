@@ -776,6 +776,14 @@ body {
   padding-bottom: 4px;
 }
 
+.log-entry.team-0 {
+  color: #60a5fa !important;
+}
+
+.log-entry.team-1 {
+  color: #f87171 !important;
+}
+
 .log-time {
   color: #7f8c8d;
   font-size: 0.75rem;
@@ -855,9 +863,10 @@ body {
   height: 38px;
   display: inline-flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-around;
   align-items: center;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+  line-height: 1;
   font-weight: 900;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
   border: 1.5px solid #bdc3c7;
@@ -865,6 +874,22 @@ body {
   position: relative;
   text-align: center;
   transition: transform 0.15s ease;
+  padding: 3px 0;
+  box-sizing: border-box;
+}
+
+.mini-card-suit-wrapper {
+  width: 13px;
+  height: 13px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.mini-card-suit-wrapper svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 .mini-card-badge:hover {
@@ -989,11 +1014,11 @@ body {
 /* Baralho Empilhado */
 .card-deck-stack {
   position: absolute;
-  left: 20px;
+  left: 15px;
   top: 50%;
   transform: translateY(-50%);
-  width: 105px;
-  height: 157.5px;
+  width: 70px;
+  height: 105px;
   pointer-events: none;
 }
 
@@ -1017,50 +1042,47 @@ body {
 .card-deck-stack .deck-card:nth-child(2) { transform: translate(2px, -2px); }
 .card-deck-stack .deck-card:nth-child(3) { transform: translate(4px, -4px); }
 
-/* Cartas Jogadas Arena */
+/* Cartas Jogadas Arena (Estilo Blyts - Pilhas) */
 .played-cards-arena {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
-  padding: 10px 40px 10px 155px; /* espaço para o deck à esquerda aumentado no PC */
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%;
+  padding: 0 !important;
+  pointer-events: none;
 }
 
-.vaza-row {
-  display: flex;
-  align-items: center;
+.played-card-slot-container {
+  position: absolute;
+  width: 80px;
+  height: 120px;
+  border: 1.5px dashed rgba(223, 177, 91, 0.2);
+  border-radius: 8px;
   background: rgba(0,0,0,0.15);
-  border-radius: 8px;
-  padding: 6px 12px;
-  height: 28%;
-  border: 1px solid rgba(255,255,255,0.03);
+  box-sizing: border-box;
 }
 
-.vaza-label {
-  font-size: 0.75rem;
-  color: var(--gold);
-  width: 60px;
-  font-weight: 800;
-  text-transform: uppercase;
-  opacity: 0.8;
-  border-right: 1px solid rgba(223, 177, 91, 0.2);
+#arena-slot-bottom {
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.vaza-slots {
-  display: flex;
-  gap: 15px;
-  flex: 1;
-  justify-content: center;
+#arena-slot-top {
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.played-card-slot {
-  width: 105px;
-  height: 157.5px;
-  border: 1.5px dashed rgba(223, 177, 91, 0.25);
-  border-radius: 8px;
-  position: relative;
-  background: rgba(0,0,0,0.2);
+#arena-slot-left {
+  left: 20%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+#arena-slot-right {
+  right: 20%;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* --- BANNER DE ALERTA NO TOPO DA ARENA (REPOSICIONADO) --- */
@@ -1654,6 +1676,27 @@ body {
     margin-top: 3px !important;
     gap: 2px !important;
   }
+
+  /* Balões de fala compactos e reposicionados no mobile */
+  .voice-bubble {
+    font-size: 0.75rem !important;
+    padding: 4px 10px !important;
+    border-radius: 10px !important;
+    border-width: 1px !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.3) !important;
+  }
+  #seat-bottom .voice-bubble {
+    top: -38px !important;
+  }
+  #seat-top .voice-bubble {
+    top: 40px !important;
+  }
+  #seat-left .voice-bubble {
+    left: 70px !important;
+  }
+  #seat-right .voice-bubble {
+    right: 70px !important;
+  }
   
   .mini-card-badge {
     width: 18px !important;
@@ -1661,6 +1704,12 @@ body {
     font-size: 0.55rem !important;
     border-width: 1px !important;
     border-radius: 2px !important;
+    padding: 1px 0 !important;
+  }
+  
+  .mini-card-suit-wrapper {
+    width: 9px !important;
+    height: 9px !important;
   }
   
   /* Elementos de Jogo no Celular */
@@ -1677,36 +1726,34 @@ body {
     padding: 0 !important;
     width: 100%;
     height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    position: absolute;
+    top: 0; left: 0;
   }
-  
-  .vaza-row {
-    padding: 2px 4px;
-    gap: 5px;
-    width: 100%;
-    justify-content: center;
+
+  .played-card-slot-container {
+    width: 40px !important;
+    height: 60px !important;
   }
-  
-  .vaza-label {
-    display: none !important; /* Esconde labels de rodada no mobile para centralizar */
+
+  #arena-slot-bottom {
+    bottom: 8% !important;
   }
-  
-  .vaza-winner {
-    font-size: 0.55rem;
-    padding: 1px 3px;
+
+  #arena-slot-top {
+    top: 8% !important;
   }
-  
-  .played-card-slot {
-    width: 48px;
-    height: 72px;
+
+  #arena-slot-left {
+    left: 8% !important;
+  }
+
+  #arena-slot-right {
+    right: 8% !important;
   }
   
   .played-card {
-    width: 48px;
-    height: 72px;
+    width: 40px !important;
+    height: 60px !important;
   }
   
   /* Mão do Jogador */

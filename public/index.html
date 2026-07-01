@@ -31,20 +31,16 @@
     <span>Feedback? Envie para nós: <a href="mailto:mohamad.assaf.dev@gmail.com">mohamad.assaf.dev@gmail.com</a></span>
   </div>
 
-  <!-- CONTROLES FLUTUANTES DE ÁUDIO -->
+  <!-- CONTROLES FLUTUANTES DE ÁUDIO (Unificados) -->
   <div class="audio-controls-panel">
-    <button id="toggle-audio-btn" class="audio-btn" title="Ligar/Desligar Som">
-      <i class="fa-solid fa-volume-high"></i>
+    <button id="mobile-settings-toggle-btn-desktop" class="audio-btn" title="Ajustes do Jogo">
+      <i class="fa-solid fa-gear"></i>
     </button>
-    <button id="voice-settings-btn" class="audio-btn" title="Configurar Vozes/Gritos">
-      <i class="fa-solid fa-microphone"></i>
-    </button>
-    <button id="admin-panel-btn" class="audio-btn btn-warning" title="Painel Admin (Testes)"
-      style="background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
-      <i class="fa-solid fa-wrench"></i>
-    </button>
-    <div class="volume-slider-container">
-      <i class="fa-solid fa-music text-xs"></i>
+    <!-- Elementos originais mantidos ocultos para compatibilidade com eventos do motor -->
+    <div style="display: none !important;">
+      <button id="toggle-audio-btn"></button>
+      <button id="voice-settings-btn"></button>
+      <button id="admin-panel-btn"></button>
       <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3">
     </div>
   </div>
@@ -376,43 +372,12 @@
               <div class="deck-card back"></div>
             </div>
 
-            <!-- Cartas Jogadas por Rodada -->
+            <!-- Cartas Jogadas por Jogador (Estilo Blyts - Pilha acumulada) -->
             <div class="played-cards-arena">
-              <!-- Cartas jogadas na rodada 1 -->
-              <div class="vaza-row" data-vaza="0">
-                <div class="vaza-label">1ª Rodada</div>
-                <div class="vaza-winner" id="vaza-winner-0"></div>
-                <div class="vaza-slots">
-                  <div class="played-card-slot" id="slot-v0-bottom"></div>
-                  <div class="played-card-slot" id="slot-v0-left"></div>
-                  <div class="played-card-slot" id="slot-v0-top"></div>
-                  <div class="played-card-slot" id="slot-v0-right"></div>
-                </div>
-              </div>
-
-              <!-- Cartas jogadas na rodada 2 -->
-              <div class="vaza-row" data-vaza="1">
-                <div class="vaza-label">2ª Rodada</div>
-                <div class="vaza-winner" id="vaza-winner-1"></div>
-                <div class="vaza-slots">
-                  <div class="played-card-slot" id="slot-v1-bottom"></div>
-                  <div class="played-card-slot" id="slot-v1-left"></div>
-                  <div class="played-card-slot" id="slot-v1-top"></div>
-                  <div class="played-card-slot" id="slot-v1-right"></div>
-                </div>
-              </div>
-
-              <!-- Cartas jogadas na rodada 3 -->
-              <div class="vaza-row" data-vaza="2">
-                <div class="vaza-label">3ª Rodada</div>
-                <div class="vaza-winner" id="vaza-winner-2"></div>
-                <div class="vaza-slots">
-                  <div class="played-card-slot" id="slot-v2-bottom"></div>
-                  <div class="played-card-slot" id="slot-v2-left"></div>
-                  <div class="played-card-slot" id="slot-v2-top"></div>
-                  <div class="played-card-slot" id="slot-v2-right"></div>
-                </div>
-              </div>
+              <div class="played-card-slot-container" id="arena-slot-bottom"></div>
+              <div class="played-card-slot-container" id="arena-slot-left"></div>
+              <div class="played-card-slot-container" id="arena-slot-top"></div>
+              <div class="played-card-slot-container" id="arena-slot-right"></div>
             </div>
 
           </div>
