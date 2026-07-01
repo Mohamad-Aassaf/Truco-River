@@ -2333,3 +2333,28 @@ body[data-deck-style="pixel"] .card.hidden {
     display: none !important;
   }
 }
+
+/* BARRA DE FEEDBACK NO TOPO */
+.feedback-top-bar {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 6px;
+  border-bottom: 1.5px solid var(--gold);
+  z-index: 2000;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'Outfit', sans-serif;
+  flex-shrink: 0;
+}
+.feedback-top-bar a {
+  color: var(--gold);
+  text-decoration: none;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.feedback-top-bar a:hover {
+  text-decoration: underline;
+  color: #fff;
+}
