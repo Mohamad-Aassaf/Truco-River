@@ -212,14 +212,14 @@ const DECK_PREVIEWS = {
       '/Baralho_Espanhol_Organizado/Copas/3.png'
     ],
     [
-      '/Baralho_Espanhol_Organizado/Paus/1.png',
+      '/Baralho_Espanhol_Organizado/Bastos/1.png',
       '/Baralho_Espanhol_Organizado/Ouros/7.png',
       '/Baralho_Espanhol_Organizado/Espadas/3.png'
     ],
     [
-      '/Baralho_Espanhol_Organizado/Reis/12.png',
-      '/Baralho_Espanhol_Organizado/Cavalos/11.png',
-      '/Baralho_Espanhol_Organizado/Valetes/10.png'
+      '/Baralho_Espanhol_Organizado/Ouros/12.png',
+      '/Baralho_Espanhol_Organizado/Bastos/11.png',
+      '/Baralho_Espanhol_Organizado/Copas/10.png'
     ]
   ],
   pixel: [
