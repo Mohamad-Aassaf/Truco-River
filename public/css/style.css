@@ -1611,27 +1611,56 @@ body {
   
   /* Assentos dos Jogadores no Celular */
   #seat-top {
-    top: 15px;
+    top: -25px;
     left: 50%;
     transform: translateX(-50%);
   }
   
   #seat-bottom {
-    bottom: 15px;
+    bottom: -25px;
     left: 50%;
     transform: translateX(-50%);
   }
   
   #seat-left {
-    left: 15px;
+    left: -25px;
     top: 50%;
     transform: translateY(-50%);
   }
   
   #seat-right {
-    right: 15px;
+    right: -25px;
     top: 50%;
     transform: translateY(-50%);
+  }
+
+  .avatar-card {
+    padding: 3px 6px !important;
+    min-width: 65px !important;
+    border-radius: 8px !important;
+    gap: 2px !important;
+  }
+  
+  .seat-name {
+    font-size: 0.72rem !important;
+  }
+  
+  .seat-role {
+    font-size: 0.55rem !important;
+    padding: 1px 3px !important;
+  }
+  
+  .seat-cards {
+    margin-top: 3px !important;
+    gap: 2px !important;
+  }
+  
+  .mini-card-badge {
+    width: 18px !important;
+    height: 27px !important;
+    font-size: 0.55rem !important;
+    border-width: 1px !important;
+    border-radius: 2px !important;
   }
   
   /* Elementos de Jogo no Celular */
@@ -2359,4 +2388,62 @@ body[data-deck-style="pixel"] .card.hidden {
 .feedback-top-bar a:hover {
   text-decoration: underline;
   color: #fff;
+}
+
+/* Espaçamento para as telas não serem cortadas pela barra absoluta */
+body[data-screen="home"] #screen-lobby,
+body[data-screen="lobby"] #screen-waiting {
+  padding-top: 45px !important;
+}
+
+/* Ocultar barra de feedback quando a mesa de jogo estiver ativa */
+body[data-screen="game"] .feedback-top-bar,
+body[data-screen="game_end"] .feedback-top-bar {
+  display: none !important;
+}
+
+/* Ocultar barra de feedback em celulares/telas menores */
+@media (max-width: 850px) {
+  .feedback-top-bar {
+    display: none !important;
+  }
+}
+
+/* INDICADORES COLORIDOS DE RODADAS NA MESA */
+.round-indicators {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+
+.round-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+  transition: all 0.3s ease;
+}
+
+.round-dot.win-us {
+  background: #2ecc71 !important;
+  border-color: #27ae60 !important;
+  box-shadow: 0 0 8px rgba(46, 204, 113, 0.8) !important;
+}
+
+.round-dot.win-them {
+  background: #e74c3c !important;
+  border-color: #c0392b !important;
+  box-shadow: 0 0 8px rgba(231, 76, 60, 0.8) !important;
+}
+
+.round-dot.tie {
+  background: #f1c40f !important;
+  border-color: #f39c12 !important;
+  box-shadow: 0 0 8px rgba(241, 196, 15, 0.8) !important;
 }

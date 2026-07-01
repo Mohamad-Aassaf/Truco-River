@@ -551,16 +551,19 @@ socket.on('game_state', (gameState) => {
 
   // Atualizar visualizações com base no estado do jogo
   if (gameState.state === 'lobby') {
+    document.body.setAttribute('data-screen', 'lobby');
     renderLobbyScreen(gameState);
     if (window.soundManager) {
       window.soundManager.changeMusic('/js/musica.mp3');
     }
   } else if (gameState.state === 'playing' || gameState.state === 'hand_end') {
+    document.body.setAttribute('data-screen', 'game');
     renderGameScreen(gameState);
     if (window.soundManager) {
       window.soundManager.changeMusic('/js/musicaJogo.mp3');
     }
   } else if (gameState.state === 'game_end') {
+    document.body.setAttribute('data-screen', 'game_end');
     // Renderiza a mesa de jogo para mostrar o estado final do jogo por 6 segundos
     renderGameScreen(gameState);
     gameEndTimeout = setTimeout(() => {
@@ -1111,25 +1114,35 @@ function renderPlayedCards(playedCards, players, gameState) {
       winnerEl.textContent = '';
       winnerEl.className = 'vaza-winner';
     }
+    const dotEl = document.getElementById(`round-dot-${r}`);
+    if (dotEl) {
+      dotEl.className = 'round-dot';
+    }
   }
 
   if (gameState && gameState.hand && gameState.hand.roundWinners) {
     gameState.hand.roundWinners.forEach((winnerIdx, r) => {
       const winnerEl = document.getElementById(`vaza-winner-${r}`);
-      if (winnerEl) {
-        if (winnerIdx === -1) {
+      const dotEl = document.getElementById(`round-dot-${r}`);
+      if (winnerIdx === -1) {
+        if (winnerEl) {
           winnerEl.textContent = 'Empate';
           winnerEl.className = 'vaza-winner tie';
-        } else {
-          const winnerPlayer = gameState.players[winnerIdx];
-          const myTeam = gameState.players[mySeatIndex].team;
-          if (winnerPlayer.team === myTeam) {
-            winnerEl.textContent = 'Nós';
-            winnerEl.className = 'vaza-winner win-us';
-          } else {
-            winnerEl.textContent = 'Eles';
-            winnerEl.className = 'vaza-winner win-them';
-          }
+        }
+        if (dotEl) {
+          dotEl.className = 'round-dot tie';
+        }
+      } else {
+        const winnerPlayer = gameState.players[winnerIdx];
+        const myTeam = gameState.players[mySeatIndex].team;
+        const isUs = winnerPlayer.team === myTeam;
+        
+        if (winnerEl) {
+          winnerEl.textContent = isUs ? 'Nós' : 'Eles';
+          winnerEl.className = isUs ? 'vaza-winner win-us' : 'vaza-winner win-them';
+        }
+        if (dotEl) {
+          dotEl.className = isUs ? 'round-dot win-us' : 'round-dot win-them';
         }
       }
     });

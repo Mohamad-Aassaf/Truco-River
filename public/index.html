@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="/css/style.css?v=2.0">
 </head>
 
-<body>
+<body data-screen="home">
 
   <!-- BARRA DE CONTATO / FEEDBACK -->
   <div class="feedback-top-bar">
@@ -361,6 +361,13 @@
 
           <!-- CENTRO DA MESA: DECK E CARTAS JOGADAS -->
           <div class="table-center">
+
+            <!-- Indicadores Coloridos de Rodadas (Bolinhas de Status) -->
+            <div class="round-indicators">
+              <span class="round-dot" id="round-dot-0" title="1ª Rodada"></span>
+              <span class="round-dot" id="round-dot-1" title="2ª Rodada"></span>
+              <span class="round-dot" id="round-dot-2" title="3ª Rodada"></span>
+            </div>
 
             <!-- Monte de Cartas (Baralho de Amostra/Decoração) -->
             <div class="card-deck-stack">
