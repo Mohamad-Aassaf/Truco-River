@@ -1,0 +1,381 @@
+/* public/css/responsive.css */
+/* Ajustes de Responsividade para Celulares e Tablets (Largura < 850px) */
+
+@media (max-width: 850px) {
+  .mobile-only {
+    display: flex !important;
+  }
+
+  .audio-controls-panel {
+    display: none !important; /* Esconde os controles flutuantes no celular */
+  }
+  
+  body {
+    overflow: hidden; /* Evita rolagem em toda a página */
+  }
+  
+  /* Layout Principal */
+  .game-container {
+    flex-direction: row;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  /* Gaveta Lateral (Sidebar Drawer) */
+  .info-sidebar {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    width: 290px;
+    height: 100%;
+    z-index: 999;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-right: 2px solid var(--gold-dark);
+    border-bottom: none;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at center, #2e1d0c 0%, #150a04 100%) !important;
+    box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+    padding: 15px;
+    box-sizing: border-box;
+  }
+  
+  .info-sidebar.open {
+    left: 0;
+  }
+  
+  .matchstick-tracker-container {
+    flex-direction: row;
+    justify-content: space-around;
+    margin-bottom: 10px;
+  }
+  
+  .logs-container {
+    max-height: 140px;
+    flex-grow: 1;
+  }
+  
+  .chat-container {
+    max-height: 200px;
+    flex-grow: 1;
+    margin-top: 10px;
+  }
+  
+  /* Área da Mesa */
+  .table-area {
+    width: 100%;
+    height: 100%;
+    min-height: auto;
+    padding-top: 55px; /* Espaço para o cabeçalho do celular */
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column; /* Layout vertical no celular */
+    justify-content: flex-start; /* Alinha os itens no topo */
+    align-items: center;
+    position: relative;
+  }
+  
+  /* Cabeçalho do Celular */
+  .mobile-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 15px;
+    background: rgba(40, 24, 10, 0.9);
+    border-bottom: 1.5px solid var(--gold-dark);
+    box-sizing: border-box;
+    height: 50px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+  }
+
+  .mobile-header-left {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .sidebar-toggle-btn {
+    background: transparent;
+    border: 1.5px solid var(--gold-dark);
+    color: var(--gold);
+    border-radius: 8px;
+    font-size: 1.1rem;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .sidebar-toggle-btn:hover {
+    background: rgba(223, 177, 91, 0.15);
+  }
+  
+  .sidebar-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--gold);
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .mobile-score-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--gold-dark);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 0.9rem;
+    color: var(--gold);
+  }
+  
+  .mobile-score-lbl {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.7rem;
+    color: var(--text-light);
+    margin-right: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .mobile-score-badge .score-team {
+    font-weight: 800;
+  }
+  
+  .mobile-score-badge .score-team0 {
+    color: #60a5fa;
+  }
+  
+  .mobile-score-badge .score-team1 {
+    color: #f87171;
+  }
+  
+  /* Mesa e Elementos Internos */
+  .truco-table {
+    flex: none;
+    width: 82vw;
+    max-width: 320px;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+    margin: 10px auto 0 auto; /* Empurra para baixo do cabeçalho */
+    border-width: 8px;
+    border-radius: 50%;
+  }
+  
+  /* Assentos dos Jogadores no Celular */
+  #seat-top {
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  #seat-bottom {
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  #seat-left {
+    left: -25px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  
+  #seat-right {
+    right: -25px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .avatar-card {
+    padding: 3px 6px !important;
+    min-width: 65px !important;
+    border-radius: 8px !important;
+    gap: 2px !important;
+  }
+  
+  .seat-name {
+    font-size: 0.72rem !important;
+  }
+  
+  .seat-role {
+    font-size: 0.55rem !important;
+    padding: 1px 3px !important;
+  }
+  
+  .seat-cards {
+    margin-top: 3px !important;
+    gap: 2px !important;
+  }
+
+  /* Balões de fala compactos e reposicionados no mobile */
+  .voice-bubble {
+    font-size: 0.75rem !important;
+    padding: 4px 10px !important;
+    border-radius: 10px !important;
+    border-width: 1px !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.3) !important;
+  }
+  #seat-bottom .voice-bubble {
+    top: -38px !important;
+  }
+  #seat-top .voice-bubble {
+    top: 40px !important;
+  }
+  #seat-left .voice-bubble {
+    left: 70px !important;
+  }
+  #seat-right .voice-bubble {
+    right: 70px !important;
+  }
+  
+  .mini-card-badge {
+    width: 18px !important;
+    height: 27px !important;
+    font-size: 0.55rem !important;
+    border-width: 1px !important;
+    border-radius: 2px !important;
+    padding: 1px 0 !important;
+  }
+  
+  .mini-card-suit-wrapper {
+    width: 9px !important;
+    height: 9px !important;
+  }
+  
+  /* Elementos de Jogo no Celular */
+  .table-center {
+    width: 75%;
+    height: 75%;
+  }
+  
+  .card-deck-stack {
+    display: none !important; /* Esconde monte de cartas no mobile para centralizar vazas */
+  }
+  
+  .played-cards-arena {
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  .played-card-slot-container {
+    width: 40px !important;
+    height: 60px !important;
+  }
+
+  #arena-slot-bottom {
+    bottom: 8% !important;
+  }
+
+  #arena-slot-top {
+    top: 8% !important;
+  }
+
+  #arena-slot-left {
+    left: 8% !important;
+  }
+
+  #arena-slot-right {
+    right: 8% !important;
+  }
+  
+  .played-card {
+    width: 40px !important;
+    height: 60px !important;
+  }
+  
+  /* Mão do Jogador */
+  .player-hand-container {
+    bottom: 110px; /* Posicionado acima dos botões */
+    width: 260px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 250;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .player-hand {
+    display: flex;
+    justify-content: center !important;
+    align-items: center;
+    width: 100%;
+    height: 100px;
+    gap: -12px;
+  }
+  
+  .card {
+    width: 65px;
+    height: 98px;
+    padding: 3px;
+    border-radius: 6px;
+  }
+
+  /* Reduz tamanho dos nomes e avatares no celular */
+  .avatar-card {
+    padding: 4px 8px !important;
+    min-width: 65px !important;
+    border-radius: 8px !important;
+  }
+  .seat-name {
+    font-size: 0.72rem !important;
+  }
+  .seat-role {
+    font-size: 0.55rem !important;
+    padding: 1px 4px !important;
+  }
+  
+  .card-corner {
+    font-size: 0.7rem;
+  }
+  
+  .suit-main-svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .action-panel {
+    bottom: 15px; /* Posição fixa na base da tela */
+    padding: 8px 10px;
+    gap: 6px;
+    border-radius: 12px;
+    max-width: 96%;
+    min-height: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 350;
+  }
+
+  .action-group {
+    display: contents !important;
+  }
+  
+  .action-btn {
+    padding: 6px 10px;
+    font-size: 0.7rem;
+    border-radius: 6px;
+  }
+  
+  .lobby-actions-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .divider {
+    padding: 10px 0;
+  }
+}

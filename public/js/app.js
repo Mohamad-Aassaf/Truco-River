@@ -1,5 +1,5 @@
 // public/js/app.js
-// Controlador do Cliente para o Truco Gaúcho
+// Controlador e Orquestrador Principal do Cliente para o Truco Gaúcho
 
 const socket = window.location.hostname.includes('vercel.app') 
   ? io('https://truco-river.onrender.com') 
@@ -40,7 +40,7 @@ if (savedVoiceConfig) {
   }
 }
 
-// Elementos da Interface
+// Elementos da Interface Geral
 const screenLobby = document.getElementById('screen-lobby');
 const screenWaiting = document.getElementById('screen-waiting');
 const screenGame = document.getElementById('screen-game');
@@ -50,16 +50,16 @@ const usernameInput = document.getElementById('username');
 const newRoomIdInput = document.getElementById('new-room-id');
 const joinRoomIdInput = document.getElementById('join-room-id');
 const roomsList = document.getElementById('rooms-list');
+const waitingRoomTitle = document.getElementById('waiting-room-title');
+const waitingRoomSubtitle = document.getElementById('waiting-room-subtitle');
+const playersLobbyList = document.getElementById('players-lobby-list');
+
 const deckPreviewImg1 = document.getElementById('deck-preview-img-1');
 const deckPreviewImg2 = document.getElementById('deck-preview-img-2');
 const deckPreviewImg3 = document.getElementById('deck-preview-img-3');
 const prevPreviewBtn = document.getElementById('prev-preview-btn');
 const nextPreviewBtn = document.getElementById('next-preview-btn');
 const deckOptions = document.querySelectorAll('.deck-option');
-
-const waitingRoomTitle = document.getElementById('waiting-room-title');
-const waitingRoomSubtitle = document.getElementById('waiting-room-subtitle');
-const playersLobbyList = document.getElementById('players-lobby-list');
 
 const scoreValTeam0 = document.getElementById('score-val-team0');
 const scoreValTeam1 = document.getElementById('score-val-team1');
@@ -68,15 +68,9 @@ const sticksTeam1 = document.getElementById('sticks-team1');
 const gameLogs = document.getElementById('game-logs');
 const phaseBadge = document.getElementById('phase-badge');
 
-// Elementos Mobile
-const infoSidebar = document.querySelector('.info-sidebar');
-const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
-const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
-const sidebarOverlay = document.getElementById('sidebar-overlay');
-const mobileScoreUs = document.getElementById('mobile-score-us');
-const mobileScoreThem = document.getElementById('mobile-score-them');
+const playerHand = document.getElementById('player-hand');
 
-// Novos Controles de Configurações Mobile / Desktop Unificados
+// Elementos de Configurações Mobile / Desktop Unificados
 const mobileSettingsToggleBtn = document.getElementById('mobile-settings-toggle-btn');
 const desktopSettingsToggleBtn = document.getElementById('mobile-settings-toggle-btn-desktop');
 const modalMobileSettings = document.getElementById('modal-mobile-settings');
@@ -85,15 +79,7 @@ const mobileMuteBtn = document.getElementById('mobile-mute-btn');
 const mobileVolumeSlider = document.getElementById('mobile-volume-slider');
 const mobileVoiceBtn = document.getElementById('mobile-voice-btn');
 const mobileAdminBtn = document.getElementById('mobile-admin-btn');
-
-const seatBottom = document.getElementById('seat-bottom');
-const seatTop = document.getElementById('seat-top');
-const seatLeft = document.getElementById('seat-left');
-const seatRight = document.getElementById('seat-right');
-
-const playerHand = document.getElementById('player-hand');
-const gameAlertBanner = document.getElementById('game-alert-banner');
-const gameAlertText = document.getElementById('game-alert-text');
+const audioBtn = document.getElementById('toggle-audio-btn');
 
 // Painéis de Ações
 const btnTruco = document.getElementById('btn-truco');
@@ -116,7 +102,6 @@ const groupFlor = document.getElementById('group-flor');
 const groupResponse = document.getElementById('group-response');
 const groupFlorResponse = document.getElementById('group-flor-response');
 
-// Novos Elementos do Envido Mobile
 const btnEnvidoMobileTrigger = document.getElementById('btn-envido-mobile-trigger');
 const groupEnvidoMobileSub = document.getElementById('group-envido-mobile-sub');
 const btnEnvidoSubEnvido = document.getElementById('btn-envido-sub-envido');
@@ -139,321 +124,11 @@ let mySeatIndex = -1;
 let prevPlayedCardsCount = 0;
 let prevVoiceBubbles = {};
 let audioInitialized = false;
-let lastGameState = null; // Armazena a cópia local do estado do jogo
-let gameEndTimeout = null; // Controla a transição de fim de jogo
-let isClientAdminAuthenticated = false; // Controle de login no painel admin
+let lastGameState = null; 
+let gameEndTimeout = null; 
+let isClientAdminAuthenticated = false; 
 
-// SVGs das Cartas por Naipe (Design Premium Customizado)
-const SUIT_SVGS = {
-  espadas: `
-    <svg class="suit-main-svg" viewBox="0 0 100 100">
-      <!-- Lâmina da Espada -->
-      <path d="M50,15 L62,55 L50,58 L38,55 Z" fill="#b0c4de" stroke="#2c3e50" stroke-width="2"/>
-      <line x1="50" y1="15" x2="50" y2="58" stroke="#778899" stroke-width="1.5"/>
-      <!-- Guarda e Haste -->
-      <path d="M30,55 C30,55 50,52 70,55 L70,60 C70,60 50,57 30,60 Z" fill="#d4af37" stroke="#996515" stroke-width="1.5"/>
-      <rect x="47" y="60" width="6" height="18" fill="#8b5a2b" stroke="#3e2723" stroke-width="1.5"/>
-      <!-- Pomo da espada -->
-      <circle cx="50" cy="80" r="5" fill="#d4af37" stroke="#996515" stroke-width="1"/>
-    </svg>
-  `,
-  paus: `
-    <svg class="suit-main-svg" viewBox="0 0 100 100">
-      <!-- Tronco do Bastão -->
-      <path d="M43,80 L40,30 C40,30 50,15 60,30 L57,80 Z" fill="#8b5a2b" stroke="#3e2723" stroke-width="2"/>
-      <!-- Nós de Madeira e Ranhuras -->
-      <circle cx="48" cy="40" r="3" fill="#5d4037"/>
-      <circle cx="52" cy="60" r="4.5" fill="#5d4037"/>
-      <!-- Pequena Folha verde brotando para estilizar gaúcho -->
-      <path d="M58,45 C65,40 70,45 64,52 Z" fill="#27ae60" stroke="#1e8449" stroke-width="1"/>
-    </svg>
-  `,
-  copas: `
-    <svg class="suit-main-svg" viewBox="0 0 100 100">
-      <!-- Cálice de Ouro -->
-      <path d="M30,20 L70,20 L68,45 C68,55 58,62 50,62 C42,62 32,55 32,45 Z" fill="#d4af37" stroke="#996515" stroke-width="2"/>
-      <!-- Detalhe da borda e gemas -->
-      <rect x="35" y="24" width="30" height="3" fill="#c0392b"/>
-      <!-- Haste do Cálice -->
-      <rect x="46" y="62" width="8" height="15" fill="#b58d3d" stroke="#996515" stroke-width="1.5"/>
-      <!-- Base do Cálice -->
-      <path d="M35,77 L65,77 L60,82 L40,82 Z" fill="#d4af37" stroke="#996515" stroke-width="2"/>
-    </svg>
-  `,
-  ouros: `
-    <svg class="suit-main-svg" viewBox="0 0 100 100">
-      <!-- Moeda de Ouro Gaudéria com Sol no centro -->
-      <circle cx="50" cy="50" r="35" fill="#f1c40f" stroke="#d4af37" stroke-width="3"/>
-      <!-- Linhas internas/Relevo -->
-      <circle cx="50" cy="50" r="27" fill="none" stroke="#d4af37" stroke-width="1.5" stroke-dasharray="4,4"/>
-      <!-- Sol no centro -->
-      <circle cx="50" cy="50" r="8" fill="#f39c12"/>
-      <path d="M50,30 L50,38 M50,62 L50,70 M30,50 L38,50 M62,50 L70,50 M36,36 L42,42 M58,58 L64,64 M64,36 L58,42 M42,58 L36,64" stroke="#e67e22" stroke-width="2.5" stroke-linecap="round"/>
-    </svg>
-  `
-};
-
-const SUIT_MINIS = {
-  espadas: '⚔️',
-  paus: '🪵',
-  copas: '🏆',
-  ouros: '🟡'
-};
-
-// --- CONFIGURAÇÃO E EVENTOS DO LOBBY ---
-
-// Estilo das Cartas (Tradicional ou Pixel)
-let currentDeckStyle = localStorage.getItem('truco_deck_style') || 'traditional';
-
-const DECK_PREVIEWS = {
-  traditional: [
-    [
-      '/Baralho_Espanhol_Organizado/Espadas/1.png',
-      '/Baralho_Espanhol_Organizado/Espadas/7.png',
-      '/Baralho_Espanhol_Organizado/Copas/3.png'
-    ],
-    [
-      '/Baralho_Espanhol_Organizado/Bastos/1.png',
-      '/Baralho_Espanhol_Organizado/Ouros/7.png',
-      '/Baralho_Espanhol_Organizado/Espadas/3.png'
-    ],
-    [
-      '/Baralho_Espanhol_Organizado/Ouros/12.png',
-      '/Baralho_Espanhol_Organizado/Bastos/11.png',
-      '/Baralho_Espanhol_Organizado/Copas/10.png'
-    ]
-  ],
-  pixel: [
-    [
-      '/pixelDeck/pixelDeck/Espada/espada1.png',
-      '/pixelDeck/pixelDeck/Espada/espada7.png',
-      '/pixelDeck/pixelDeck/Copa/copa3.png'
-    ],
-    [
-      '/pixelDeck/pixelDeck/Basto/basto1.png',
-      '/pixelDeck/pixelDeck/Oro/oro7.png',
-      '/pixelDeck/pixelDeck/Espada/espada3.png'
-    ],
-    [
-      '/pixelDeck/pixelDeck/Oro/oro10.png',
-      '/pixelDeck/pixelDeck/Basto/basto9.png',
-      '/pixelDeck/pixelDeck/Copa/copa8.png'
-    ]
-  ]
-};
-
-let currentPreviewSlideIndex = 0;
-
-function updateDeckPreview() {
-  const slide = DECK_PREVIEWS[currentDeckStyle][currentPreviewSlideIndex];
-  if (slide) {
-    if (deckPreviewImg1) {
-      deckPreviewImg1.src = slide[0];
-      deckPreviewImg1.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
-    }
-    if (deckPreviewImg2) {
-      deckPreviewImg2.src = slide[1];
-      deckPreviewImg2.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
-    }
-    if (deckPreviewImg3) {
-      deckPreviewImg3.src = slide[2];
-      deckPreviewImg3.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
-    }
-  }
-}
-
-if (prevPreviewBtn) {
-  prevPreviewBtn.addEventListener('click', () => {
-    currentPreviewSlideIndex = (currentPreviewSlideIndex - 1 + 3) % 3;
-    updateDeckPreview();
-  });
-}
-
-if (nextPreviewBtn) {
-  nextPreviewBtn.addEventListener('click', () => {
-    currentPreviewSlideIndex = (currentPreviewSlideIndex + 1) % 3;
-    updateDeckPreview();
-  });
-}
-
-function updateBodyDeckStyle() {
-  document.body.setAttribute('data-deck-style', currentDeckStyle);
-}
-
-// Inicializar botões e estado no lobby
-deckOptions.forEach(btn => {
-  if (btn.dataset.deck === currentDeckStyle) {
-    btn.classList.add('active');
-  } else {
-    btn.classList.remove('active');
-  }
-
-  btn.addEventListener('click', (e) => {
-    deckOptions.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentDeckStyle = btn.dataset.deck;
-    localStorage.setItem('truco_deck_style', currentDeckStyle);
-    updateDeckPreview();
-    updateBodyDeckStyle();
-  });
-});
-
-// --- ALTERNADOR DO MARCADOR DE PONTOS (PLACAR VS PALITOS) ---
-const btnScoreDigital = document.getElementById('btn-score-digital');
-const btnScoreSticks = document.getElementById('btn-score-sticks');
-const viewScoreDigital = document.getElementById('view-score-digital');
-const viewScoreSticks = document.getElementById('view-score-sticks');
-
-let currentScoreView = localStorage.getItem('truco_score_view') || 'digital';
-
-function updateScoreViewMode() {
-  if (!btnScoreDigital || !btnScoreSticks) return;
-  if (currentScoreView === 'sticks') {
-    btnScoreSticks.classList.add('active');
-    btnScoreDigital.classList.remove('active');
-    viewScoreSticks.classList.remove('hide');
-    viewScoreDigital.classList.add('hide');
-  } else {
-    btnScoreDigital.classList.add('active');
-    btnScoreSticks.classList.remove('active');
-    viewScoreDigital.classList.remove('hide');
-    viewScoreSticks.classList.add('hide');
-  }
-}
-
-if (btnScoreDigital && btnScoreSticks) {
-  btnScoreDigital.addEventListener('click', () => {
-    currentScoreView = 'digital';
-    localStorage.setItem('truco_score_view', currentScoreView);
-    updateScoreViewMode();
-  });
-
-  btnScoreSticks.addEventListener('click', () => {
-    currentScoreView = 'sticks';
-    localStorage.setItem('truco_score_view', currentScoreView);
-    updateScoreViewMode();
-  });
-}
-
-updateScoreViewMode();
-updateDeckPreview();
-updateBodyDeckStyle();
-
-// Seletor de Modo (1v1 ou 2v2)
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    selectedRoomMode = e.target.dataset.mode;
-  });
-});
-
-// Opções de Sala (Configuração de Pontos e Privacidade)
-let selectedRoomPrivacy = false; // false = Pública, true = Privada
-let selectedRoomPoints = 24; // 24, 30 ou valor customizado
-
-// Inicializar botões de privacidade
-document.querySelectorAll('#room-privacy-group .lobby-toggle-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    document.querySelectorAll('#room-privacy-group .lobby-toggle-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedRoomPrivacy = btn.dataset.private === 'true';
-  });
-});
-
-// Inicializar botões de limite de pontos
-const customPointsInputGroup = document.getElementById('custom-points-input-group');
-const customPointsInput = document.getElementById('custom-points');
-
-document.querySelectorAll('#room-points-group .lobby-toggle-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    document.querySelectorAll('#room-points-group .lobby-toggle-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-
-    const val = btn.dataset.points;
-    if (val === 'custom') {
-      customPointsInputGroup.classList.remove('hide');
-      if (customPointsInput) selectedRoomPoints = parseInt(customPointsInput.value) || 24;
-    } else {
-      customPointsInputGroup.classList.add('hide');
-      selectedRoomPoints = parseInt(val) || 24;
-    }
-  });
-});
-
-// Atualizar valor customizado se mudar o input
-if (customPointsInput) {
-  customPointsInput.addEventListener('input', () => {
-    selectedRoomPoints = parseInt(customPointsInput.value) || 24;
-  });
-}
-
-// Criar Sala
-document.getElementById('create-room-btn').addEventListener('click', () => {
-  initAudioContext();
-  const name = usernameInput.value.trim() || 'Jogador Anônimo';
-  const roomName = newRoomIdInput.value.trim();
-
-  socket.emit('create_room', {
-    roomName: roomName,
-    mode: selectedRoomMode,
-    playerName: name,
-    maxPoints: selectedRoomPoints,
-    isPrivate: selectedRoomPrivacy
-  });
-});
-
-// Entrar em Sala
-document.getElementById('join-room-btn').addEventListener('click', () => {
-  initAudioContext();
-  const name = usernameInput.value.trim() || 'Jogador Anônimo';
-  const code = joinRoomIdInput.value.trim().toUpperCase();
-
-  if (!code) {
-    alert('Qual o código da sala que queres entrar?');
-    return;
-  }
-
-  socket.emit('join_room', {
-    roomId: code,
-    playerName: name
-  });
-});
-
-// Adicionar Bot
-document.getElementById('add-bot-btn').addEventListener('click', () => {
-  const difficulty = document.getElementById('bot-difficulty-select').value;
-  socket.emit('add_bot', { difficulty });
-});
-
-// Pronto
-document.getElementById('ready-btn').addEventListener('click', () => {
-  socket.emit('toggle_ready');
-});
-
-// Abandonar Sala
-document.getElementById('leave-room-btn').addEventListener('click', () => {
-  window.location.reload();
-});
-
-// Botão de volume / Mudo
-const audioBtn = document.getElementById('toggle-audio-btn');
-audioBtn.addEventListener('click', () => {
-  initAudioContext();
-  window.soundManager.toggleMute();
-  if (window.soundManager.muted) {
-    audioBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-  } else {
-    audioBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-  }
-});
-
-// Controle de Volume
-document.getElementById('music-volume').addEventListener('input', (e) => {
-  initAudioContext();
-  window.soundManager.setMusicVolume(e.target.value);
-});
-
+// --- INICIALIZAÇÃO DE ÁUDIO ---
 function initAudioContext() {
   if (!audioInitialized) {
     window.soundManager.initAudio();
@@ -462,14 +137,6 @@ function initAudioContext() {
   window.soundManager.playMusic();
 }
 
-// Tentar tocar imediatamente ao entrar no site
-try {
-  initAudioContext();
-} catch (e) {
-  console.log("Autoplay inicial bloqueado pelo navegador.");
-}
-
-// Ouvinte para a primeira interação do usuário (caso o autoplay seja bloqueado pelo navegador)
 const startAutoplay = () => {
   initAudioContext();
   window.removeEventListener('click', startAutoplay);
@@ -483,1232 +150,84 @@ window.addEventListener('keydown', startAutoplay);
 window.addEventListener('mousedown', startAutoplay);
 window.addEventListener('touchstart', startAutoplay);
 
-// Receber salas ativas
-socket.on('available_rooms', (rooms) => {
-  roomsList.innerHTML = '';
-  if (rooms.length === 0) {
-    roomsList.innerHTML = '<li class="empty-list-msg">Nenhuma sala criada no momento. Crie uma acima!</li>';
-    return;
-  }
+// Tentar tocar imediatamente ao entrar no site
+try {
+  initAudioContext();
+} catch (e) {
+  console.log("Autoplay inicial bloqueado pelo navegador.");
+}
 
-  rooms.forEach(room => {
-    const li = document.createElement('li');
-    li.className = 'room-item';
-    const displayRoomName = room.roomName || `Sala ${room.id}`;
-    li.innerHTML = `
-      <div class="room-info">
-        <span class="room-code-badge" style="font-weight: 700;">${displayRoomName}</span>
-        <span class="room-mode" style="font-size: 0.75rem; color: #bbb;">Cod: ${room.id} | ${room.mode === '1v1' ? '1v1' : '2v2'}</span>
-      </div>
-      <div>
-        <span class="room-slots">${room.playersCount}/${room.maxPlayers} jogadores</span>
-        <button class="btn btn-secondary btn-sm join-list-btn" data-id="${room.id}" style="padding: 6px 12px; font-size: 0.75rem; margin-left: 10px;">Entrar</button>
-      </div>
-    `;
-
-    // Bind direto do botão entrar da lista
-    li.querySelector('.join-list-btn').addEventListener('click', (e) => {
-      initAudioContext();
-      const name = usernameInput.value.trim() || 'Jogador Anônimo';
-      const roomId = e.target.dataset.id;
-      socket.emit('join_room', { roomId, playerName: name });
-    });
-
-    roomsList.appendChild(li);
-  });
-});
-
-// Erros do servidor
-socket.on('error_msg', (msg) => {
-  alert(msg);
-});
-
-// Expulsão da sala
-socket.on('kicked', () => {
-  alert('Você foi removido da sala pelo criador.');
-  screenLobby.classList.add('active');
-  screenWaiting.classList.remove('active');
-  screenGame.classList.remove('active');
-  screenGameEnd.classList.remove('active');
-});
-
-// --- RECEBIMENTO DO ESTADO DE JOGO (SOCKET PRINCIPAL) ---
-
-socket.on('game_state', (gameState) => {
-  lastGameState = gameState; // Armazena a cópia local para verificação nos botões
-  myPlayerId = socket.id;
-  currentRoomMode = gameState.mode;
-
-  // Sincronizar configuração de voz local com o servidor se necessário
-  const me = gameState.players.find(p => p.id === myPlayerId || p.socketId === myPlayerId);
-  if (me && JSON.stringify(me.voiceConfig) !== JSON.stringify(myVoiceConfig)) {
-    socket.emit('update_voice_config', myVoiceConfig);
-  }
-
-  if (gameEndTimeout) {
-    clearTimeout(gameEndTimeout);
-    gameEndTimeout = null;
-  }
-
-  // Atualizar visualizações com base no estado do jogo
-  if (gameState.state === 'lobby') {
-    document.body.setAttribute('data-screen', 'lobby');
-    renderLobbyScreen(gameState);
+// --- CONTROLES DE AJUSTES/SOM UNIFICADOS ---
+const openSettingsFunc = () => {
+  initAudioContext();
+  if (modalMobileSettings) {
+    modalMobileSettings.classList.remove('hide');
     if (window.soundManager) {
-      window.soundManager.changeMusic('/js/musica.mp3');
-    }
-  } else if (gameState.state === 'playing' || gameState.state === 'hand_end') {
-    document.body.setAttribute('data-screen', 'game');
-    renderGameScreen(gameState);
-    if (window.soundManager) {
-      window.soundManager.changeMusic('/js/musicaJogo.mp3');
-    }
-  } else if (gameState.state === 'game_end') {
-    document.body.setAttribute('data-screen', 'game_end');
-    // Renderiza a mesa de jogo para mostrar o estado final do jogo por 6 segundos
-    renderGameScreen(gameState);
-    gameEndTimeout = setTimeout(() => {
-      renderGameEndScreen(gameState);
-      gameEndTimeout = null;
-    }, 6000);
-    if (window.soundManager) {
-      window.soundManager.changeMusic(null);
-    }
-  }
-});
-
-// --- RENDERIZAÇÃO DA SALA DE ESPERA (LOBBY) ---
-function renderLobbyScreen(gameState) {
-  screenLobby.classList.remove('active');
-  screenWaiting.classList.add('active');
-  screenGame.classList.remove('active');
-  screenGameEnd.classList.remove('active');
-
-  waitingRoomTitle.textContent = `${gameState.roomName}`;
-  waitingRoomSubtitle.textContent = `Código para Entrar: ${gameState.id} | Modo: ${gameState.mode === '1v1' ? 'Individual (1v1)' : 'Em Dupla (2v2)'} | Limite: ${gameState.maxPoints} pts`;
-
-  // Renderizar slots de jogadores
-  playersLobbyList.innerHTML = '';
-
-  // Preencher slots
-  for (let i = 0; i < gameState.maxPlayers; i++) {
-    const p = gameState.players[i];
-    const div = document.createElement('div');
-
-    if (p) {
-      const isMe = p.id === myPlayerId;
-      const isHost = gameState.players[0] && gameState.players[0].id === myPlayerId;
-      
-      const canChangeTeam = gameState.mode === '2v2' && (isMe || (isHost && p.isBot));
-      const changeTeamBtnHtml = canChangeTeam
-        ? `<button class="change-team-btn btn btn-secondary btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Mudar Time</button>` 
-        : '';
-
-      const kickBtnHtml = (isHost && !isMe)
-        ? `<button class="kick-player-btn btn btn-danger btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 6px; font-size: 0.7rem; line-height: 1; border-radius: 4px;" title="Remover"><i class="fa-solid fa-user-xmark"></i> Remover</button>`
-        : '';
-
-      div.className = `player-slot ${p.ready ? 'ready' : ''}`;
-      div.innerHTML = `
-        <span class="player-slot-name">
-          ${p.isBot ? '<i class="fa-solid fa-robot"></i>' : '<i class="fa-solid fa-user"></i>'}
-          ${p.name} ${isMe ? '(Você)' : ''}
-          <span style="font-size: 0.75rem; opacity: 0.7; font-weight: 700; color: ${p.team === 0 ? '#60a5fa' : '#f87171'};">
-            (Time ${p.team + 1})
-          </span>
-          ${changeTeamBtnHtml}
-          ${kickBtnHtml}
-        </span>
-        <span class="status-badge ${p.ready ? 'ready' : 'waiting'}">
-          ${p.ready ? 'Pronto' : 'Aguardando'}
-        </span>
-      `;
-      
-      if (canChangeTeam) {
-        setTimeout(() => {
-          const btn = div.querySelector('.change-team-btn');
-          if (btn) {
-            btn.addEventListener('click', () => {
-              socket.emit('switch_team', { targetId: p.id });
-            });
-          }
-        }, 0);
-      }
-
-      if (isHost && !isMe) {
-        setTimeout(() => {
-          const btn = div.querySelector('.kick-player-btn');
-          if (btn) {
-            btn.addEventListener('click', () => {
-              socket.emit('kick_player', { playerId: p.id });
-            });
-          }
-        }, 0);
-      }
-    } else {
-      div.className = 'player-slot';
-      div.innerHTML = `
-        <span class="player-slot-name" style="color: #7f8c8d; font-style: italic;">
-          Vaga Aberta
-        </span>
-        <span class="status-badge" style="background: #333; color: #7f8c8d;">
-          Livre
-        </span>
-      `;
-    }
-    playersLobbyList.appendChild(div);
-  }
-
-  // Controle de exibição do botão Adicionar Bot
-  const addBotBtn = document.getElementById('add-bot-btn');
-  if (gameState.players.length >= gameState.maxPlayers) {
-    addBotBtn.classList.add('hide');
-  } else {
-    addBotBtn.classList.remove('hide');
-  }
-
-  // Texto do botão de Pronto
-  const myPlayer = gameState.players.find(p => p.id === myPlayerId);
-  const readyBtn = document.getElementById('ready-btn');
-  if (myPlayer) {
-    readyBtn.innerHTML = myPlayer.ready ? '<i class="fa-solid fa-xmark"></i> Não Pronto' : '<i class="fa-solid fa-check"></i> Pronto';
-    if (myPlayer.ready) {
-      readyBtn.className = 'btn btn-danger';
-    } else {
-      readyBtn.className = 'btn btn-success';
-    }
-  }
-}
-
-// --- RENDERIZAÇÃO DA ARENA DE JOGO ---
-
-function renderGameScreen(gameState) {
-  screenLobby.classList.remove('active');
-  screenWaiting.classList.remove('active');
-  screenGame.classList.add('active');
-  screenGameEnd.classList.remove('active');
-
-  // 1. Encontrar o meu index nos jogadores do servidor
-  mySeatIndex = gameState.players.findIndex(p => p.id === myPlayerId);
-
-  // 2. Atualizar o Placar e Narrativa
-  scoreValTeam0.textContent = String(gameState.score[0]).padStart(2, '0');
-  scoreValTeam1.textContent = String(gameState.score[1]).padStart(2, '0');
-
-  if (mobileScoreUs) mobileScoreUs.textContent = String(gameState.score[0]).padStart(2, '0');
-  if (mobileScoreThem) mobileScoreThem.textContent = String(gameState.score[1]).padStart(2, '0');
-
-  // Atualizar limite de pontos
-  const limit = gameState.maxPoints || 24;
-  const vsBadge = document.querySelector('.vs-badge');
-  if (vsBadge) {
-    vsBadge.innerHTML = `VS<br><span style="font-size: 0.62rem; opacity: 0.7; font-weight: 700; white-space: nowrap;">Até ${limit} pts</span>`;
-  }
-  const mobileLimit = document.getElementById('mobile-score-limit');
-  if (mobileLimit) {
-    mobileLimit.textContent = `(${limit} pts)`;
-  }
-
-  // Desenhar os palitos gaúchos (pontos)
-  drawMatchsticks(sticksTeam0, gameState.score[0]);
-  drawMatchsticks(sticksTeam1, gameState.score[1]);
-
-  // Narrativas/Logs
-  renderLogs(gameState.logs);
-
-  // Fase do Jogo
-  if (gameState.state === 'hand_end') {
-    phaseBadge.textContent = 'Fim da Mão';
-    phaseBadge.style.background = '#8e44ad';
-  } else {
-    phaseBadge.textContent = `Rodada ${gameState.hand.currentRound + 1}`;
-    phaseBadge.style.background = '#d4af37';
-  }
-
-  setupSeatsLayout(gameState.players, gameState.dealerIndex, gameState.hand ? gameState.hand.currentPlayer : -1, gameState.hand);
-
-  // 4. Se a mão estiver ativa
-  if (gameState.hand) {
-    // Renderizar cartas jogadas na mesa
-    renderPlayedCards(gameState.hand.playedCards, gameState.players, gameState);
-
-    // Renderizar cartas do próprio jogador
-    renderMyHand(gameState.hand.hands[mySeatIndex], gameState.hand.currentPlayer === mySeatIndex && !gameState.hand.trucoResponsePending && !gameState.hand.envidoResponsePending && !gameState.hand.florResponsePending);
-
-    // Exibir balões de voz
-    renderVoiceBubbles(gameState.hand.voiceBubble, gameState.players);
-
-    // Atualizar banner de alerta
-    updateAlertBanner(gameState);
-
-    // Habilitar/Desabilitar botões de ações
-    setupActionButtons(gameState);
-
-    // Emitir som se uma nova carta foi jogada
-    const currentPlayedCount = gameState.hand.playedCards.length;
-    if (currentPlayedCount > prevPlayedCardsCount) {
-      window.soundManager.playCardPlaySound();
-      prevPlayedCardsCount = currentPlayedCount;
-    }
-  } else if ((gameState.state === 'hand_end' || gameState.state === 'game_end') && gameState.lastHandSummary) {
-    // Fim de mão ou de jogo: manter as cartas jogadas na mesa para visualização e mostrar resultado
-    renderPlayedCards(gameState.lastHandSummary.playedCards, gameState.players);
-
-    // Limpar mão local do jogador
-    playerHand.innerHTML = '';
-
-    // Exibir balões de voz finais da última ação (ex: "Não Quero", "Mazo"), se houver
-    if (gameState.lastHandSummary.voiceBubble) {
-      renderVoiceBubbles(gameState.lastHandSummary.voiceBubble, gameState.players);
-    }
-
-    // Exibir balão de resultado na barra superior
-    const summary = gameState.lastHandSummary;
-    const myTeam = gameState.players[mySeatIndex].team;
-    const lastLog = gameState.logs && gameState.logs.length > 0 ? gameState.logs[gameState.logs.length - 1].msg : '';
-
-    if (gameState.state === 'game_end') {
-      const isGameWinner = gameState.winner === myTeam;
-      if (isGameWinner) {
-        gameAlertText.innerHTML = `
-          <div style="color: #dfb15b; font-weight: 800; text-shadow: 0 0 10px rgba(223, 177, 91, 0.6); font-size: 1.4rem;">¡VENCEMOS A PELEIA! 🏆</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
-        `;
+      if (window.soundManager.muted) {
+        mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
       } else {
-        gameAlertText.innerHTML = `
-          <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.6); font-size: 1.4rem;">¡FOMOS DERROTADOS! 😢</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
-        `;
+        mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
       }
+      mobileVolumeSlider.value = window.soundManager.musicVolume;
+    }
+  }
+};
+
+if (mobileSettingsToggleBtn) mobileSettingsToggleBtn.addEventListener('click', openSettingsFunc);
+if (desktopSettingsToggleBtn) desktopSettingsToggleBtn.addEventListener('click', openSettingsFunc);
+
+if (closeMobileSettings) {
+  closeMobileSettings.addEventListener('click', () => {
+    modalMobileSettings.classList.add('hide');
+  });
+}
+
+if (mobileMuteBtn) {
+  mobileMuteBtn.addEventListener('click', () => {
+    initAudioContext();
+    window.soundManager.toggleMute();
+    if (window.soundManager.muted) {
+      mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+      if (audioBtn) audioBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
     } else {
-      const isWinner = summary.winnerTeam === myTeam;
-      const ptsText = summary.pointsWon === 1 ? '1 ponto' : `${summary.pointsWon} pontos`;
-      if (isWinner) {
-        gameAlertText.innerHTML = `
-          <div style="color: #2ecc71; font-weight: 800; text-shadow: 0 0 10px rgba(46, 204, 113, 0.4); font-size: 1.4rem;">¡VENCEMOS A MÃO! (+${ptsText})</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
-        `;
-      } else {
-        gameAlertText.innerHTML = `
-          <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.4); font-size: 1.4rem;">¡ELES VENCERAM A MÃO! (+${ptsText})</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
-        `;
-      }
-    }
-
-    gameAlertBanner.classList.remove('hide');
-    disableAllActionButtons();
-    prevPlayedCardsCount = 0;
-  } else {
-    // Estado de transição limpa
-    playerHand.innerHTML = '';
-    clearPlayedCardSlots();
-    hideVoiceBubbles();
-    gameAlertBanner.classList.add('hide');
-    disableAllActionButtons();
-    prevPlayedCardsCount = 0;
-  }
-}
-
-// Mapeia e atualiza visualmente os assentos de cada jogador
-function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = null) {
-  // Ocultar todos por padrão
-  seatLeft.classList.add('hidden-seat');
-  seatRight.classList.add('hidden-seat');
-
-  // Remover marcações ativas anteriores
-  document.querySelectorAll('.player-seat').forEach(seat => {
-    seat.classList.remove('active-seat');
-    seat.querySelector('.seat-role').classList.remove('ready');
-    seat.querySelector('.seat-role').textContent = '';
-    const seatCardsEl = seat.querySelector('.seat-cards');
-    if (seatCardsEl) seatCardsEl.innerHTML = '';
-  });
-
-  const getSeatElement = (mappedPos) => {
-    if (mappedPos === 'bottom') return seatBottom;
-    if (mappedPos === 'top') return seatTop;
-    if (mappedPos === 'left') return seatLeft;
-    if (mappedPos === 'right') return seatRight;
-    return null;
-  };
-
-  const maxPlayers = players.length;
-
-  const suitSymbols = {
-    'espadas': '⚔️',
-    'paus': '♣',
-    'copas': '♥',
-    'ouros': '🪙'
-  };
-  const suitClasses = {
-    'espadas': 'sword',
-    'paus': 'club',
-    'copas': 'cup',
-    'ouros': 'gold'
-  };
-
-  players.forEach((p, idx) => {
-    let position = 'bottom';
-
-    if (currentRoomMode === '1v1') {
-      // 1v1: Me = bottom, Oponente = top
-      position = (idx === mySeatIndex) ? 'bottom' : 'top';
-    } else {
-      // 2v2:
-      // Posição relativa a mim
-      const diff = (idx - mySeatIndex + 4) % 4;
-      if (diff === 0) position = 'bottom'; // Eu
-      else if (diff === 1) position = 'left';  // Oponente 1
-      else if (diff === 2) position = 'top';   // Parceiro
-      else if (diff === 3) position = 'right'; // Oponente 2
-    }
-
-    const seat = getSeatElement(position);
-    if (!seat) return;
-
-    seat.classList.remove('hidden-seat');
-
-    // Atualizar info
-    seat.querySelector('.seat-name').textContent = p.isBot ? `🤖 ${p.name}` : p.name;
-
-    // Distintivo do Carteador (D) ou Mão (M)
-    const roleBadge = seat.querySelector('.seat-role');
-    if (idx === dealerIndex) {
-      roleBadge.textContent = 'Doador';
-      roleBadge.classList.add('ready');
-    } else if (idx === (dealerIndex + 1) % maxPlayers) {
-      roleBadge.textContent = 'Mão';
-    }
-
-    // Sinalizar de quem é o turno
-    if (idx === currentPlayerIdx) {
-      seat.classList.add('active-seat');
-    }
-
-    // Renderizar mini-cartas do jogador na mesa
-    const seatCardsEl = seat.querySelector('.seat-cards');
-    if (seatCardsEl && activeHand && activeHand.hands && activeHand.hands[idx]) {
-      const playerCards = activeHand.hands[idx];
-      let cardsHtml = '';
-      playerCards.forEach(card => {
-        if (card.hidden) {
-          cardsHtml += `<span class="mini-card-badge hidden-card"></span>`;
-        } else {
-          const cls = suitClasses[card.suit] || '';
-          const svgMarkup = SUIT_SVGS[card.suit] || '';
-          cardsHtml += `
-            <span class="mini-card-badge ${cls}">
-              <span>${card.value}</span>
-              <div class="mini-card-suit-wrapper">${svgMarkup}</div>
-            </span>`;
-        }
-      });
-      seatCardsEl.innerHTML = cardsHtml;
+      mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+      if (audioBtn) audioBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
     }
   });
 }
 
-// Desenha o marcador de fósforos rústicos de pontos
-function drawMatchsticks(container, score) {
-  container.innerHTML = '';
-
-  if (score === 0) {
-    container.innerHTML = '<span style="color: #7f8c8d; font-size: 0.8rem; font-style: italic;">Nenhum ponto</span>';
-    return;
-  }
-
-  const fullBoxes = Math.floor(score / 5);
-  const remainder = score % 5;
-
-  // Criar caixas cheias (5 pontos cada)
-  for (let i = 0; i < fullBoxes; i++) {
-    const box = document.createElement('div');
-    box.className = 'stick-group-5';
-    box.innerHTML = `
-      <div class="stick-line line-top"></div>
-      <div class="stick-line line-right"></div>
-      <div class="stick-line line-bottom"></div>
-      <div class="stick-line line-left"></div>
-      <div class="stick-line line-diagonal"></div>
-    `;
-    container.appendChild(box);
-  }
-
-  // Criar caixa incompleta para o resto
-  if (remainder > 0) {
-    const box = document.createElement('div');
-    box.className = 'stick-group-5';
-
-    let html = '';
-    if (remainder >= 1) html += '<div class="stick-line line-top"></div>';
-    if (remainder >= 2) html += '<div class="stick-line line-right"></div>';
-    if (remainder >= 3) html += '<div class="stick-line line-bottom"></div>';
-    if (remainder >= 4) html += '<div class="stick-line line-left"></div>';
-    // Diagonal opcionalmente não cai no 5 aqui (se for 5 vira loop anterior)
-    box.innerHTML = html;
-    container.appendChild(box);
-  }
-}
-
-// Renderiza a Narrative/logs do jogo
-function renderLogs(logs) {
-  gameLogs.innerHTML = '';
-  logs.forEach(log => {
-    const div = document.createElement('div');
-    div.className = 'log-entry';
-    if (log.team === 0) {
-      div.classList.add('team-0');
-    } else if (log.team === 1) {
-      div.classList.add('team-1');
-    }
-
-    const timeStr = new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    div.innerHTML = `<span class="log-time">[${timeStr}]</span> ${log.msg}`;
-
-    gameLogs.appendChild(div);
-  });
-
-  // Rolar para o final
-  gameLogs.scrollTop = gameLogs.scrollHeight;
-}
-
-// Ilustrações das figuras do baralho espanhol (Sota, Cavalo, Rei)
-const FIG_10_SVG = (color) => `
-  <svg class="suit-main-svg" viewBox="0 0 100 100">
-    <path d="M50,15 C42,15 38,22 38,32 C38,42 45,50 50,72 C55,50 62,42 62,32 C62,22 58,15 50,15 Z" fill="none" stroke="${color}" stroke-width="2.5"/>
-    <circle cx="50" cy="30" r="7" fill="${color}"/>
-    <line x1="32" y1="80" x2="68" y2="20" stroke="${color}" stroke-width="2.5"/>
-    <polygon points="68,20 64,28 72,26" fill="${color}"/>
-    <rect x="42" y="45" width="4" height="22" fill="${color}" transform="rotate(45 42 45)"/>
-  </svg>
-`;
-
-const FIG_11_SVG = (color) => `
-  <svg class="suit-main-svg" viewBox="0 0 100 100">
-    <path d="M68,75 C68,58 58,42 58,28 C58,22 48,12 38,18 C28,24 25,35 32,40 C38,42 42,40 48,45 C54,50 52,65 45,75 Z" fill="${color}"/>
-    <path d="M30,35 C35,37 45,35 48,45" fill="none" stroke="#fff" stroke-width="1.5"/>
-    <path d="M22,78 C22,85 78,85 78,78" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="4,4"/>
-  </svg>
-`;
-
-const FIG_12_SVG = (color) => `
-  <svg class="suit-main-svg" viewBox="0 0 100 100">
-    <path d="M18,68 L82,68 L88,38 L72,52 L50,28 L28,52 L12,38 Z" fill="${color}" stroke="#ecdcb0" stroke-width="1.5"/>
-    <rect x="22" y="68" width="56" height="6" fill="#ecdcb0" rx="3"/>
-    <circle cx="50" cy="28" r="4.5" fill="#c0392b"/>
-    <circle cx="12" cy="38" r="3" fill="#2980b9"/>
-    <circle cx="88" cy="38" r="3" fill="#2980b9"/>
-    <circle cx="28" cy="52" r="3.5" fill="#27ae60"/>
-    <circle cx="72" cy="52" r="3.5" fill="#27ae60"/>
-  </svg>
-`;
-
-function getCardCenterHTML(card) {
-  const value = card.value;
-  const suit = card.suit;
-
-  let color = '#333';
-  if (suit === 'espadas') color = '#2c3e50';
-  else if (suit === 'paus') color = '#1e8449';
-  else if (suit === 'copas') color = '#b03a2e';
-  else if (suit === 'ouros') color = '#d4ac0d';
-
-  if (value === 10) {
-    return `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;">
-        ${FIG_10_SVG(color)}
-        <span class="card-figure-label">Sota</span>
-      </div>
-    `;
-  }
-  if (value === 11) {
-    return `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;">
-        ${FIG_11_SVG(color)}
-        <span class="card-figure-label">Cavalo</span>
-      </div>
-    `;
-  }
-  if (value === 12) {
-    return `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;">
-        ${FIG_12_SVG(color)}
-        <span class="card-figure-label">Rei</span>
-      </div>
-    `;
-  }
-
-  return SUIT_SVGS[suit];
-}
-
-function getSuitFolder(suit) {
-  switch (suit) {
-    case 'espadas': return 'Espadas';
-    case 'paus': return 'Bastos';
-    case 'copas': return 'Copas';
-    case 'ouros': return 'Ouros';
-    default: return '';
-  }
-}
-
-function getCardImgSrc(card) {
-  if (currentDeckStyle === 'pixel') {
-    let suitFolder = '';
-    let imgPrefix = '';
-    switch (card.suit) {
-      case 'espadas':
-        suitFolder = 'Espada';
-        imgPrefix = 'espada';
-        break;
-      case 'paus':
-        suitFolder = 'Basto';
-        imgPrefix = 'basto';
-        break;
-      case 'copas':
-        suitFolder = 'Copa';
-        imgPrefix = 'copa';
-        break;
-      case 'ouros':
-        suitFolder = 'Oro';
-        imgPrefix = 'oro';
-        break;
-    }
-    let val = card.value;
-    if (val === 10) val = 8;
-    else if (val === 11) val = 9;
-    else if (val === 12) val = 10;
-
-    return `/pixelDeck/pixelDeck/${suitFolder}/${imgPrefix}${val}.png`;
-  } else {
-    const suitFolder = getSuitFolder(card.suit);
-    return `/Baralho_Espanhol_Organizado/${suitFolder}/${card.value}.png`;
-  }
-}
-
-// Renderiza a mão do jogador local (3 cartas no bottom)
-function renderMyHand(cards, isMyTurn) {
-  playerHand.innerHTML = '';
-
-  if (!cards || cards.length === 0) return;
-
-  cards.forEach((card, idx) => {
-    const cardEl = document.createElement('div');
-    // Classe de naipe para cor
-    cardEl.className = `card ${card.suit}`;
-    cardEl.dataset.idx = idx;
-
-    // Renderizar a imagem da carta
-    cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
-
-    // Se for meu turno e sem aposta pendente, posso clicar para jogar
-    if (isMyTurn) {
-      cardEl.addEventListener('click', () => {
-        socket.emit('game_action', { action: 'play_card', value: idx });
-      });
-    } else {
-      cardEl.style.cursor = 'default';
-    }
-
-    playerHand.appendChild(cardEl);
+if (mobileVolumeSlider) {
+  mobileVolumeSlider.addEventListener('input', (e) => {
+    initAudioContext();
+    const vol = parseFloat(e.target.value);
+    window.soundManager.setMusicVolume(vol);
+    const desktopSlider = document.getElementById('music-volume');
+    if (desktopSlider) desktopSlider.value = vol;
   });
 }
 
-// Desenha as cartas jogadas por rodada no centro da mesa (Estilo Blyts - Pilhas)
-function renderPlayedCards(playedCards, players, gameState) {
-  clearPlayedCardSlots();
-
-  // Limpar e atualizar os marcadores de rodadas (bolinhas)
-  for (let r = 0; r < 3; r++) {
-    const dotEl = document.getElementById(`round-dot-${r}`);
-    if (dotEl) {
-      dotEl.className = 'round-dot';
-    }
-  }
-
-  if (gameState && gameState.hand && gameState.hand.roundWinners) {
-    gameState.hand.roundWinners.forEach((winnerIdx, r) => {
-      const dotEl = document.getElementById(`round-dot-${r}`);
-      if (winnerIdx === -1) {
-        if (dotEl) {
-          dotEl.className = 'round-dot tie';
-        }
-      } else {
-        const winnerPlayer = gameState.players[winnerIdx];
-        const myTeam = gameState.players[mySeatIndex].team;
-        const isUs = winnerPlayer.team === myTeam;
-        if (dotEl) {
-          dotEl.className = isUs ? 'round-dot win-us' : 'round-dot win-them';
-        }
-      }
-    });
-  }
-
-  playedCards.forEach(play => {
-    // Determinar em qual assento o jogador está sentado
-    let seat = 'bottom';
-    const playerIdx = play.playerIdx;
-
-    if (currentRoomMode === '1v1') {
-      seat = (playerIdx === mySeatIndex) ? 'bottom' : 'top';
-    } else {
-      const diff = (playerIdx - mySeatIndex + 4) % 4;
-      if (diff === 0) seat = 'bottom';
-      else if (diff === 1) seat = 'left';
-      else if (diff === 2) seat = 'top';
-      else if (diff === 3) seat = 'right';
-    }
-
-    const slot = document.getElementById(`arena-slot-${seat}`);
-    if (slot) {
-      const card = play.card;
-      const round = play.round; // 0, 1 ou 2
-      
-      // Cria a carta miniatura para a mesa
-      const cardEl = document.createElement('div');
-      cardEl.className = `played-card ${card.suit}`;
-      
-      // Calcular deslocamento tridimensional e rotação para efeito de pilha (Cascata para baixo e direita)
-      const isMobile = window.innerWidth <= 850;
-      const stepX = isMobile ? 10 : 22;
-      const stepY = isMobile ? 6 : 14;
-      
-      let offsetX = round * stepX;
-      let offsetY = round * stepY;
-      let rotate = (round - 1) * 8; // -8deg, 0deg, 8deg
-      
-      cardEl.style.position = 'absolute';
-      cardEl.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotate}deg)`;
-      cardEl.style.zIndex = 10 + round;
-      
-      cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
-      slot.appendChild(cardEl);
-    }
+if (mobileVoiceBtn) {
+  mobileVoiceBtn.addEventListener('click', () => {
+    modalMobileSettings.classList.add('hide');
+    const voiceSettingsBtn = document.getElementById('voice-settings-btn');
+    if (voiceSettingsBtn) voiceSettingsBtn.click();
   });
 }
 
-function clearPlayedCardSlots() {
-  const seats = ['bottom', 'left', 'top', 'right'];
-  seats.forEach(seat => {
-    const el = document.getElementById(`arena-slot-${seat}`);
-    if (el) el.innerHTML = '';
+if (mobileAdminBtn) {
+  mobileAdminBtn.addEventListener('click', () => {
+    modalMobileSettings.classList.add('hide');
+    const adminPanelBtn = document.getElementById('admin-panel-btn');
+    if (adminPanelBtn) adminPanelBtn.click();
   });
 }
-
-// Exibe balões de diálogo
-function renderVoiceBubbles(voiceBubbles, players) {
-  hideVoiceBubbles();
-
-  if (!voiceBubbles) return;
-
-  Object.keys(voiceBubbles).forEach(key => {
-    const playerIdx = parseInt(key);
-    const text = voiceBubbles[playerIdx];
-
-    let seat = 'bottom';
-    if (currentRoomMode === '1v1') {
-      seat = (playerIdx === mySeatIndex) ? 'bottom' : 'top';
-    } else {
-      const diff = (playerIdx - mySeatIndex + 4) % 4;
-      if (diff === 0) seat = 'bottom';
-      else if (diff === 1) seat = 'left';
-      else if (diff === 2) seat = 'top';
-      else if (diff === 3) seat = 'right';
-    }
-
-    const bubble = document.getElementById(`bubble-${seat}`);
-    if (bubble) {
-      // Se for o áudio especial de flor sobre envido, mostra apenas "FLOR" no balão visual
-      let displayText = text;
-      if (text === '¡FLOR_SOBRE_ENVIDO!') {
-        displayText = '¡FLOR!';
-      }
-      bubble.textContent = displayText;
-      bubble.classList.add('show');
-
-      // Tocar som de grito se for um grito novo (usa voz)
-      if (prevVoiceBubbles[playerIdx] !== text) {
-        const playerObj = players && players[playerIdx];
-        const customConfig = playerObj ? playerObj.voiceConfig : null;
-        window.soundManager.playVoiceChant(text, customConfig);
-      }
-    }
-  });
-
-  prevVoiceBubbles = { ...voiceBubbles };
-}
-
-function hideVoiceBubbles() {
-  document.querySelectorAll('.voice-bubble').forEach(b => {
-    b.classList.remove('show');
-    b.textContent = '';
-  });
-}
-
-// Alertas de turnos e apostas pendentes
-function updateAlertBanner(gameState) {
-  gameAlertBanner.classList.add('hide');
-
-  const hand = gameState.hand;
-  const myTeam = gameState.players[mySeatIndex].team;
-
-  // 1. Resposta pendente de Flor para o meu time
-  if (hand.florResponsePending && hand.florPendingTeam === myTeam) {
-    gameAlertText.textContent = `Flor cantada! Tens contra-flor para rebater?`;
-    gameAlertBanner.classList.remove('hide');
-    return;
-  }
-
-  // 2. Resposta pendente de Envido para o meu time
-  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam) {
-    const currentCall = hand.envidoChant;
-    gameAlertText.textContent = `Eles gritaram ${currentCall}! Aceitas a aposta?`;
-    gameAlertBanner.classList.remove('hide');
-    return;
-  }
-
-  // 3. Resposta pendente de Truco para o meu time
-  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
-    gameAlertText.textContent = `Time adversário gritou ${hand.trucoChant}! O que fazes?`;
-    gameAlertBanner.classList.remove('hide');
-    return;
-  }
-
-  // 4. Vez normal de jogar
-  if (hand.currentPlayer === mySeatIndex) {
-    gameAlertText.textContent = 'É a tua vez de jogar, jogador!';
-    gameAlertBanner.classList.remove('hide');
-  }
-}
-
-function showAndEnableButton(btn) {
-  if (!btn) return;
-  btn.classList.remove('hide');
-  btn.disabled = false;
-}
-
-// Configura dinamicamente os botões que o jogador pode clicar
-function setupActionButtons(gameState) {
-  disableAllActionButtons(gameState);
-
-  const hand = gameState.hand;
-  const myPlayer = gameState.players[mySeatIndex];
-  const myTeam = myPlayer.team;
-  const isMyTurn = hand.currentPlayer === mySeatIndex;
-  
-  // Regra do Pé: no 2v2 apenas os pés (índices 2 e 3) controlam o Envido
-  const isPe = (gameState.mode === '1v1') || (mySeatIndex === 2 || mySeatIndex === 3);
-
-  const statusEl = document.getElementById('action-panel-status');
-
-  // --- SE HOUVER APOSTA PENDENTE PARA O MEU TIME RESPONDER ---
-
-  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
-    if (statusEl) statusEl.classList.add('hide');
-    groupResponse.classList.remove('hide');
-    showAndEnableButton(btnQuero);
-    showAndEnableButton(btnNaoQuero);
-
-    // Opções de Aumentar Truco
-    if (hand.trucoState === 'truco') {
-      groupTruco.classList.remove('hide');
-      showAndEnableButton(btnRetruco);
-    } else if (hand.trucoState === 'retruco') {
-      groupTruco.classList.remove('hide');
-      showAndEnableButton(btnVale4);
-    }
-
-    // Os adversários do Truco podem chamar Envido/Flor antes de aceitar o Truco
-    // Só na primeira rodada e se o jogador não jogou ainda
-    const myCards = hand.hands[mySeatIndex] || [];
-    const hasNotPlayedYet = myCards.length === 3;
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isPe) {
-      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
-        groupEnvido.classList.remove('hide');
-        showAndEnableButton(btnEnvido);
-        showAndEnableButton(btnRealEnvido);
-        showAndEnableButton(btnFaltaEnvido);
-      }
-      if (myPlayer.hasFlor && hand.florState === 'none') {
-        groupFlor.classList.remove('hide');
-        showAndEnableButton(btnFlor);
-      }
-    }
-    return; // Impede outras ações simultâneas
-  }
-
-  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && isPe) {
-    if (statusEl) statusEl.classList.add('hide');
-    groupResponse.classList.remove('hide');
-    showAndEnableButton(btnQuero);
-    showAndEnableButton(btnNaoQuero);
-
-    // Pode repicar o Envido se for a primeira rodada
-    if (hand.currentRound === 0) {
-      groupEnvido.classList.remove('hide');
-
-      const history = hand.envidoHistory || [];
-      const lastCall = history[history.length - 1];
-
-      if (lastCall === 'envido') {
-        const envidoCount = history.filter(c => c === 'envido').length;
-        if (envidoCount < 2) {
-          showAndEnableButton(btnEnvido);
-        }
-        showAndEnableButton(btnRealEnvido);
-        showAndEnableButton(btnFaltaEnvido);
-      } else if (lastCall === 'real_envido') {
-        showAndEnableButton(btnFaltaEnvido);
-      }
-
-      // Pode cantar Flor se tiver Flor (cancela o Envido)
-      if (myPlayer.hasFlor && hand.florState === 'none') {
-        groupFlor.classList.remove('hide');
-        showAndEnableButton(btnFlor);
-      }
-    }
-    return;
-  }
-
-  if (hand.florResponsePending && hand.florPendingTeam === myTeam) {
-    if (statusEl) statusEl.classList.add('hide');
-    groupFlorResponse.classList.remove('hide');
-    showAndEnableButton(btnContraFlor);
-    showAndEnableButton(btnContraFlorResto);
-    showAndEnableButton(btnAchique);
-    return;
-  }
-
-  // --- AÇÕES QUE PODEM SER CHAMADAS EM QUALQUER MOMENTO (INDEPENDENTE DE TURNO) ---
-  // Desde que não haja nenhuma resposta pendente na mesa
-  const noResponsePending = !hand.trucoResponsePending && !hand.envidoResponsePending && !hand.florResponsePending;
-
-  if (noResponsePending) {
-    // 1. Botão de Truco / Retruco / Vale 4
-    if (hand.trucoCallerTeam !== myTeam) {
-      groupTruco.classList.remove('hide');
-      if (hand.trucoState === 'none') {
-        showAndEnableButton(btnTruco);
-      } else if (hand.trucoState === 'truco') {
-        showAndEnableButton(btnRetruco);
-      } else if (hand.trucoState === 'retruco') {
-        showAndEnableButton(btnVale4);
-      }
-    }
-
-    // Só na primeira rodada e se eu tiver 3 cartas (ou seja, não joguei ainda)
-    const myCards = hand.hands[mySeatIndex] || [];
-    const hasNotPlayedYet = myCards.length === 3;
-
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isPe) {
-      // 2. Botão de Envido / Real / Falta
-      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
-        groupEnvido.classList.remove('hide');
-        showAndEnableButton(btnEnvido);
-        showAndEnableButton(btnRealEnvido);
-        showAndEnableButton(btnFaltaEnvido);
-      }
-
-      // 3. Botão de Flor
-      if (myPlayer.hasFlor && hand.florState === 'none') {
-        groupFlor.classList.remove('hide');
-        showAndEnableButton(btnFlor);
-      }
-    }
-  }
-
-  // --- SE FOR O MEU TURNO NORMAL DE JOGAR ---
-  if (isMyTurn) {
-    if (statusEl) statusEl.classList.add('hide');
-    // Mazo (Sempre ativo no turno)
-    showAndEnableButton(btnFold);
-  }
-
-  // --- ADAPTAÇÃO DO ENVIDO/FLOR PARA CELULAR ---
-  const isMobile = window.innerWidth <= 850;
-  if (isMobile) {
-    // 1. Oculta os botões normais do desktop
-    groupEnvido.classList.add('hide');
-    groupFlor.classList.add('hide');
-
-    // 2. Verifica se existia alguma opção de Envido ou Flor ativa no painel
-    const hasEnvidoOption = !btnEnvido.classList.contains('hide') || 
-                             !btnRealEnvido.classList.contains('hide') || 
-                             !btnFaltaEnvido.classList.contains('hide');
-    const hasFlorOption = !btnFlor.classList.contains('hide');
-
-    if (hasEnvidoOption || hasFlorOption) {
-      // 3. Exibe apenas o botão gatilho no mobile
-      if (btnEnvidoMobileTrigger) {
-        btnEnvidoMobileTrigger.classList.remove('hide');
-        btnEnvidoMobileTrigger.disabled = false;
-      }
-      
-      // 4. Copia os estados ativos/inativos dos botões reais para o sub-menu
-      const updateSubMenuButton = (desktopBtn, subBtn) => {
-        if (!desktopBtn || !subBtn) return;
-        if (desktopBtn.classList.contains('hide')) {
-          subBtn.classList.add('hide');
-        } else {
-          subBtn.classList.remove('hide');
-          subBtn.disabled = desktopBtn.disabled;
-        }
-      };
-
-      updateSubMenuButton(btnEnvido, btnEnvidoSubEnvido);
-      updateSubMenuButton(btnRealEnvido, btnRealEnvidoSubReal);
-      updateSubMenuButton(btnFaltaEnvido, btnFaltaEnvidoSubFalta);
-      updateSubMenuButton(btnFlor, btnEnvidoSubFlor);
-    } else {
-      if (btnEnvidoMobileTrigger) btnEnvidoMobileTrigger.classList.add('hide');
-      if (groupEnvidoMobileSub) groupEnvidoMobileSub.classList.add('hide');
-    }
-  } else {
-    if (btnEnvidoMobileTrigger) btnEnvidoMobileTrigger.classList.add('hide');
-    if (groupEnvidoMobileSub) groupEnvidoMobileSub.classList.add('hide');
-  }
-}
-
-function disableAllActionButtons(gameState) {
-  // Esconder grupos de resposta que são apenas contextuais
-  groupResponse.classList.add('hide');
-  btnQuero.classList.add('hide');
-  btnNaoQuero.classList.add('hide');
-
-  groupFlorResponse.classList.add('hide');
-  btnContraFlor.classList.add('hide');
-  btnContraFlorResto.classList.add('hide');
-  btnAchique.classList.add('hide');
-
-  // Esconder por padrão
-  groupTruco.classList.add('hide');
-  btnTruco.classList.add('hide');
-  btnTruco.disabled = true;
-  btnRetruco.classList.add('hide');
-  btnVale4.classList.add('hide');
-
-  groupEnvido.classList.add('hide');
-  btnEnvido.classList.add('hide');
-  btnEnvido.disabled = true;
-  btnRealEnvido.classList.add('hide');
-  btnRealEnvido.disabled = true;
-  btnFaltaEnvido.classList.add('hide');
-  btnFaltaEnvido.disabled = true;
-
-  groupFlor.classList.add('hide');
-  btnFlor.classList.add('hide');
-  btnFlor.disabled = true;
-
-  btnFold.classList.add('hide');
-  btnFold.disabled = true;
-
-  // Esconder botões mobile por padrão
-  if (btnEnvidoMobileTrigger) btnEnvidoMobileTrigger.classList.add('hide');
-  if (groupEnvidoMobileSub) groupEnvidoMobileSub.classList.add('hide');
-
-  // Mostrar status de vez do adversário
-  const statusEl = document.getElementById('action-panel-status');
-  if (statusEl) {
-    statusEl.classList.remove('hide');
-    if (gameState) {
-      if (gameState.state === 'hand_end') {
-        statusEl.textContent = 'Mão finalizada. Aguardando...';
-      } else if (gameState.state === 'game_end') {
-        statusEl.textContent = 'Partida terminada!';
-      } else {
-        if (gameState.mode === '2v2' && gameState.hand) {
-          const currPlayer = gameState.hand.currentPlayer;
-          const currTeam = gameState.players[currPlayer] ? gameState.players[currPlayer].team : -1;
-          const myTeam = gameState.players[mySeatIndex] ? gameState.players[mySeatIndex].team : -2;
-          if (currTeam === myTeam) {
-            statusEl.textContent = 'Vez do seu parceiro jogar...';
-          } else {
-            statusEl.textContent = 'Vez do adversário jogar...';
-          }
-        } else {
-          statusEl.textContent = 'Vez do adversário jogar...';
-        }
-      }
-    } else {
-      statusEl.textContent = 'Vez do adversário jogar...';
-    }
-  }
-}
-
-// --- CLIQUE NOS BOTÕES DE AÇÕES ---
-
-// Botoes Truco
-btnTruco.addEventListener('click', () => socket.emit('game_action', { action: 'call_truco' }));
-btnRetruco.addEventListener('click', () => {
-  // Pode ser resposta ou grito de turno
-  const hand = prevVoiceBubbles; // Apenas fallback
-  socket.emit('game_action', { action: 'truco_raise', value: 'retruco' });
-});
-btnVale4.addEventListener('click', () => {
-  socket.emit('game_action', { action: 'truco_raise', value: 'vale4' });
-});
-
-// Botoes Envido
-btnEnvido.addEventListener('click', () => socket.emit('game_action', { action: 'call_envido', value: 'envido' }));
-btnRealEnvido.addEventListener('click', () => socket.emit('game_action', { action: 'call_envido', value: 'real_envido' }));
-btnFaltaEnvido.addEventListener('click', () => socket.emit('game_action', { action: 'call_envido', value: 'falta_envido' }));
-
-// Flor
-btnFlor.addEventListener('click', () => socket.emit('game_action', { action: 'call_flor' }));
-
-// Quero / Não Quero (decidido contextualmente com base na aposta pendente)
-btnQuero.addEventListener('click', () => {
-  if (!lastGameState || !lastGameState.hand) return;
-  const myTeam = lastGameState.players[mySeatIndex].team;
-  if (lastGameState.hand.trucoResponsePending && lastGameState.hand.trucoPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'truco_response', value: 'quero' });
-  } else if (lastGameState.hand.envidoResponsePending && lastGameState.hand.envidoPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'envido_response', value: 'quero' });
-  } else if (lastGameState.hand.florResponsePending && lastGameState.hand.florPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'flor_response', value: 'quero' });
-  }
-});
-
-btnNaoQuero.addEventListener('click', () => {
-  if (!lastGameState || !lastGameState.hand) return;
-  const myTeam = lastGameState.players[mySeatIndex].team;
-  if (lastGameState.hand.trucoResponsePending && lastGameState.hand.trucoPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'truco_response', value: 'nao_quero' });
-  } else if (lastGameState.hand.envidoResponsePending && lastGameState.hand.envidoPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'envido_response', value: 'nao_quero' });
-  } else if (lastGameState.hand.florResponsePending && lastGameState.hand.florPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'flor_response', value: 'nao_quero' });
-  }
-});
-
-// Contra-Flor
-btnContraFlor.addEventListener('click', () => socket.emit('game_action', { action: 'flor_response', value: 'contra_flor' }));
-btnContraFlorResto.addEventListener('click', () => socket.emit('game_action', { action: 'flor_response', value: 'contra_flor_resto' }));
-btnAchique.addEventListener('click', () => socket.emit('game_action', { action: 'flor_response', value: 'nao_quero' }));
-
-btnFold.addEventListener('click', () => {
-  socket.emit('game_action', { action: 'fold' });
-});
-
-// --- ENVIDO MOBILE SUB-MENU INTERACTION ---
-if (btnEnvidoMobileTrigger) {
-  btnEnvidoMobileTrigger.addEventListener('click', () => {
-    groupTruco.classList.add('hide');
-    groupResponse.classList.add('hide');
-    groupFlorResponse.classList.add('hide');
-    btnFold.classList.add('hide');
-    btnEnvidoMobileTrigger.classList.add('hide');
-    groupEnvidoMobileSub.classList.remove('hide');
-  });
-}
-
-if (btnEnvidoSubBack) {
-  btnEnvidoSubBack.addEventListener('click', () => {
-    groupEnvidoMobileSub.classList.add('hide');
-    if (lastGameState) {
-      setupActionButtons(lastGameState);
-    }
-  });
-}
-
-if (btnEnvidoSubEnvido) {
-  btnEnvidoSubEnvido.addEventListener('click', () => {
-    btnEnvido.click();
-    groupEnvidoMobileSub.classList.add('hide');
-  });
-}
-if (btnRealEnvidoSubReal) {
-  btnRealEnvidoSubReal.addEventListener('click', () => {
-    btnRealEnvido.click();
-    groupEnvidoMobileSub.classList.add('hide');
-  });
-}
-if (btnFaltaEnvidoSubFalta) {
-  btnFaltaEnvidoSubFalta.addEventListener('click', () => {
-    btnFaltaEnvido.click();
-    groupEnvidoMobileSub.classList.add('hide');
-  });
-}
-if (btnEnvidoSubFlor) {
-  btnEnvidoSubFlor.addEventListener('click', () => {
-    btnFlor.click();
-    groupEnvidoMobileSub.classList.add('hide');
-  });
-}
-
-// --- RENDERIZAÇÃO DA TELA DE VITÓRIA ---
-
-function renderGameEndScreen(gameState) {
-  screenLobby.classList.remove('active');
-  screenWaiting.classList.remove('active');
-  screenGame.classList.remove('active');
-  screenGameEnd.classList.add('active');
-
-  const winner = gameState.winner;
-  const myTeam = (mySeatIndex !== -1 && gameState.players[mySeatIndex]) ? gameState.players[mySeatIndex].team : 0;
-  const isMyTeamWinner = myTeam === winner;
-
-  if (isMyTeamWinner) {
-    document.getElementById('victory-title').textContent = 'Vitória Campeira!';
-    document.getElementById('victory-title').style.color = 'var(--gold)';
-    window.soundManager.playVictorySound();
-  } else {
-    document.getElementById('victory-title').textContent = 'Fomos Derrotados!';
-    document.getElementById('victory-title').style.color = '#c0392b';
-  }
-
-  document.getElementById('final-score-t0').textContent = gameState.score[0];
-  document.getElementById('final-score-t1').textContent = gameState.score[1];
-}
-
-// Botão Jogar Novamente
-document.getElementById('restart-game-btn').addEventListener('click', () => {
-  socket.emit('restart_game');
-});
-
-// --- LÓGICA DE CHAT E SAIR DA PARTIDA ---
-
-// Enviar mensagens no chat
-chatForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if (text) {
-    socket.emit('send_chat', text);
-    chatInput.value = '';
-  }
-});
-
-// Receber mensagens de chat
-socket.on('receive_chat', ({ sender, senderId, msg }) => {
-  const isSelf = senderId === socket.id;
-  const div = document.createElement('div');
-  div.className = `chat-bubble ${isSelf ? 'self' : ''}`;
-  div.innerHTML = `
-    <span class="chat-sender">${sender}</span>
-    <span class="chat-text">${msg}</span>
-  `;
-  chatMessages.appendChild(div);
-
-  // Rolar para o final do chat
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-});
-
-// Sair da Partida
-gameLeaveBtn.addEventListener('click', () => {
-  if (confirm("Tens certeza que queres abandonar a partida e voltar ao lobby, jogador?")) {
-    window.location.reload();
-  }
-});
 
 // --- CONFIGURAÇÃO DE VOZES / PERSONALIZAÇÃO EVENTOS ---
-
-// Elementos da Configuração de Vozes
 const btnVoiceSettings = document.getElementById('voice-settings-btn');
 const modalVoiceSettings = document.getElementById('modal-voice-settings');
 const btnCloseVoiceSettings = document.getElementById('close-voice-settings');
 const btnSaveVoiceSettings = document.getElementById('save-voice-settings');
 
-// Sincronizar UI com as configurações locais
 function syncVoiceSettingsUI() {
   VOICE_ACTIONS.forEach(action => {
     const el = document.getElementById(`select-voice-${action}`);
@@ -1717,7 +236,6 @@ function syncVoiceSettingsUI() {
     }
   });
 
-  // Atualizar botões de pitch ativos
   document.querySelectorAll('.pitch-btn').forEach(btn => {
     const action = btn.getAttribute('data-action');
     const pitch = parseFloat(btn.getAttribute('data-pitch'));
@@ -1729,7 +247,6 @@ function syncVoiceSettingsUI() {
   });
 }
 
-// Abrir modal de configurações
 if (btnVoiceSettings) {
   btnVoiceSettings.addEventListener('click', () => {
     syncVoiceSettingsUI();
@@ -1737,20 +254,17 @@ if (btnVoiceSettings) {
   });
 }
 
-// Fechar modal
 if (btnCloseVoiceSettings) {
   btnCloseVoiceSettings.addEventListener('click', () => {
     modalVoiceSettings.classList.add('hide');
   });
 }
 
-// Evento nos botões de pitch para alternar classe ativo e atualizar localmente
 document.querySelectorAll('.pitch-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
+  btn.addEventListener('click', () => {
     const action = btn.getAttribute('data-action');
     const pitch = parseFloat(btn.getAttribute('data-pitch'));
 
-    // Desativar outros botões de pitch para a mesma ação
     document.querySelectorAll(`.pitch-btn[data-action="${action}"]`).forEach(b => {
       b.classList.remove('active');
     });
@@ -1761,7 +275,6 @@ document.querySelectorAll('.pitch-btn').forEach(btn => {
   });
 });
 
-// Eventos de mudança nos dropdowns de áudio base (dinâmico)
 VOICE_ACTIONS.forEach(action => {
   const el = document.getElementById(`select-voice-${action}`);
   if (el) {
@@ -1772,20 +285,14 @@ VOICE_ACTIONS.forEach(action => {
   }
 });
 
-// Testar som individualmente (preview)
 document.querySelectorAll('.btn-preview-voice').forEach(btn => {
-  btn.addEventListener('click', (e) => {
+  btn.addEventListener('click', () => {
     const action = btn.getAttribute('data-action');
     const config = myVoiceConfig[action];
 
     if (window.soundManager && config) {
       window.soundManager.initAudio();
-
-      let path = config.path;
-      if (!path) {
-        // Fallback padrão se não selecionado
-        path = `/audio/${action}.ogg`;
-      }
+      let path = config.path || `/audio/${action}.ogg`;
 
       const audio = new Audio(path);
       audio.volume = window.soundManager.sfxVolume;
@@ -1798,20 +305,12 @@ document.querySelectorAll('.btn-preview-voice').forEach(btn => {
   });
 });
 
-// Salvar e aplicar
 if (btnSaveVoiceSettings) {
   btnSaveVoiceSettings.addEventListener('click', () => {
     localStorage.setItem('truco_voice_config', JSON.stringify(myVoiceConfig));
     modalVoiceSettings.classList.add('hide');
-
-    // Se o jogo estiver ativo, envia para o servidor
     if (lastGameState) {
       socket.emit('update_voice_config', myVoiceConfig);
-    }
-
-    // Tocar um feedback sonoro amigável
-    if (window.soundManager) {
-      window.soundManager.playVictorySound();
     }
   });
 }
@@ -1821,12 +320,10 @@ const btnAdminPanel = document.getElementById('admin-panel-btn');
 const modalAdminPanel = document.getElementById('modal-admin-panel');
 const btnCloseAdminPanel = document.getElementById('close-admin-panel');
 const btnApplyAdminCards = document.getElementById('apply-admin-cards');
-
 const selectAdminCard1 = document.getElementById('select-admin-card1');
 const selectAdminCard2 = document.getElementById('select-admin-card2');
 const selectAdminCard3 = document.getElementById('select-admin-card3');
 
-// Lista completa das 40 cartas do baralho espanhol
 const ALL_DECK_CARDS = [];
 const suitsBr = { espadas: 'Espadas', paus: 'Paus', copas: 'Copas', ouros: 'Ouros' };
 const suitsEmoji = { espadas: '⚔️', paus: '🌿', copas: '❤️', ouros: '🪙' };
@@ -1858,7 +355,6 @@ function populateAdminCardSelects() {
   });
 }
 
-// Abrir modal Admin
 if (btnAdminPanel) {
   btnAdminPanel.addEventListener('click', () => {
     if (!lastGameState || lastGameState.state !== 'playing' || !lastGameState.hand) {
@@ -1877,21 +373,18 @@ if (btnAdminPanel) {
   });
 }
 
-// Escutar retorno de autenticação do administrador
 socket.on('admin_validated', () => {
   isClientAdminAuthenticated = true;
   populateAdminCardSelects();
   modalAdminPanel.classList.remove('hide');
 });
 
-// Fechar modal Admin
 if (btnCloseAdminPanel) {
   btnCloseAdminPanel.addEventListener('click', () => {
     modalAdminPanel.classList.add('hide');
   });
 }
 
-// Aplicar as cartas escolhidas
 if (btnApplyAdminCards) {
   btnApplyAdminCards.addEventListener('click', () => {
     const c1 = JSON.parse(selectAdminCard1.value);
@@ -1902,32 +395,28 @@ if (btnApplyAdminCards) {
       action: 'admin_set_cards',
       value: [c1, c2, c3]
     });
-
     modalAdminPanel.classList.add('hide');
-
-    // Tocar um feedback sonoro amigável
-    if (window.soundManager) {
-      window.soundManager.playVictorySound();
-    }
+    if (window.soundManager) window.soundManager.playVictorySound();
   });
 }
 
-// Toggle da Gaveta Lateral (Mobile)
+// --- GAVETA LATERAL MOBILE ---
+const infoSidebar = document.querySelector('.info-sidebar');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+
 if (sidebarToggleBtn && infoSidebar) {
   sidebarToggleBtn.addEventListener('click', () => {
     infoSidebar.classList.add('open');
-    if (sidebarOverlay) {
-      sidebarOverlay.classList.remove('hide');
-    }
+    if (sidebarOverlay) sidebarOverlay.classList.remove('hide');
   });
 }
 
 if (sidebarCloseBtn && infoSidebar) {
   sidebarCloseBtn.addEventListener('click', () => {
     infoSidebar.classList.remove('open');
-    if (sidebarOverlay) {
-      sidebarOverlay.classList.add('hide');
-    }
+    if (sidebarOverlay) sidebarOverlay.classList.add('hide');
   });
 }
 
@@ -1938,119 +427,63 @@ if (sidebarOverlay && infoSidebar) {
   });
 }
 
-// Controles de Configurações Mobile / Desktop
-const openSettingsFunc = () => {
-  initAudioContext();
-  if (modalMobileSettings) {
-    modalMobileSettings.classList.remove('hide');
-    if (window.soundManager) {
-      if (window.soundManager.muted) {
-        mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-      } else {
-        mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-      }
-      mobileVolumeSlider.value = window.soundManager.musicVolume;
-    }
+// --- COMUNICAÇÕES DE SOCKETS ---
+socket.on('error_msg', (msg) => {
+  alert(msg);
+});
+
+socket.on('kicked', () => {
+  alert('Você foi removido da sala pelo criador.');
+  screenLobby.classList.add('active');
+  screenWaiting.classList.remove('active');
+  screenGame.classList.remove('active');
+  screenGameEnd.classList.remove('active');
+});
+
+socket.on('game_state', (gameState) => {
+  lastGameState = gameState; 
+  myPlayerId = socket.id;
+  currentRoomMode = gameState.mode;
+
+  // Sincronizar vozes locais com o servidor
+  const me = gameState.players.find(p => p.id === myPlayerId || p.socketId === myPlayerId);
+  if (me && JSON.stringify(me.voiceConfig) !== JSON.stringify(myVoiceConfig)) {
+    socket.emit('update_voice_config', myVoiceConfig);
   }
-};
 
-if (mobileSettingsToggleBtn) {
-  mobileSettingsToggleBtn.addEventListener('click', openSettingsFunc);
-}
-if (desktopSettingsToggleBtn) {
-  desktopSettingsToggleBtn.addEventListener('click', openSettingsFunc);
-}
+  if (gameEndTimeout) {
+    clearTimeout(gameEndTimeout);
+    gameEndTimeout = null;
+  }
 
-if (closeMobileSettings) {
-  closeMobileSettings.addEventListener('click', () => {
-    modalMobileSettings.classList.add('hide');
-  });
-}
+  if (gameState.state === 'lobby') {
+    document.body.setAttribute('data-screen', 'lobby');
+    renderLobbyScreen(gameState);
+    if (window.soundManager) window.soundManager.changeMusic('/js/musica.mp3');
+  } else if (gameState.state === 'playing' || gameState.state === 'hand_end') {
+    document.body.setAttribute('data-screen', 'game');
+    renderGameScreen(gameState);
+    if (window.soundManager) window.soundManager.changeMusic('/js/musicaJogo.mp3');
+  } else if (gameState.state === 'game_end') {
+    document.body.setAttribute('data-screen', 'game_end');
+    renderGameScreen(gameState);
+    gameEndTimeout = setTimeout(() => {
+      renderGameEndScreen(gameState);
+      gameEndTimeout = null;
+    }, 6000);
+    if (window.soundManager) window.soundManager.changeMusic(null);
+  }
+});
 
-if (mobileMuteBtn) {
-  mobileMuteBtn.addEventListener('click', () => {
-    initAudioContext();
-    window.soundManager.toggleMute();
-    if (window.soundManager.muted) {
-      mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-      audioBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-    } else {
-      mobileMuteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-      audioBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-    }
-  });
-}
+socket.on('chat_msg', (data) => {
+  const isMe = data.playerId === myPlayerId;
+  const msgEl = document.createElement('div');
+  msgEl.className = `chat-msg ${isMe ? 'me' : ''}`;
+  msgEl.innerHTML = `<span class="sender-name">${data.playerName}:</span> <span class="message-text">${data.message}</span>`;
+  chatMessages.appendChild(msgEl);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
 
-if (mobileVolumeSlider) {
-  mobileVolumeSlider.addEventListener('input', (e) => {
-    initAudioContext();
-    const vol = parseFloat(e.target.value);
-    window.soundManager.setMusicVolume(vol);
-    const desktopSlider = document.getElementById('music-volume');
-    if (desktopSlider) desktopSlider.value = vol;
-  });
-}
-
-if (mobileVoiceBtn) {
-  mobileVoiceBtn.addEventListener('click', () => {
-    modalMobileSettings.classList.add('hide');
-    const voiceSettingsBtn = document.getElementById('voice-settings-btn');
-    if (voiceSettingsBtn) voiceSettingsBtn.click();
-  });
-}
-
-if (mobileAdminBtn) {
-  mobileAdminBtn.addEventListener('click', () => {
-    modalMobileSettings.classList.add('hide');
-    const adminPanelBtn = document.getElementById('admin-panel-btn');
-    if (adminPanelBtn) adminPanelBtn.click();
-  });
-}
-
-// Controle de tamanho vertical dos contêineres logs e chat
-const btnIncreaseLogs = document.getElementById('btn-increase-logs');
-const btnDecreaseLogs = document.getElementById('btn-decrease-logs');
-const btnIncreaseChat = document.getElementById('btn-increase-chat');
-const btnDecreaseChat = document.getElementById('btn-decrease-chat');
-
-const logsContainer = document.querySelector('.logs-container');
-const chatContainer = document.querySelector('.chat-container');
-
-if (btnIncreaseLogs && logsContainer) {
-  btnIncreaseLogs.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = logsContainer.offsetHeight;
-    if (currentHeight < 500) {
-      logsContainer.style.height = (currentHeight + 30) + 'px';
-    }
-  });
-}
-if (btnDecreaseLogs && logsContainer) {
-  btnDecreaseLogs.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = logsContainer.offsetHeight;
-    if (currentHeight > 80) {
-      logsContainer.style.height = (currentHeight - 30) + 'px';
-    }
-  });
-}
-if (btnIncreaseChat && chatContainer) {
-  btnIncreaseChat.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = chatContainer.offsetHeight;
-    if (currentHeight < 600) {
-      chatContainer.style.height = (currentHeight + 30) + 'px';
-      chatContainer.style.minHeight = 'auto';
-    }
-  });
-}
-if (btnDecreaseChat && chatContainer) {
-  btnDecreaseChat.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = chatContainer.offsetHeight;
-    if (currentHeight > 100) {
-      chatContainer.style.height = (currentHeight - 30) + 'px';
-      chatContainer.style.minHeight = 'auto';
-    }
-  });
-}
+  if (!isMe && window.soundManager) {
+    window.soundManager.playClickSound(); 
+  }
+});

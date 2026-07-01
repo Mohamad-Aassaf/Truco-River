@@ -1,0 +1,311 @@
+/* public/css/lobby.css */
+/* Estilos da Tela de Lobby Inicial, Lista de Salas e Sala de Espera */
+
+.screen {
+  display: none;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.screen.active {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.lobby-card {
+  width: 90%;
+  max-width: 780px;
+  padding: 35px;
+  text-align: center;
+  border: 2px solid var(--gold-dark);
+  margin: auto;
+}
+
+.rustic-title {
+  font-family: var(--font-title);
+  color: var(--gold);
+  font-size: 3.2rem;
+  margin-bottom: 5px;
+  text-shadow: 2px 2px 0 #000, 4px 4px 10px rgba(0,0,0,0.8);
+  letter-spacing: 2px;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: #bdc3c7;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 30px;
+}
+
+.input-group {
+  margin-bottom: 20px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-group label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+}
+
+.input-group input[type="text"] {
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--gold-dark);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: white;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.input-group input[type="text"]:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 8px rgba(223, 177, 91, 0.4);
+}
+
+.lobby-actions-container {
+  display: grid;
+  grid-template-columns: 1fr 50px 1fr;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.lobby-action-box {
+  background: rgba(0,0,0,0.25);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.05);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.lobby-action-box h3 {
+  color: var(--gold);
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  border-bottom: 1px solid rgba(223,177,91,0.2);
+  padding-bottom: 8px;
+}
+
+.mode-select {
+  display: flex;
+  background: rgba(0,0,0,0.4);
+  border-radius: 20px;
+  padding: 4px;
+  margin-bottom: 15px;
+}
+
+.mode-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #ccc;
+  padding: 8px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+}
+
+.mode-btn.active {
+  background: var(--gold);
+  color: var(--wood-dark);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.divider {
+  font-family: var(--font-title);
+  color: var(--gold);
+  font-weight: bold;
+  opacity: 0.6;
+  font-size: 1.1rem;
+}
+
+.available-rooms-section {
+  border-top: 1px solid rgba(223,177,91,0.2);
+  margin-top: 15px;
+  padding-top: 20px;
+  text-align: left;
+}
+
+.available-rooms-section h3 {
+  color: var(--gold);
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+.rooms-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.rooms-list::-webkit-scrollbar {
+  width: 6px;
+}
+.rooms-list::-webkit-scrollbar-thumb {
+  background-color: var(--gold-dark);
+  border-radius: 3px;
+}
+
+.room-item {
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 10px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.3s;
+}
+
+.room-item:hover {
+  background: rgba(223, 177, 91, 0.1);
+  border-color: rgba(223, 177, 91, 0.3);
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.room-code-badge {
+  background: var(--gold-dark);
+  color: var(--wood-dark);
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.room-mode {
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.room-slots {
+  font-size: 0.85rem;
+  color: #bdc3c7;
+}
+
+.empty-list-msg {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 15px;
+}
+
+/* --- TELA 2: SALA DE ESPERA (PRE-GAME) --- */
+.waiting-card {
+  width: 90%;
+  max-width: 500px;
+  padding: 35px;
+  text-align: center;
+  border: 2px solid var(--gold-dark);
+  margin: auto;
+}
+
+.room-title {
+  font-family: var(--font-title);
+  color: var(--gold);
+  font-size: 2.2rem;
+  margin-bottom: 5px;
+}
+
+.room-subtitle {
+  color: #aaa;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+  margin-bottom: 25px;
+}
+
+.lobby-slots {
+  text-align: left;
+  margin-bottom: 30px;
+}
+
+.lobby-slots h3 {
+  color: var(--gold);
+  font-size: 1rem;
+  margin-bottom: 15px;
+  border-bottom: 1px solid rgba(223,177,91,0.2);
+  padding-bottom: 5px;
+}
+
+.players-lobby-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.player-slot {
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.player-slot.ready {
+  border-color: var(--green-accent);
+  background: rgba(39, 174, 96, 0.1);
+}
+
+.player-slot-name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-slot-name .fa-robot {
+  color: var(--blue-accent);
+}
+
+.status-badge {
+  font-size: 0.8rem;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.status-badge.ready {
+  background: var(--green-accent);
+  color: white;
+}
+
+.status-badge.waiting {
+  background: #f39c12;
+  color: white;
+}
+
+.waiting-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

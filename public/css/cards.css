@@ -1,0 +1,257 @@
+/* public/css/cards.css */
+/* Estilos das Cartas Jogáveis, Baralho da Mesa, Cartas Jogadas e Animações */
+
+/* Baralho Empilhado */
+.card-deck-stack {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 70px;
+  height: 105px;
+  pointer-events: none;
+}
+
+.deck-card {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+  border: 1px solid rgba(223, 177, 91, 0.4);
+}
+
+.deck-card.back {
+  background-image: url('/Baralho_Espanhol_Organizado/verso.png');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Espalhar na pilha */
+.card-deck-stack .deck-card:nth-child(1) { transform: translate(0, 0); }
+.card-deck-stack .deck-card:nth-child(2) { transform: translate(2px, -2px); }
+.card-deck-stack .deck-card:nth-child(3) { transform: translate(4px, -4px); }
+
+/* Cartas Jogadas Arena (Estilo Blyts - Pilhas) */
+.played-cards-arena {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%;
+  padding: 0 !important;
+  pointer-events: none;
+}
+
+.played-card-slot-container {
+  position: absolute;
+  width: 80px;
+  height: 120px;
+  border: 1.5px dashed rgba(223, 177, 91, 0.2);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.15);
+  box-sizing: border-box;
+}
+
+#arena-slot-bottom {
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#arena-slot-top {
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#arena-slot-left {
+  left: 20%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+#arena-slot-right {
+  right: 20%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* --- BANNER DE ALERTA NO TOPO DA ARENA (REPOSICIONADO) --- */
+.game-alert-banner {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  background: linear-gradient(135deg, rgba(20, 10, 5, 0.95) 0%, rgba(45, 25, 10, 0.95) 100%);
+  border: 1.5px solid var(--gold);
+  border-radius: 10px;
+  padding: 6px 16px;
+  z-index: 400;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+  max-width: 90%;
+  margin: 10px auto;
+  text-align: center;
+  pointer-events: none;
+}
+
+.game-alert-text {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  text-shadow: 1px 1px 2px #000;
+}
+
+/* --- ÁREA DE CARTAS DO JOGADOR LOCAL (PC) --- */
+.playable-cards-area {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 500px;
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-bottom: 15px;
+  z-index: 250;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.player-hand {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  width: 100%;
+  height: 100%;
+  align-items: flex-end;
+  overflow: visible;
+}
+
+/* Cartas de Jogo Tradicionais */
+.card {
+  position: relative;
+  width: 110px;
+  height: 165px;
+  border-radius: 8px;
+  background: white;
+  border: 2px solid #ddd;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.2);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  user-select: none;
+}
+
+.card .card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.card.hidden::after {
+  display: none;
+}
+
+/* Efeito de Elevação e Rotação 3D da Mão */
+.player-hand .card {
+  transform-origin: bottom center;
+}
+
+/* Distribuir rotação leve em leque na mão */
+.player-hand .card:nth-child(1) { transform: rotate(-8deg) translateY(5px); }
+.player-hand .card:nth-child(2) { transform: rotate(0deg); }
+.player-hand .card:nth-child(3) { transform: rotate(8deg) translateY(5px); }
+
+.player-hand .card:hover {
+  transform: translateY(-40px) scale(1.15) rotate(0deg) !important;
+  z-index: 500;
+  box-shadow: 0 15px 30px rgba(0,0,0,0.6), 0 0 15px rgba(223, 177, 91, 0.5);
+  border-color: var(--gold);
+}
+
+/* Detalhes da face da carta espanhola */
+.card-corner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-weight: 900;
+  font-size: 1.25rem;
+  line-height: 0.95;
+}
+
+.card-corner.top-left {
+  align-self: flex-start;
+}
+
+.card-corner.bottom-right {
+  align-self: flex-end;
+  transform: rotate(180deg);
+}
+
+.card-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+/* Tamanho dos naipes de canto */
+.suit-mini {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+/* Cores por Naipe (Garante legibilidade alta na mesa) */
+.card.espadas, .played-card.espadas,
+.card.espadas *, .played-card.espadas * { color: #1a252f !important; }
+
+.card.paus, .played-card.paus,
+.card.paus *, .played-card.paus * { color: #145a32 !important; }
+
+.card.copas, .played-card.copas,
+.card.copas *, .played-card.copas * { color: #7b241c !important; }
+
+.card.ouros, .played-card.ouros,
+.card.ouros *, .played-card.ouros * { color: #7d6608 !important; }
+
+.played-card {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 8px;
+  background: #1c2833;
+  border: 2px solid var(--gold-dark);
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.5);
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  animation: cardFlyToSlot 0.3s ease-out;
+}
+
+.played-card .card-corner {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+.played-card .suit-mini {
+  width: 12px;
+  height: 12px;
+}
+.played-card .suit-main-svg {
+  width: 32px;
+  height: 32px;
+}
+
+@keyframes cardFlyToSlot {
+  0% { transform: translateY(40px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}

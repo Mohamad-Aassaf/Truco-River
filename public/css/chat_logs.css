@@ -1,0 +1,408 @@
+/* public/css/chat_logs.css */
+/* Estilos do Painel Lateral de Chat, Logs de Rodadas, Placar e Palitos */
+
+/* --- LADO ESQUERDO: BARRA LATERAL --- */
+.info-sidebar {
+  width: 350px; /* Aumentado de 320px para dar mais espaço ao chat e logs */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 15px; /* Reduzido de 20px para liberar espaço vertical */
+  border-radius: 0;
+  border-left: none;
+  border-top: none;
+  border-bottom: none;
+  border-right: 2px solid var(--gold-dark);
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  font-family: var(--font-title);
+  color: var(--gold);
+  font-size: 1.3rem;
+  text-align: center;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--gold-dark);
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+/* Painel Unificado de Pontuação */
+.scoreboard-card {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  border: 1px solid rgba(223, 177, 91, 0.15);
+  padding: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.score-mode-selector {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 10px;
+  gap: 4px;
+  border: 1px solid rgba(223, 177, 91, 0.1);
+}
+
+.score-mode-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #999;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.score-mode-btn:hover {
+  color: #ddd;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.score-mode-btn.active {
+  color: var(--wood-dark);
+  background: var(--gold);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.score-view-pane {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.score-view-pane.hide {
+  display: none !important;
+}
+
+.scoreboard-digital {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0,0,0,0.5);
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(223, 177, 91, 0.2);
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.team-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.team-name {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+.score-number {
+  font-size: 1.8rem;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.score-team0 .score-number {
+  color: var(--gold);
+}
+
+.score-team1 .score-number {
+  color: #e74c3c;
+}
+
+.vs-badge {
+  font-family: var(--font-title);
+  color: var(--gold-dark);
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 0 10px;
+  opacity: 0.6;
+}
+
+.matchstick-tracker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background: none;
+  padding: 5px 0 0 0;
+  border: none;
+  flex-grow: 0;
+  margin-bottom: 0;
+}
+
+.matchstick-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.matchstick-box h4 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: var(--gold);
+  border-bottom: 1px solid rgba(223, 177, 91, 0.1);
+  padding-bottom: 3px;
+}
+
+.sticks-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 40px;
+}
+
+/* Elemento de Desenho de Fósforos de 5 tentos */
+.stick-group-5 {
+  position: relative;
+  width: 32px;
+  height: 32px;
+}
+
+.stick-line {
+  position: absolute;
+  background: #c39b77; /* Cor da madeira do palito */
+  border-radius: 2px;
+  box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  transition: opacity 0.3s;
+}
+
+.stick-line::after {
+  content: '';
+  position: absolute;
+  background: #c0392b; /* Cabeça de fósforo vermelha */
+  border-radius: 50%;
+  width: 5px;
+  height: 5px;
+}
+
+/* Definições das 5 linhas que formam o quadrado com a diagonal */
+.line-top {
+  top: 3px; left: 3px; right: 3px; height: 3px;
+}
+.line-top::after { right: -2px; top: -1px; }
+
+.line-right {
+  top: 3px; bottom: 3px; right: 3px; width: 3px;
+}
+.line-right::after { bottom: -2px; right: -1px; }
+
+.line-bottom {
+  bottom: 3px; left: 3px; right: 3px; height: 3px;
+}
+.line-bottom::after { left: -2px; bottom: -1px; }
+
+.line-left {
+  top: 3px; bottom: 3px; left: 3px; width: 3px;
+}
+.line-left::after { top: -2px; left: -1px; }
+
+.line-diagonal {
+  top: 3px; left: 3px; width: 38px; height: 3px;
+  transform: rotate(45deg);
+  transform-origin: top left;
+}
+.line-diagonal::after { right: -2px; top: -1px; }
+
+.game-phase-indicator {
+  text-align: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  background: var(--gold-dark);
+  color: var(--wood-dark);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+/* Histórico de Narrativa */
+.logs-container {
+  height: 150px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0,0,0,0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(223, 177, 91, 0.15);
+  padding: 12px;
+  overflow: hidden;
+  flex-shrink: 0; /* Impede encolhimento nas resoluções */
+}
+
+.logs-container h4 {
+  font-size: 0.85rem;
+  color: var(--gold);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.game-logs {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 5px;
+  color: #ddd;
+  line-height: 1.3;
+}
+
+.game-logs::-webkit-scrollbar {
+  width: 4px;
+}
+.game-logs::-webkit-scrollbar-thumb {
+  background-color: var(--gold-dark);
+}
+
+.log-entry {
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  padding-bottom: 4px;
+}
+
+.log-entry.team-0 {
+  color: #60a5fa !important;
+}
+
+.log-entry.team-1 {
+  color: #f87171 !important;
+}
+
+.log-time {
+  color: #7f8c8d;
+  font-size: 0.75rem;
+  margin-right: 5px;
+}
+
+/* Contêiner do Chat */
+.chat-container {
+  flex: 2; /* Aumentado para priorizar a expansão do chat */
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: 12px;
+  border: 1px solid rgba(223, 177, 91, 0.2);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.chat-container h4 {
+  font-size: 0.85rem;
+  color: var(--gold);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(223, 177, 91, 0.1);
+  padding-bottom: 4px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 5px;
+  color: #eee;
+  margin-bottom: 10px;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 4px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: var(--gold-dark);
+}
+
+.chat-bubble {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--gold);
+  word-break: break-word;
+}
+
+.chat-bubble.self {
+  border-left-color: var(--blue-accent);
+  background: rgba(41, 128, 185, 0.15);
+}
+
+.chat-sender {
+  font-weight: 800;
+  color: var(--gold);
+  margin-right: 5px;
+  font-size: 0.75rem;
+  display: block;
+}
+
+.chat-bubble.self .chat-sender {
+  color: #5dade2;
+}
+
+.chat-text {
+  font-size: 0.85rem;
+}
+
+.chat-form {
+  display: flex;
+  gap: 6px;
+  height: 36px;
+}
+
+.chat-form input {
+  flex: 1;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--gold-dark);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: white;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+
+.chat-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.chat-form button {
+  background: var(--gold-dark);
+  color: var(--wood-dark);
+  border: none;
+  width: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background 0.3s;
+}
+
+.chat-form button:hover {
+  background: var(--gold);
+}

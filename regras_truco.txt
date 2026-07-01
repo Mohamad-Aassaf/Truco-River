@@ -79,6 +79,15 @@ Nível 3| ¡VALE QUATRO!  | 4 pontos         | 3 pontos
   Falta Envido  | Pontos para fechar| 1 ponto (ou valor acumulado)
                 | o jogo do líder  |
 
+* Regra de Declaração e Revelação do Envido (Duelo):
+  - O jogador ou time que realizou o último aumento/canto de Envido deve declarar primeiro seu valor de Envido na mesa.
+  - Nas duplas (2v2), a disputa ocorre entre os representantes de cada time que possuem o maior valor de Envido na mão.
+  - O representante do time proponente/aumentador declara seu valor primeiro (ex: "Jogador 1: 31!").
+  - Caso o primeiro valor declarado vença a disputa (seja maior ou ganhe no critério de desempate de Mão):
+    * O outro time não revela seus pontos e responde apenas "São boas...", ocultando seu valor.
+  - Caso o primeiro valor declarado perca a disputa:
+    * O representante do outro time declara seu valor maior (ex: "Jogador 2: 33!") e ganha os pontos do Envido.
+
 --------------------------------------------------------------------------------
 5. DIRETRIZES DE RESPONSIVIDADE E FRONTEND (MUITO IMPORTANTE)
 --------------------------------------------------------------------------------

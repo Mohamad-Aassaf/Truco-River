@@ -250,6 +250,7 @@ class TrucoGame {
       envidoChant: '',
       envidoDeclares: {}, // { playerIdx: points } para comparar quando resolvido
       envidoHistory: [], // Histórico de cantadas: ['envido', 'real_envido', etc.]
+      envidoResolutionDetails: null, // Detalhes do pop-up do resultado do envido
       canCallEnvido: true, // Envido/Flor só pode ser chamado antes do jogador jogar sua primeira carta
       
       // Flor
@@ -536,44 +537,87 @@ class TrucoGame {
     return true;
   }
 
-  resolveEnvido() {
-    // Determinar o maior Envido score. 
-    // Em caso de empate, vence quem for "Mão" ou o mais próximo do "Mão" no sentido horário (ordem de jogo)
-    let bestPlayerIdx = -1;
+  getBestEnvidoPlayerOfTeam(team) {
+    let bestPlayer = null;
     let bestScore = -1;
-    
-    // Percorre em ordem de jogo a partir do Mão
+    let bestIdx = -1;
     for (let i = 0; i < this.maxPlayers; i++) {
       const idx = (this.hand.mão + i) % this.maxPlayers;
       const p = this.players[idx];
-      
-      // Jogador com Flor não participa da disputa do Envido
-      if (p.hasFlor) continue;
-
-      if (p.envidoScore > bestScore) {
-        bestScore = p.envidoScore;
-        bestPlayerIdx = idx;
+      if (p.team === team && !p.hasFlor) {
+        if (p.envidoScore > bestScore) {
+          bestScore = p.envidoScore;
+          bestPlayer = p;
+          bestIdx = idx;
+        }
       }
     }
+    return { player: bestPlayer, score: bestScore, index: bestIdx };
+  }
 
-    if (bestPlayerIdx !== -1) {
-      const winner = this.players[bestPlayerIdx];
-      const points = this.hand.envidoPointsAtStake;
-      
-      this.log(`Disputa de Envido vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
-      this.score[winner.team] += points;
-      
-      // Registrar no estado da mão para mostrar no chat
-      this.hand.envidoWinnerInfo = {
-        name: winner.name,
-        points: bestScore,
-        team: winner.team,
-        tentos: points
-      };
+  resolveEnvido() {
+    const callerTeam = this.players[this.hand.envidoCallerIdx].team;
+    const opponentTeam = callerTeam === 0 ? 1 : 0;
 
-      this.checkGameWinner();
+    const bestCaller = this.getBestEnvidoPlayerOfTeam(callerTeam);
+    const bestOpponent = this.getBestEnvidoPlayerOfTeam(opponentTeam);
+
+    if (!bestCaller.player || !bestOpponent.player) {
+      this.hand.canCallEnvido = false;
+      return;
     }
-    
+
+    const hasPriority = (playerIdx1, playerIdx2, mãoIdx, maxPlayers) => {
+      for (let i = 0; i < maxPlayers; i++) {
+        const idx = (mãoIdx + i) % maxPlayers;
+        if (idx === playerIdx1) return true;
+        if (idx === playerIdx2) return false;
+      }
+      return false;
+    };
+
+    let callerWins = false;
+    if (bestCaller.score > bestOpponent.score) {
+      callerWins = true;
+    } else if (bestCaller.score < bestOpponent.score) {
+      callerWins = false;
+    } else {
+      callerWins = hasPriority(bestCaller.index, bestOpponent.index, this.hand.mão, this.maxPlayers);
+    }
+
+    const winner = callerWins ? bestCaller.player : bestOpponent.player;
+    const points = this.hand.envidoPointsAtStake;
+
+    let secondScoreShow = '';
+    if (callerWins) {
+      secondScoreShow = 'São boas...';
+    } else {
+      secondScoreShow = bestOpponent.score.toString();
+    }
+
+    this.log(`Disputa de Envido vencida por ${winner.name} com ${winner.envidoScore} pontos (Time ${winner.team + 1}).`, winner.team);
+    this.score[winner.team] += points;
+
+    // Registrar no estado da mão para mostrar no chat
+    this.hand.envidoWinnerInfo = {
+      name: winner.name,
+      points: winner.envidoScore,
+      team: winner.team,
+      tentos: points
+    };
+
+    // Detalhes da resolução para o pop-up na tela
+    this.hand.envidoResolutionDetails = {
+      firstPlayerName: bestCaller.player.name,
+      firstPlayerScore: bestCaller.score.toString(),
+      secondPlayerName: bestOpponent.player.name,
+      secondPlayerScore: secondScoreShow,
+      winnerName: winner.name,
+      winnerTeam: winner.team,
+      pointsWon: points
+    };
+
+    this.checkGameWinner();
     this.hand.canCallEnvido = false;
   }
 
