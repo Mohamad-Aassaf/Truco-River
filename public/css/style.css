@@ -115,7 +115,7 @@ body {
 /* --- CONTROLES DE ÁUDIO FLUTUANTES --- */
 .audio-controls-panel {
   position: absolute;
-  top: 15px;
+  top: 45px;
   right: 15px;
   z-index: 1000;
   display: flex;
@@ -2336,6 +2336,10 @@ body[data-deck-style="pixel"] .card.hidden {
 
 /* BARRA DE FEEDBACK NO TOPO */
 .feedback-top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   background: rgba(0, 0, 0, 0.85);
   color: #fff;
   font-size: 0.8rem;
@@ -2343,10 +2347,8 @@ body[data-deck-style="pixel"] .card.hidden {
   padding: 6px;
   border-bottom: 1.5px solid var(--gold);
   z-index: 2000;
-  width: 100%;
   box-sizing: border-box;
   font-family: 'Outfit', sans-serif;
-  flex-shrink: 0;
 }
 .feedback-top-bar a {
   color: var(--gold);
