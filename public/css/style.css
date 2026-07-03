@@ -30,6 +30,43 @@ html, body {
   padding: 0;
 }
 
+/* ============================================================
+   SCROLLBAR CUSTOMIZADA — Estilo Gaúcho (Dourado + Madeira)
+   ============================================================ */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-dark) rgba(44, 26, 14, 0.6);
+}
+
+/* WebKit: Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(44, 26, 14, 0.55);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dark) 60%, #7a5a20 100%);
+  border-radius: 10px;
+  border: 1.5px solid rgba(44, 26, 14, 0.4);
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #f0c96e 0%, var(--gold) 50%, var(--gold-dark) 100%);
+}
+
+::-webkit-scrollbar-corner {
+  background: rgba(44, 26, 14, 0.55);
+}
+
+
 body {
   font-family: var(--font-ui);
   background-color: var(--charcoal);
@@ -1135,9 +1172,22 @@ body {
 .player-hand {
   display: flex;
   justify-content: center;
-  gap: -12px; /* Sobreposição de cartas */
-  height: 190px;
+  gap: 4px;
+  height: 235px;
+  min-height: 235px; /* Espaço fixo: 180px carta + 50px zona de hover superior */
   align-items: flex-end;
+  position: relative;
+}
+
+/* --- WRAPPER DE HOVER (zona de clique estável que não se move) --- */
+.card-lift-wrapper {
+  width: 120px;
+  height: 100%; /* Ocupa toda a altura do player-hand */
+  display: flex;
+  align-items: flex-end; /* Carta fica no fundo do wrapper */
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* --- CARTAS (ESTRUTURA DE IMAGEM DO BARALHO) --- */
@@ -1183,21 +1233,40 @@ body {
   display: none;
 }
 
-/* Efeito de Elevação e Rotação 3D da Mão */
-.player-hand .card {
+/* Efeito de Elevação e Rotação 3D da Mão — aplicado no wrapper, não na carta */
+.player-hand .card-lift-wrapper .card {
   transform-origin: bottom center;
+  will-change: transform; /* Optimização de GPU */
 }
 
-/* Distribuir rotação leve em leque na mão */
-.player-hand .card:nth-child(1) { transform: rotate(-8deg) translateY(5px); }
-.player-hand .card:nth-child(2) { transform: rotate(0deg); }
-.player-hand .card:nth-child(3) { transform: rotate(8deg) translateY(5px); }
+/* Distribuir rotação em leque pelos wrappers */
+.player-hand .card-lift-wrapper:nth-child(1) .card { transform: rotate(-8deg) translateY(5px); }
+.player-hand .card-lift-wrapper:nth-child(2) .card { transform: rotate(0deg); }
+.player-hand .card-lift-wrapper:nth-child(3) .card { transform: rotate(8deg) translateY(5px); }
 
-.player-hand .card:hover {
-  transform: translateY(-40px) scale(1.15) rotate(0deg) !important;
+/* 
+  HOVER no WRAPPER (zona estável) → anima a CARTA interna.
+  Corrige o jitter: o cursor permanece dentro do wrapper mesmo quando a carta sobe.
+*/
+.player-hand .card-lift-wrapper:hover .card {
+  transform: translateY(-45px) scale(1.12) rotate(0deg) !important;
   z-index: 500;
-  box-shadow: 0 15px 30px rgba(0,0,0,0.6), 0 0 15px rgba(223, 177, 91, 0.5);
+  box-shadow: 0 20px 35px rgba(0,0,0,0.65), 0 0 18px rgba(223, 177, 91, 0.55);
   border-color: var(--gold);
+}
+
+/* Animação: carta voando para a mesa */
+@keyframes cardFlyToTable {
+  0%   { transform: translateY(0px) scale(1) rotate(0deg); opacity: 1; z-index: 600; }
+  40%  { transform: translateY(-120px) scale(1.15) rotate(-5deg); opacity: 1; z-index: 600; }
+  100% { transform: translateY(-400px) scale(0.6) rotate(8deg); opacity: 0; z-index: 600; }
+}
+
+.card.playing {
+  animation: cardFlyToTable 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+  position: relative;
+  z-index: 600;
 }
 
 /* Detalhes da face da carta espanhola */
@@ -1773,8 +1842,9 @@ body {
     justify-content: center !important;
     align-items: center;
     width: 100%;
-    height: 100px;
-    gap: -12px;
+    height: 130px;
+    min-height: 130px;
+    gap: 4px;
   }
   
   .card {
@@ -1782,6 +1852,15 @@ body {
     height: 98px;
     padding: 3px;
     border-radius: 6px;
+  }
+
+  .card-lift-wrapper {
+    width: 65px;
+    height: 130px;
+  }
+
+  .player-hand .card-lift-wrapper:hover .card {
+    transform: translateY(-28px) scale(1.10) rotate(0deg) !important;
   }
 
   /* Reduz tamanho dos nomes e avatares no celular */

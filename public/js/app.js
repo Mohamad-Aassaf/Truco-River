@@ -142,6 +142,7 @@ let audioInitialized = false;
 let lastGameState = null; // Armazena a cópia local do estado do jogo
 let gameEndTimeout = null; // Controla a transição de fim de jogo
 let isClientAdminAuthenticated = false; // Controle de login no painel admin
+let isAnimatingCardPlay = false; // Guarda de animação: impede re-render durante animação de carta
 
 // SVGs das Cartas por Naipe (Design Premium Customizado)
 const SUIT_SVGS = {
@@ -1088,31 +1089,53 @@ function getCardImgSrc(card) {
 
 // Renderiza a mão do jogador local (3 cartas no bottom)
 function renderMyHand(cards, isMyTurn) {
+  // GUARDA: não re-renderiza enquanto a animação de carta estiver rodando
+  if (isAnimatingCardPlay) return;
+
   playerHand.innerHTML = '';
 
   if (!cards || cards.length === 0) return;
 
   cards.forEach((card, idx) => {
-    const cardEl = document.createElement('div');
-    // Classe de naipe para cor
-    cardEl.className = `card ${card.suit}`;
-    cardEl.dataset.idx = idx;
+    // WRAPPER: zona de hover estável — não se move com a carta
+    // Isso elimina o jitter causado pelo cursor sair da área da carta quando ela sobe
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card-lift-wrapper';
+    wrapper.dataset.idx = idx;
 
-    // Renderizar a imagem da carta
+    const cardEl = document.createElement('div');
+    cardEl.className = `card ${card.suit}`;
+
     cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
 
-    // Se for meu turno e sem aposta pendente, posso clicar para jogar
     if (isMyTurn) {
-      cardEl.addEventListener('click', () => {
-        socket.emit('game_action', { action: 'play_card', value: idx });
+      wrapper.style.cursor = 'pointer';
+      wrapper.addEventListener('click', () => {
+        if (isAnimatingCardPlay) return; // Dupla proteção
+        isAnimatingCardPlay = true;
+        cardEl.classList.add('playing');
+        // Bloqueia todos os wrappers imediatamente
+        playerHand.querySelectorAll('.card-lift-wrapper').forEach(w => {
+          w.style.pointerEvents = 'none';
+        });
+        // Emite ao servidor após animação ser visível (250ms)
+        setTimeout(() => {
+          socket.emit('game_action', { action: 'play_card', value: idx });
+          // Libera o guarda após tempo suficiente para o servidor responder e re-renderizar
+          setTimeout(() => { isAnimatingCardPlay = false; }, 500);
+        }, 250);
       });
     } else {
+      wrapper.style.cursor = 'default';
       cardEl.style.cursor = 'default';
     }
 
-    playerHand.appendChild(cardEl);
+    wrapper.appendChild(cardEl);
+    playerHand.appendChild(wrapper);
   });
 }
+
+
 
 // Desenha as cartas jogadas por rodada no centro da mesa (Estilo Blyts - Pilhas)
 function renderPlayedCards(playedCards, players, gameState) {
