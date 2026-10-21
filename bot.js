@@ -165,7 +165,85 @@ function handleBotAction(game, playerIdx) {
   const handCards = game.hand.hands[playerIdx];
   const difficulty = player.difficulty || 'medium';
 
-  // 1. RESPONDER A TRUCO PENDENTE
+  // 1. RESPONDER A ENVIDO PENDENTE (prioridade sobre o Truco)
+  if (game.hand.envidoResponsePending && game.hand.envidoPendingTeam === player.team) {
+    const envidoScore = player.envidoScore;
+    const history = game.hand.envidoHistory;
+    const currentCall = history[history.length - 1];
+
+    if (difficulty === 'easy') {
+      // Fácil: 50% de chance de aceitar ou recusar sem olhar pontuação
+      return { action: 'envido_response', value: Math.random() < 0.5 ? 'quero' : 'nao_quero' };
+    }
+
+    if (difficulty === 'hard') {
+      // Difícil: aceita apenas com pontuação ideal
+      if (currentCall === 'envido') {
+        if (envidoScore >= 27) {
+          if (envidoScore >= 31 && Math.random() < 0.5) return { action: 'envido_raise', value: 'real_envido' };
+          return { action: 'envido_response', value: 'quero' };
+        }
+        return { action: 'envido_response', value: 'nao_quero' };
+      } else if (currentCall === 'real_envido') {
+        if (envidoScore >= 29) {
+          if (envidoScore >= 32 && Math.random() < 0.4) return { action: 'envido_raise', value: 'falta_envido' };
+          return { action: 'envido_response', value: 'quero' };
+        }
+        return { action: 'envido_response', value: 'nao_quero' };
+      } else if (currentCall === 'falta_envido') {
+        return { action: 'envido_response', value: envidoScore >= 30 ? 'quero' : 'nao_quero' };
+      }
+    }
+
+    // Médio
+    if (currentCall === 'envido') {
+      if (envidoScore >= 26) {
+        if (envidoScore >= 30 && Math.random() < 0.4) return { action: 'envido_raise', value: 'real_envido' };
+        return { action: 'envido_response', value: 'quero' };
+      }
+      return { action: 'envido_response', value: 'nao_quero' };
+    } else if (currentCall === 'real_envido') {
+      if (envidoScore >= 28) {
+        if (envidoScore >= 31 && Math.random() < 0.3) return { action: 'envido_raise', value: 'falta_envido' };
+        return { action: 'envido_response', value: 'quero' };
+      }
+      return { action: 'envido_response', value: 'nao_quero' };
+    } else if (currentCall === 'falta_envido') {
+      return { action: 'envido_response', value: envidoScore >= 29 ? 'quero' : 'nao_quero' };
+    }
+    // Segurança: nunca sair daqui sem responder o Envido
+    return { action: 'envido_response', value: 'nao_quero' };
+  }
+
+  // 2. RESPONDER A FLOR PENDENTE
+  if (game.hand.florResponsePending && game.hand.florPendingTeam === player.team) {
+    if (player.hasFlor) {
+      const florScore = player.florScore;
+      const history = game.hand.florHistory;
+      const currentCall = history[history.length - 1];
+
+      if (difficulty === 'easy') {
+        return { action: 'flor_response', value: Math.random() < 0.7 ? 'quero' : 'nao_quero' };
+      }
+
+      if (currentCall === 'flor') {
+        if (florScore >= 30 && Math.random() < 0.4) {
+          return { action: 'flor_raise', value: 'contra_flor_resto' };
+        } else if (florScore >= 27) {
+          return { action: 'flor_raise', value: 'contra_flor' };
+        }
+        return { action: 'flor_response', value: 'quero' };
+      } else if (currentCall === 'contra_flor') {
+        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 29 : 28) ? 'quero' : 'nao_quero' };
+      } else if (currentCall === 'contra_flor_resto') {
+        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 31 : 30) ? 'quero' : 'nao_quero' };
+      }
+    } else {
+      return { action: 'flor_response', value: 'nao_quero' };
+    }
+  }
+
+  // 3. RESPONDER A TRUCO PENDENTE (só depois de Envido/Flor resolvidos)
   if (game.hand.trucoResponsePending && game.hand.trucoPendingTeam === player.team) {
     const strength = evaluateHandStrength(handCards);
     const maxRank = handCards.length > 0 ? Math.max(...handCards.map(c => c.trucoRank)) : 0;
@@ -216,81 +294,8 @@ function handleBotAction(game, playerIdx) {
     }
   }
 
-  // 2. RESPONDER A ENVIDO PENDENTE
-  if (game.hand.envidoResponsePending && game.hand.envidoPendingTeam === player.team) {
-    const envidoScore = player.envidoScore;
-    const history = game.hand.envidoHistory;
-    const currentCall = history[history.length - 1];
-
-    if (difficulty === 'easy') {
-      // Fácil: 50% de chance de aceitar ou recusar sem olhar pontuação
-      return { action: 'envido_response', value: Math.random() < 0.5 ? 'quero' : 'nao_quero' };
-    }
-
-    if (difficulty === 'hard') {
-      // Difícil: aceita apenas com pontuação ideal
-      if (currentCall === 'envido') {
-        if (envidoScore >= 27) {
-          if (envidoScore >= 31 && Math.random() < 0.5) return { action: 'envido_raise', value: 'real_envido' };
-          return { action: 'envido_response', value: 'quero' };
-        }
-        return { action: 'envido_response', value: 'nao_quero' };
-      } else if (currentCall === 'real_envido') {
-        if (envidoScore >= 29) {
-          if (envidoScore >= 32 && Math.random() < 0.4) return { action: 'envido_raise', value: 'falta_envido' };
-          return { action: 'envido_response', value: 'quero' };
-        }
-        return { action: 'envido_response', value: 'nao_quero' };
-      } else if (currentCall === 'falta_envido') {
-        return { action: 'envido_response', value: envidoScore >= 30 ? 'quero' : 'nao_quero' };
-      }
-    }
-
-    // Médio
-    if (currentCall === 'envido') {
-      if (envidoScore >= 26) {
-        if (envidoScore >= 30 && Math.random() < 0.4) return { action: 'envido_raise', value: 'real_envido' };
-        return { action: 'envido_response', value: 'quero' };
-      }
-      return { action: 'envido_response', value: 'nao_quero' };
-    } else if (currentCall === 'real_envido') {
-      if (envidoScore >= 28) {
-        if (envidoScore >= 31 && Math.random() < 0.3) return { action: 'envido_raise', value: 'falta_envido' };
-        return { action: 'envido_response', value: 'quero' };
-      }
-      return { action: 'envido_response', value: 'nao_quero' };
-    } else if (currentCall === 'falta_envido') {
-      return { action: 'envido_response', value: envidoScore >= 29 ? 'quero' : 'nao_quero' };
-    }
-  }
-
-  // 3. RESPONDER A FLOR PENDENTE
-  if (game.hand.florResponsePending && game.hand.florPendingTeam === player.team) {
-    if (player.hasFlor) {
-      const florScore = player.florScore;
-      const history = game.hand.florHistory;
-      const currentCall = history[history.length - 1];
-
-      if (difficulty === 'easy') {
-        return { action: 'flor_response', value: Math.random() < 0.7 ? 'quero' : 'nao_quero' };
-      }
-
-      if (currentCall === 'flor') {
-        if (florScore >= 30 && Math.random() < 0.4) {
-          return { action: 'flor_raise', value: 'contra_flor_resto' };
-        } else if (florScore >= 27) {
-          return { action: 'flor_raise', value: 'contra_flor' };
-        }
-        return { action: 'flor_response', value: 'quero' };
-      } else if (currentCall === 'contra_flor') {
-        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 29 : 28) ? 'quero' : 'nao_quero' };
-      } else if (currentCall === 'contra_flor_resto') {
-        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 31 : 30) ? 'quero' : 'nao_quero' };
-      }
-    } else {
-      return { action: 'flor_response', value: 'nao_quero' };
-    }
-  }
+  // Enquanto houver qualquer aposta aguardando resposta, o bot não inicia outra
+  if (game.hand.envidoResponsePending || game.hand.florResponsePending || game.hand.trucoResponsePending) return null;
 
   // SE NÃO FOR SUA VEZ DE JOGAR CARTA OU APOSTAR
   if (game.hand.currentPlayer !== playerIdx) return null;

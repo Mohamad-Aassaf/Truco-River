@@ -78,6 +78,13 @@ function scheduleNextHand(roomId) {
 // Executa ações dos jogadores (humanos ou bots)
 function executeGameAction(game, playerIdx, decision) {
   const { action, value } = decision;
+
+  // Envido/Flor pendente tem prioridade: ninguém responde ou aumenta o Truco antes
+  const betPending = game.hand && (game.hand.envidoResponsePending || game.hand.florResponsePending);
+  if (betPending && ['call_truco', 'truco_response', 'truco_raise', 'play_card'].includes(action)) {
+    return;
+  }
+
   switch (action) {
     case 'play_card':
       game.playCard(playerIdx, value);
@@ -123,23 +130,34 @@ function executeGameAction(game, playerIdx, decision) {
 }
 
 // Loop recursivo para gerenciar a vez dos Bots
+// Um único timer por sala: se um humano agir enquanto o bot "pensa", o timer
+// é reiniciado em vez de criar um segundo (que faria o bot agir duas vezes seguidas).
+const botTimers = {};
 function runBotLogic(roomId) {
+  if (botTimers[roomId]) {
+    clearTimeout(botTimers[roomId]);
+    delete botTimers[roomId];
+  }
+
   const game = activeGames[roomId];
   if (!game || game.state !== 'playing' || !game.hand) return;
 
   // Encontra se algum bot precisa agir
   let activeBotIdx = -1;
 
-  if (game.hand.trucoResponsePending) {
+  // Ordem de prioridade: Flor > Envido > Truco (Envido/Flor precisam ser respondidos antes do Truco)
+  if (game.hand.florResponsePending) {
+    const pendingTeam = game.hand.florPendingTeam;
+    activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && p.hasFlor && !game.hand.foldedPlayers.has(idx));
+  } else if (game.hand.envidoResponsePending) {
+    const pendingTeam = game.hand.envidoPendingTeam;
+    // No 2v2 apenas o Pé (índices 2 e 3) responde o Envido
+    activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && !game.hand.foldedPlayers.has(idx)
+      && (game.mode !== '2v2' || idx === 2 || idx === 3));
+  } else if (game.hand.trucoResponsePending) {
     const pendingTeam = game.hand.trucoPendingTeam;
     // O bot que deve responder na equipe
     activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && !game.hand.foldedPlayers.has(idx));
-  } else if (game.hand.envidoResponsePending) {
-    const pendingTeam = game.hand.envidoPendingTeam;
-    activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && !game.hand.foldedPlayers.has(idx));
-  } else if (game.hand.florResponsePending) {
-    const pendingTeam = game.hand.florPendingTeam;
-    activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && p.hasFlor && !game.hand.foldedPlayers.has(idx));
   } else {
     // Turno normal de carta
     const curr = game.hand.currentPlayer;
@@ -150,7 +168,8 @@ function runBotLogic(roomId) {
 
   if (activeBotIdx !== -1) {
     // Simula tempo de pensamento
-    setTimeout(() => {
+    botTimers[roomId] = setTimeout(() => {
+      delete botTimers[roomId];
       const g = activeGames[roomId];
       if (!g || g.state !== 'playing' || !g.hand) return;
 

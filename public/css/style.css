@@ -1166,10 +1166,22 @@ body {
   pointer-events: none;
   transition: opacity 0.3s;
   flex-shrink: 0;
+  /* Sempre uma linha só, para a altura não variar com o texto */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
-.game-alert-banner.hide {
-  display: none;
+/* Mantém o espaço do banner mesmo escondido, para a mesa não pular */
+#game-alert-banner.hide,
+#game-alert-banner.hide * {
+  display: block !important;
+  visibility: hidden;
+}
+#game-alert-banner.hide #game-alert-text {
+  display: inline-block !important;
+  animation: none;
 }
 
 #game-alert-text {
@@ -1383,11 +1395,25 @@ body {
 }
 
 /* --- PAINEL DE BOTÕES DE AÇÃO FLUTUANTE (NÃO TAPA AS CARTAS) --- */
-.action-panel {
-  position: relative;
+/* Espaço fixo reservado para o painel: a mesa não muda de tamanho
+   quando os botões aparecem/somem. Se o painel crescer, ele transborda
+   por cima do espaço vazio em vez de empurrar a mesa. */
+.action-panel-slot {
   order: 1;
   flex-shrink: 0;
-  align-self: center;
+  position: relative;
+  width: 100%;
+  height: 64px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 350;
+  pointer-events: none;
+}
+
+.action-panel {
+  position: relative;
+  pointer-events: auto;
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(10px);
@@ -1896,9 +1922,15 @@ body {
     height: 24px;
   }
   
-  .action-panel {
+  .action-panel-slot {
     order: 2;
-    margin: 6px auto 12px;
+    height: 84px; /* cabe 2 linhas de botões */
+    margin: 4px 0 10px;
+    align-items: flex-end; /* se precisar de mais linhas, cresce para cima */
+  }
+
+  .action-panel {
+    margin: 0;
     padding: 8px 10px;
     gap: 6px;
     border-radius: 12px;
@@ -2197,14 +2229,12 @@ body[data-deck-style="pixel"] .card.hidden {
 
 /* --- BANNER DE VEZ DO ADVERSÁRIO --- */
 .action-panel-status {
-  width: 100%;
   text-align: center;
   color: #aeb6bf;
   font-size: 0.9rem;
   font-weight: 600;
   font-style: italic;
-  padding: 10px;
-  margin-bottom: 10px;
+  padding: 7px 12px; /* compacto, na mesma linha dos botões */
   background: rgba(0,0,0,0.3);
   border-radius: 6px;
   border: 1px dashed rgba(223, 177, 91, 0.2);
