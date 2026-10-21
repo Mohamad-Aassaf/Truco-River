@@ -757,6 +757,7 @@ function renderGameScreen(gameState) {
 
     // Limpar mão local do jogador
     playerHand.innerHTML = '';
+    pendingHandRender = null; // evita redesenhar a mão antiga ao fim de uma animação
 
     // Exibir balões de voz finais da última ação (ex: "Não Quero", "Mazo"), se houver
     if (gameState.lastHandSummary.voiceBubble) {
@@ -803,6 +804,7 @@ function renderGameScreen(gameState) {
   } else {
     // Estado de transição limpa
     playerHand.innerHTML = '';
+    pendingHandRender = null; // evita redesenhar a mão antiga ao fim de uma animação
     clearPlayedCardSlots();
     hideVoiceBubbles();
     gameAlertBanner.classList.add('hide');
@@ -1088,58 +1090,110 @@ function getCardImgSrc(card) {
 }
 
 // Renderiza a mão do jogador local (3 cartas no bottom)
+// Último estado recebido para a mão (usado para atualizar ao fim da animação de jogada)
+let pendingHandRender = null;
+
 function renderMyHand(cards, isMyTurn) {
+  pendingHandRender = [cards, isMyTurn];
   // GUARDA: não re-renderiza enquanto a animação de carta estiver rodando
+  // (o último estado é aplicado quando a animação termina)
   if (isAnimatingCardPlay) return;
 
-  playerHand.innerHTML = '';
+  cards = cards || [];
+  playerHand.classList.toggle('my-turn', !!isMyTurn);
 
-  if (!cards || cards.length === 0) return;
+  // Reaproveita as cartas que continuam na mão (evita piscar a cada atualização)
+  const existing = new Map();
+  playerHand.querySelectorAll('.card-lift-wrapper').forEach(w => existing.set(w.dataset.key, w));
+
+  // FLIP: guarda a posição atual para deslizar suavemente se a ordem/quantidade mudar
+  const before = new Map();
+  existing.forEach((w, key) => before.set(key, w.getBoundingClientRect().left));
+
+  const isNewDeal = existing.size === 0;
+
+  // Remove primeiro as cartas que saíram da mão (ou que estavam no meio da animação de jogada)
+  const nextKeys = new Set(cards.map(c => `${c.value}-${c.suit}`));
+  existing.forEach((w, key) => {
+    if (!nextKeys.has(key) || w.querySelector('.card.playing')) {
+      w.remove();
+      existing.delete(key);
+    }
+  });
 
   cards.forEach((card, idx) => {
-    // WRAPPER: zona de hover estável — não se move com a carta
-    // Isso elimina o jitter causado pelo cursor sair da área da carta quando ela sobe
-    const wrapper = document.createElement('div');
-    wrapper.className = 'card-lift-wrapper';
-    wrapper.dataset.idx = idx;
+    const key = `${card.value}-${card.suit}`;
+    let wrapper = existing.get(key);
 
-    const cardEl = document.createElement('div');
-    cardEl.className = `card ${card.suit}`;
-
-    cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
-
-    if (isMyTurn) {
-      wrapper.style.cursor = 'pointer';
-      wrapper.addEventListener('click', () => {
-        if (isAnimatingCardPlay) return; // Dupla proteção
-        isAnimatingCardPlay = true;
-        cardEl.classList.add('playing');
-        // Bloqueia todos os wrappers imediatamente
-        playerHand.querySelectorAll('.card-lift-wrapper').forEach(w => {
-          w.style.pointerEvents = 'none';
-        });
-        // Emite ao servidor após animação ser visível (250ms)
-        setTimeout(() => {
-          socket.emit('game_action', { action: 'play_card', value: idx });
-          // Libera o guarda após tempo suficiente para o servidor responder e re-renderizar
-          setTimeout(() => { isAnimatingCardPlay = false; }, 500);
-        }, 250);
-      });
-    } else {
-      wrapper.style.cursor = 'default';
-      cardEl.style.cursor = 'default';
+    if (!wrapper) {
+      // WRAPPER: zona de hover estável — não se move com a carta
+      // Isso elimina o jitter causado pelo cursor sair da área da carta quando ela sobe
+      wrapper = document.createElement('div');
+      wrapper.className = 'card-lift-wrapper';
+      wrapper.dataset.key = key;
+      wrapper.innerHTML = `<div class="card ${card.suit}"><img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}"></div>`;
+      if (isNewDeal) {
+        wrapper.classList.add('dealing');
+        wrapper.style.animationDelay = `${idx * 90}ms`;
+        wrapper.addEventListener('animationend', () => {
+          wrapper.classList.remove('dealing');
+          wrapper.style.animationDelay = '';
+        }, { once: true });
+      }
     }
 
-    wrapper.appendChild(cardEl);
-    playerHand.appendChild(wrapper);
+    wrapper.dataset.idx = idx;
+    wrapper.style.pointerEvents = '';
+    // Só move no DOM se estiver fora do lugar (mover reinicia animações)
+    if (playerHand.children[idx] !== wrapper) {
+      playerHand.insertBefore(wrapper, playerHand.children[idx] || null);
+    }
+  });
+
+  // FLIP: anima das posições antigas para as novas
+  playerHand.querySelectorAll('.card-lift-wrapper').forEach(w => {
+    const oldLeft = before.get(w.dataset.key);
+    if (oldLeft === undefined) return;
+    const dx = oldLeft - w.getBoundingClientRect().left;
+    if (Math.abs(dx) < 1) return;
+    w.animate(
+      [{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }],
+      { duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+    );
   });
 }
+
+// Um único listener para a mão inteira (as cartas são reaproveitadas entre atualizações)
+playerHand.addEventListener('click', (e) => {
+  const wrapper = e.target.closest('.card-lift-wrapper');
+  if (!wrapper || !playerHand.classList.contains('my-turn') || isAnimatingCardPlay) return;
+
+  const idx = Number(wrapper.dataset.idx);
+  const cardEl = wrapper.querySelector('.card');
+  isAnimatingCardPlay = true;
+  cardEl.classList.add('playing');
+  // Bloqueia todos os wrappers imediatamente
+  playerHand.querySelectorAll('.card-lift-wrapper').forEach(w => {
+    w.style.pointerEvents = 'none';
+  });
+  // Emite ao servidor após animação ser visível (250ms)
+  setTimeout(() => {
+    socket.emit('game_action', { action: 'play_card', value: idx });
+    // Libera o guarda e aplica o estado mais recente recebido do servidor
+    setTimeout(() => {
+      isAnimatingCardPlay = false;
+      if (pendingHandRender) renderMyHand(...pendingHandRender);
+    }, 300);
+  }, 250);
+});
 
 
 
 // Desenha as cartas jogadas por rodada no centro da mesa (Estilo Blyts - Pilhas)
 function renderPlayedCards(playedCards, players, gameState) {
-  clearPlayedCardSlots();
+  // Só mexe no que mudou: cartas que já estão na mesa ficam intactas
+  // (recriá-las a cada atualização fazia todas piscarem).
+  const wanted = new Set();
 
   // Limpar e atualizar os marcadores de rodadas (bolinhas)
   for (let r = 0; r < 3; r++) {
@@ -1186,40 +1240,56 @@ function renderPlayedCards(playedCards, players, gameState) {
     if (slot) {
       const card = play.card;
       const round = play.round; // 0, 1 ou 2
-      
-      // Cria a carta miniatura para a mesa
-      const cardEl = document.createElement('div');
-      cardEl.className = `played-card ${card.suit}`;
-      
-      // Cascata para baixo e direita, proporcional ao tamanho da carta
-      // (o CSS dos slots reserva exatamente este espaço: 30% x 8% por rodada)
-      const offsetX = round * 30;
-      const offsetY = round * 8;
-      const rotate = (round - 1) * 8; // -8deg, 0deg, 8deg
+      const key = `${playerIdx}-${round}-${card.value}-${card.suit}`;
+      wanted.add(key);
 
-      cardEl.style.position = 'absolute';
-      cardEl.style.transform = `translate(${offsetX}%, ${offsetY}%) rotate(${rotate}deg)`;
+      if (slot.querySelector(`.played-card[data-key="${key}"]:not(.leaving)`)) return; // já está na mesa
+
+      const cardEl = document.createElement('div');
+      cardEl.className = `played-card ${card.suit} entering`;
+      cardEl.dataset.key = key;
+
+      // Cascata para baixo e direita, proporcional ao tamanho da carta
+      // (o CSS dos slots reserva exatamente este espaço: 30% x 8% por rodada).
+      // Usa as propriedades `translate`/`rotate` para não conflitar com o
+      // `transform` da animação de entrada.
+      cardEl.style.translate = `${round * 30}% ${round * 8}%`;
+      cardEl.style.rotate = `${(round - 1) * 8}deg`;
       cardEl.style.zIndex = 10 + round;
-      
+
       cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
+      cardEl.addEventListener('animationend', () => cardEl.classList.remove('entering'), { once: true });
       slot.appendChild(cardEl);
     }
   });
+
+  // Remove (com fade) as cartas que não estão mais no estado
+  document.querySelectorAll('.played-card:not(.leaving)').forEach(el => {
+    if (!wanted.has(el.dataset.key)) removePlayedCard(el);
+  });
+}
+
+function removePlayedCard(el) {
+  el.classList.remove('entering');
+  el.classList.add('leaving');
+  const done = () => el.remove();
+  el.addEventListener('animationend', done, { once: true });
+  setTimeout(done, 400); // garantia caso a animação não rode
 }
 
 function clearPlayedCardSlots() {
-  const seats = ['bottom', 'left', 'top', 'right'];
-  seats.forEach(seat => {
-    const el = document.getElementById(`arena-slot-${seat}`);
-    if (el) el.innerHTML = '';
-  });
+  document.querySelectorAll('.played-card:not(.leaving)').forEach(removePlayedCard);
 }
 
 // Exibe balões de diálogo
 function renderVoiceBubbles(voiceBubbles, players) {
-  hideVoiceBubbles();
+  // Balões que devem continuar visíveis nesta atualização
+  const visibleSeats = new Set();
 
-  if (!voiceBubbles) return;
+  if (!voiceBubbles) {
+    hideVoiceBubbles();
+    return;
+  }
 
   Object.keys(voiceBubbles).forEach(key => {
     const playerIdx = parseInt(key);
@@ -1243,8 +1313,14 @@ function renderVoiceBubbles(voiceBubbles, players) {
       if (text === '¡FLOR_SOBRE_ENVIDO!') {
         displayText = '¡FLOR!';
       }
-      bubble.textContent = displayText;
-      bubble.classList.add('show');
+      visibleSeats.add(bubble.id);
+      // Só reinicia a animação se o texto mudou (senão o balão "pula" a cada atualização)
+      if (bubble.textContent !== displayText || !bubble.classList.contains('show')) {
+        bubble.classList.remove('show');
+        bubble.textContent = displayText;
+        void bubble.offsetWidth; // reinicia a animação
+        bubble.classList.add('show');
+      }
 
       // Tocar som de grito se for um grito novo (usa voz)
       if (prevVoiceBubbles[playerIdx] !== text) {
@@ -1252,6 +1328,13 @@ function renderVoiceBubbles(voiceBubbles, players) {
         const customConfig = playerObj ? playerObj.voiceConfig : null;
         window.soundManager.playVoiceChant(text, customConfig);
       }
+    }
+  });
+
+  document.querySelectorAll('.voice-bubble').forEach(b => {
+    if (!visibleSeats.has(b.id)) {
+      b.classList.remove('show');
+      b.textContent = '';
     }
   });
 

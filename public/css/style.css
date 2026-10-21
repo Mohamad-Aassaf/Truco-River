@@ -983,19 +983,21 @@ body {
   border: 2px solid white;
   box-shadow: 0 5px 15px rgba(0,0,0,0.4);
   white-space: nowrap;
-  animation: popChant 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   pointer-events: none;
   opacity: 0;
   z-index: 600;
 }
 
+/* A animação só roda quando o balão aparece. Usa `scale`/`translate`
+   (propriedades separadas) para não sobrescrever o `transform` de posição. */
 .voice-bubble.show {
   opacity: 1;
+  animation: popChant 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 @keyframes popChant {
-  0% { transform: scale(0) translateY(10px); opacity: 0; }
-  100% { transform: scale(1) translateY(0); opacity: 1; }
+  0% { scale: 0.6; translate: 0 8px; opacity: 0; }
+  100% { scale: 1; translate: 0 0; opacity: 1; }
 }
 
 /* Posições dos assentos baseados na perspectiva do jogador local (Bottom) */
@@ -1373,8 +1375,23 @@ body {
   display: block;
   padding: 0;
   overflow: hidden;
-  animation: cardFlyToSlot 0.3s ease-out;
 }
+
+/* Entrada: a carta desliza do lado de quem jogou.
+   Anima só `transform`/`opacity` (GPU, sem afetar o layout); a posição
+   na pilha usa `translate`/`rotate`, então nada "pula" no fim. */
+.played-card.entering {
+  animation: cardEnter 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.played-card.leaving {
+  animation: cardLeave 0.3s ease forwards;
+}
+
+#arena-slot-bottom { --enter-x: 0; --enter-y: 70%; }
+#arena-slot-top    { --enter-x: 0; --enter-y: -70%; }
+#arena-slot-left   { --enter-x: -70%; --enter-y: 0; }
+#arena-slot-right  { --enter-x: 70%; --enter-y: 0; }
 
 .played-card .card-corner {
   font-size: 1.05rem;
@@ -1389,9 +1406,44 @@ body {
   height: 32px;
 }
 
-@keyframes cardFlyToSlot {
-  0% { transform: translateY(40px) scale(0.9); opacity: 0; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
+@keyframes cardEnter {
+  0%   { transform: translate(var(--enter-x, 0), var(--enter-y, 40%)) scale(0.85); opacity: 0; }
+  45%  { opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+@keyframes cardLeave {
+  to { transform: scale(0.92); opacity: 0; }
+}
+
+/* Mão: cartas novas entram em sequência (efeito de distribuição) */
+.card-lift-wrapper.dealing {
+  animation: dealIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes dealIn {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* Cursor de acordo com a vez (antes era inline em cada carta) */
+.player-hand:not(.my-turn) .card-lift-wrapper,
+.player-hand:not(.my-turn) .card {
+  cursor: default;
+}
+
+/* Animações nunca criam barra de rolagem nem mexem no layout da tela de jogo */
+#screen-game.active {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .played-card.entering,
+  .played-card.leaving,
+  .card-lift-wrapper.dealing,
+  .voice-bubble.show {
+    animation-duration: 0.01ms;
+  }
 }
 
 /* --- PAINEL DE BOTÕES DE AÇÃO FLUTUANTE (NÃO TAPA AS CARTAS) --- */
