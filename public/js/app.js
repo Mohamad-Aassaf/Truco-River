@@ -1191,17 +1191,14 @@ function renderPlayedCards(playedCards, players, gameState) {
       const cardEl = document.createElement('div');
       cardEl.className = `played-card ${card.suit}`;
       
-      // Calcular deslocamento tridimensional e rotação para efeito de pilha (Cascata para baixo e direita)
-      const isMobile = window.innerWidth <= 850;
-      const stepX = isMobile ? 10 : 22;
-      const stepY = isMobile ? 6 : 14;
-      
-      let offsetX = round * stepX;
-      let offsetY = round * stepY;
-      let rotate = (round - 1) * 8; // -8deg, 0deg, 8deg
-      
+      // Cascata para baixo e direita, proporcional ao tamanho da carta
+      // (o CSS dos slots reserva exatamente este espaço: 30% x 8% por rodada)
+      const offsetX = round * 30;
+      const offsetY = round * 8;
+      const rotate = (round - 1) * 8; // -8deg, 0deg, 8deg
+
       cardEl.style.position = 'absolute';
-      cardEl.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotate}deg)`;
+      cardEl.style.transform = `translate(${offsetX}%, ${offsetY}%) rotate(${rotate}deg)`;
       cardEl.style.zIndex = 10 + round;
       
       cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
