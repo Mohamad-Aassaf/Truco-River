@@ -1,34 +1,33 @@
-// gameEngine.js
-// Motor do Jogo de Truco Gaúcho (Truco Cego)
+// cara eu técnicamente fiz uma engine
 
 const SUITS = ['espadas', 'paus', 'copas', 'ouros'];
-const VALUES = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12]; // Sem 8 e 9
+const VALUES = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12]; // oitos e 9s não tem
 
-// Hierarquia do Truco Gaúcho (Cego) - Do menor para o maior (1 a 14)
+// Hierarquia do Truco
 function getTrucoRank(value, suit) {
-  if (value === 1 && suit === 'espadas') return 14; // Espadilha
-  if (value === 1 && suit === 'paus') return 13;    // Bastião
-  if (value === 7 && suit === 'espadas') return 12; // Siete de espada
-  if (value === 7 && suit === 'ouros') return 11;   // Siete de oro
-  if (value === 3) return 10;
-  if (value === 2) return 9;
-  if (value === 1 && (suit === 'copas' || suit === 'ouros')) return 8; // Anchos falsos
-  if (value === 12) return 7;
-  if (value === 11) return 6;
-  if (value === 10) return 5;
-  if (value === 7 && (suit === 'paus' || suit === 'copas')) return 4;
+  if (value === 1 && suit === 'espadas') return 14; // Espadão
+  if (value === 1 && suit === 'paus') return 13;    // Pauzao
+  if (value === 7 && suit === 'espadas') return 12; // 7 de espada
+  if (value === 7 && suit === 'ouros') return 11;   // 7 de ouro
+  if (value === 3) return 10;                      // 3
+  if (value === 2) return 9;                       // 2
+  if (value === 1 && (suit === 'copas' || suit === 'ouros')) return 8; // 1 de copão e 1 de ouro
+  if (value === 12) return 7;                      // 12
+  if (value === 11) return 6;                      // 11
+  if (value === 10) return 5;                      // 10
+  if (value === 7 && (suit === 'paus' || suit === 'copas')) return 4; // 7 de pau e 7 de copa
   if (value === 6) return 3;
   if (value === 5) return 2;
   if (value === 4) return 1;
   return 0;
 }
 
-// Valor para pontos do Envido/Flor: 1 a 7 valem o próprio valor, 10/11/12 valem 0.
+// Valor para os pontos do Envido/Flor: 1 a 7 valem o próprio valor, 10/11/12 valem 0 pq são figuras
 function getEnvidoPoints(value) {
   return value <= 7 ? value : 0;
 }
 
-// Cria um baralho espanhol completo (40 cartas)
+// Cria um baralho completo 40 cartas
 function createDeck() {
   const deck = [];
   for (const suit of SUITS) {
@@ -44,7 +43,7 @@ function createDeck() {
   return deck;
 }
 
-// Embaralha as cartas
+// Embaralha
 function shuffle(deck) {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -62,7 +61,7 @@ function calculateEnvidoScore(cards) {
 
   // Verificar se há duas cartas do mesmo naipe
   let maxScore = 0;
-  
+
   // Combinações possíveis de pares
   const pairs = [
     [cards[0], cards[1]],
@@ -79,7 +78,7 @@ function calculateEnvidoScore(cards) {
     }
   }
 
-  // Se todas as 3 cartas são de naipes diferentes, vale a de maior valor individual
+  // se chamar envido sem par, vale a de maior valor sozinha sem contar as figuras
   if (!hasPair) {
     maxScore = Math.max(cards[0].envidoPoints, cards[1].envidoPoints, cards[2].envidoPoints);
   }
@@ -87,7 +86,7 @@ function calculateEnvidoScore(cards) {
   return maxScore;
 }
 
-// Calcula os pontos de Flor de uma mão (3 cartas)
+// Calcula os pontos da flor
 function calculateFlorScore(cards) {
   if (cards[0].suit === cards[1].suit && cards[1].suit === cards[2].suit) {
     return 20 + cards[0].envidoPoints + cards[1].envidoPoints + cards[2].envidoPoints;
@@ -95,17 +94,17 @@ function calculateFlorScore(cards) {
   return 0; // Não tem Flor
 }
 
-class TrucoGame {
+class TrucoGame { // TRUCO GURIZINHO
   constructor(id, mode, maxPoints = 24) {
     this.id = id;
-    this.mode = mode; // '1v1' ou '2v2'
+    this.mode = mode; // 1v1 ou 2v2
     this.maxPlayers = mode === '1v1' ? 2 : 4;
     this.players = []; // [{ id, name, socketId, isBot, team }]
     this.score = { 0: 0, 1: 0 }; // Pontuação por equipe
     this.state = 'lobby'; // 'lobby', 'playing', 'game_end'
     this.gameLogs = [];
     this.maxPoints = maxPoints;
-    
+
     // Estado da rodada/mão atual
     this.dealerIndex = 0;
     this.hand = null;
@@ -118,7 +117,7 @@ class TrucoGame {
 
   addPlayer(id, name, socketId, isBot = false, difficulty = 'medium') {
     if (this.players.length >= this.maxPlayers) return false;
-    
+
     // Determinar time:
     // No 1v1: Jogador 0 é Time 0, Jogador 1 é Time 1
     // No 2v2: Alternado: 0 e 2 são Time 0, 1 e 3 são Time 1
@@ -133,7 +132,7 @@ class TrucoGame {
       team,
       ready: isBot // Bots estão sempre prontos
     });
-    
+
     this.log(`${name} entrou na partida.`);
     return true;
   }
@@ -141,13 +140,13 @@ class TrucoGame {
   removePlayer(socketId) {
     const idx = this.players.findIndex(p => p.socketId === socketId);
     if (idx === -1) return null;
-    
+
     const p = this.players[idx];
-    
+
     if (this.state === 'playing') {
       const team = p.team;
       const opponentTeam = team === 0 ? 1 : 0;
-      
+
       if (this.mode === '1v1') {
         const opponentIdx = idx === 0 ? 1 : 0;
         this.winner = opponentTeam;
@@ -159,7 +158,7 @@ class TrucoGame {
         // 2v2:
         const partnerIdx = (idx + 2) % 4;
         const partner = this.players[partnerIdx];
-        
+
         if (!partner || partner.isBot || !partner.socketId) {
           this.winner = opponentTeam;
           this.state = 'game_end';
@@ -213,7 +212,7 @@ class TrucoGame {
 
     this.state = 'playing';
     const deck = shuffle(createDeck());
-    
+
     // Distribuir 3 cartas para cada jogador
     const hands = {};
     for (let i = 0; i < this.players.length; i++) {
@@ -231,7 +230,7 @@ class TrucoGame {
       currentRound: 0,
       mão: mãoPlayer,
       currentPlayer: mãoPlayer,
-      
+
       // Pontos do Truco
       trucoState: 'none', // 'none', 'truco', 'retruco', 'vale4'
       trucoPoints: 1, // Pontos que a mão vale atualmente
@@ -239,7 +238,7 @@ class TrucoGame {
       trucoResponsePending: false,
       trucoPendingTeam: null,
       trucoChant: '', // Balão de texto do truco
-      
+
       // Envido
       envidoState: 'none', // 'none', 'envido', 'real_envido', 'falta_envido', 'resolved', 'refused'
       envidoPointsAtStake: 0,
@@ -251,7 +250,7 @@ class TrucoGame {
       envidoDeclares: {}, // { playerIdx: points } para comparar quando resolvido
       envidoHistory: [], // Histórico de cantadas: ['envido', 'real_envido', etc.]
       canCallEnvido: true, // Envido/Flor só pode ser chamado antes do jogador jogar sua primeira carta
-      
+
       // Flor
       florState: 'none', // 'none', 'flor', 'contra_flor', 'contra_flor_resto', 'resolved', 'refused'
       florPointsAtStake: 0,
@@ -260,10 +259,10 @@ class TrucoGame {
       florPendingTeam: null,
       florChant: '',
       florHistory: [],
-      
+
       // Fold / Ir ao baralho
       foldedPlayers: new Set(),
-      
+
       // Controle de turnos adicionais
       voiceBubble: {} // { playerIdx: "Mensagem" } para animação visual
     };
@@ -281,7 +280,7 @@ class TrucoGame {
   // Permite que um administrador defina manualmente as cartas na mão de um jogador para fins de teste
   adminSetPlayerCards(playerIdx, cardsData) {
     if (!this.hand) return false;
-    
+
     // Converter a lista de valores/naipes em objetos de carta do motor
     const newCards = cardsData.map(c => {
       const val = parseInt(c.value);
@@ -293,17 +292,17 @@ class TrucoGame {
         envidoPoints: getEnvidoPoints(val)
       };
     });
-    
+
     // Substituir a mão do jogador
     this.hand.hands[playerIdx] = newCards;
     this.hand.originalHands[playerIdx] = JSON.parse(JSON.stringify(newCards));
-    
+
     // Recalcular pontuação de Envido e Flor do jogador
     const player = this.players[playerIdx];
     player.envidoScore = calculateEnvidoScore(newCards);
     player.florScore = calculateFlorScore(newCards);
     player.hasFlor = player.florScore > 0;
-    
+
     this.log(`Admin definiu as cartas de ${player.name}.`);
     return true;
   }
@@ -318,7 +317,7 @@ class TrucoGame {
   setPendingResponse(type, callingPlayerIdx, options) {
     const caller = this.players[callingPlayerIdx];
     const opponentTeam = caller.team === 0 ? 1 : 0;
-    
+
     if (type === 'truco') {
       this.hand.trucoResponsePending = true;
       this.hand.trucoPendingTeam = opponentTeam;
@@ -334,9 +333,9 @@ class TrucoGame {
   // Gritos / Cantos
   callTruco(playerIdx) {
     if (!this.hand || this.hand.trucoResponsePending || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
-    
+
     const team = this.players[playerIdx].team;
-    
+
     // Não pode cantar se o seu time foi o último a cantar
     if (this.hand.trucoCallerTeam === team) return false;
 
@@ -368,10 +367,10 @@ class TrucoGame {
 
   respondTruco(playerIdx, response) {
     if (!this.hand || !this.hand.trucoResponsePending) return false;
-    
+
     const player = this.players[playerIdx];
     const team = player.team;
-    
+
     if (team !== this.hand.trucoPendingTeam) return false;
 
     this.hand.trucoResponsePending = false;
@@ -382,18 +381,18 @@ class TrucoGame {
       if (this.hand.trucoState === 'truco') this.hand.trucoPoints = 2;
       else if (this.hand.trucoState === 'retruco') this.hand.trucoPoints = 3;
       else if (this.hand.trucoState === 'vale4') this.hand.trucoPoints = 4;
-      
+
       this.hand.voiceBubble[playerIdx] = '¡QUERO!';
       this.log(`Time ${team + 1} aceitou o Truco. A mão vale ${this.hand.trucoPoints} pontos.`, team);
     } else if (response === 'nao_quero') {
       // Não aceitou / Correu / Mazo. O time adversário ganha os pontos anteriores.
       const winnerTeam = team === 0 ? 1 : 0;
-      
+
       let pointsWon = 1;
       if (this.hand.trucoState === 'truco') pointsWon = 1;
       else if (this.hand.trucoState === 'retruco') pointsWon = 2;
       else if (this.hand.trucoState === 'vale4') pointsWon = 3;
-      
+
       this.hand.voiceBubble[playerIdx] = '¡NÃO QUERO!';
       this.log(`Time ${team + 1} não aceitou. Time ${winnerTeam + 1} ganha ${pointsWon} ponto(s).`, winnerTeam);
       this.endHand(winnerTeam, pointsWon);
@@ -408,13 +407,13 @@ class TrucoGame {
   // Chamadas de Envido
   callEnvido(playerIdx, type) {
     if (!this.hand || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
-    
+
     // Se o truco estiver pendente, apenas o time que deve responder ao truco pode chamar envido
     if (this.hand.trucoResponsePending) {
       const callingTeam = this.players[playerIdx].team;
       if (callingTeam !== this.hand.trucoPendingTeam) return false;
     }
-    
+
     // No 2v2, apenas o Pé (jogadores 2 e 3) pode cantar ou responder Envido
     if (this.mode === '2v2' && playerIdx !== 2 && playerIdx !== 3) return false;
 
@@ -444,7 +443,7 @@ class TrucoGame {
 
     let pointsToAdd = 0;
     let chant = '';
-    
+
     if (type === 'envido') {
       pointsToAdd = 2;
       chant = '¡ENVIDO!';
@@ -453,7 +452,7 @@ class TrucoGame {
       chant = '¡REAL ENVIDO!';
     } else if (type === 'falta_envido') {
       // A pontuação real do Falta Envido é definida apenas quando ele é aceito.
-      pointsToAdd = 0; 
+      pointsToAdd = 0;
       chant = '¡FALTA ENVIDO!';
     } else {
       return false;
@@ -484,10 +483,10 @@ class TrucoGame {
   respondEnvido(playerIdx, response) {
     if (this.mode === '2v2' && playerIdx !== 2 && playerIdx !== 3) return false;
     if (!this.hand || !this.hand.envidoResponsePending) return false;
-    
+
     const player = this.players[playerIdx];
     const team = player.team;
-    
+
     if (team !== this.hand.envidoPendingTeam) return false;
 
     this.hand.envidoResponsePending = false;
@@ -498,7 +497,7 @@ class TrucoGame {
     if (response === 'quero') {
       this.hand.voiceBubble[playerIdx] = '¡QUERO!';
       this.hand.envidoState = 'resolved';
-      
+
       // Calcular pontos do Falta Envido se for o caso
       if (this.hand.envidoState === 'falta_envido' || this.hand.envidoHistory.includes('falta_envido')) {
         const leadingScore = Math.max(this.score[0], this.score[1]);
@@ -512,21 +511,21 @@ class TrucoGame {
         // Garante que vale pelo menos 1 ponto
         if (this.hand.envidoPointsAtStake <= 0) this.hand.envidoPointsAtStake = 1;
       }
-      
+
       this.log(`Envido aceito pelo Time ${team}. Pontos em jogo: ${this.hand.envidoPointsAtStake}`);
       this.resolveEnvido();
     } else if (response === 'nao_quero') {
       this.hand.voiceBubble[playerIdx] = '¡NÃO QUERO!';
       this.hand.envidoState = 'refused';
-      
+
       // Se recusou o primeiro envido, o time adversário ganha 1 ponto.
       // Se recusou um aumento, ganha o valor acumulado até a rodada anterior.
       let pointsWon = this.hand.envidoPointsBeforeLastRaise === 0 ? 1 : this.hand.envidoPointsBeforeLastRaise;
-      
+
       this.log(`Envido recusado. Time ${opponentTeam} ganha ${pointsWon} ponto(s).`);
       this.score[opponentTeam] += pointsWon;
       this.checkGameWinner();
-      
+
       // Limpar estados pendentes de Envido
       this.hand.canCallEnvido = false;
     } else if (['envido', 'real_envido', 'falta_envido'].includes(response)) {
@@ -537,16 +536,16 @@ class TrucoGame {
   }
 
   resolveEnvido() {
-    // Determinar o maior Envido score. 
+    // Determinar o maior Envido
     // Em caso de empate, vence quem for "Mão" ou o mais próximo do "Mão" no sentido horário (ordem de jogo)
     let bestPlayerIdx = -1;
     let bestScore = -1;
-    
+
     // Percorre em ordem de jogo a partir do Mão
     for (let i = 0; i < this.maxPlayers; i++) {
       const idx = (this.hand.mão + i) % this.maxPlayers;
       const p = this.players[idx];
-      
+
       // Jogador com Flor não participa da disputa do Envido
       if (p.hasFlor) continue;
 
@@ -559,10 +558,10 @@ class TrucoGame {
     if (bestPlayerIdx !== -1) {
       const winner = this.players[bestPlayerIdx];
       const points = this.hand.envidoPointsAtStake;
-      
+
       this.log(`Disputa de Envido vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
       this.score[winner.team] += points;
-      
+
       // Registrar no estado da mão para mostrar no chat
       this.hand.envidoWinnerInfo = {
         name: winner.name,
@@ -573,13 +572,13 @@ class TrucoGame {
 
       this.checkGameWinner();
     }
-    
+
     this.hand.canCallEnvido = false;
   }
 
   callFlor(playerIdx) {
     if (!this.hand || this.hand.florResponsePending) return false;
-    
+
     // Se o truco estiver pendente, apenas o time que deve responder ao truco pode chamar flor
     if (this.hand.trucoResponsePending) {
       const callingTeam = this.players[playerIdx].team;
@@ -606,7 +605,7 @@ class TrucoGame {
       this.hand.voiceBubble[playerIdx] = '¡FLOR!';
     }
     this.hand.florHistory.push('flor');
-    
+
     // Por padrão, uma Flor sem oposição vale 3 pontos
     this.hand.florPointsAtStake = 3;
 
@@ -628,7 +627,7 @@ class TrucoGame {
         points = 4; // Flor e Flor
         this.log(`Ambos os parceiros têm Flor! Ganham 4 pontos.`);
       }
-      
+
       this.score[team] += points;
       this.log(`Flor não contestada. Time ${team} ganha ${points} ponto(s).`);
       this.hand.florState = 'resolved';
@@ -640,10 +639,10 @@ class TrucoGame {
 
   respondFlor(playerIdx, response) {
     if (!this.hand || !this.hand.florResponsePending) return false;
-    
+
     const player = this.players[playerIdx];
     const team = player.team;
-    
+
     if (team !== this.hand.florPendingTeam) return false;
     if (!player.hasFlor) return false; // Apenas quem tem flor pode responder à Contra-Flor
 
@@ -671,7 +670,7 @@ class TrucoGame {
       this.hand.voiceBubble[playerIdx] = '¡CONTRA-FLOR E O RESTO!';
       this.hand.florState = 'contra_flor_resto';
       this.hand.florHistory.push('contra_flor_resto');
-      
+
       const leadingScore = Math.max(this.score[0], this.score[1]);
       this.hand.florPointsAtStake = 24 - leadingScore;
       if (this.hand.florPointsAtStake <= 0) this.hand.florPointsAtStake = 1;
@@ -683,14 +682,14 @@ class TrucoGame {
       // Achicou (correu). O oponente ganha os pontos anteriores (3 se era só Flor)
       this.hand.voiceBubble[playerIdx] = '¡ACHIQUE!';
       this.hand.florState = 'refused';
-      
+
       let pointsWon = 3;
       if (this.hand.florHistory.length > 1) {
         const prevCall = this.hand.florHistory[this.hand.florHistory.length - 2];
         if (prevCall === 'flor') pointsWon = 3;
         else if (prevCall === 'contra_flor') pointsWon = 6;
       }
-      
+
       this.log(`Contra-Flor recusada. Time ${opponentTeam} ganha ${pointsWon} ponto(s).`);
       this.score[opponentTeam] += pointsWon;
       this.hand.canCallEnvido = false;
@@ -716,10 +715,10 @@ class TrucoGame {
     if (bestPlayerIdx !== -1) {
       const winner = this.players[bestPlayerIdx];
       const points = this.hand.florPointsAtStake;
-      
+
       this.log(`Disputa de Flor vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
       this.score[winner.team] += points;
-      
+
       this.hand.florWinnerInfo = {
         name: winner.name,
         points: bestScore,
@@ -746,7 +745,7 @@ class TrucoGame {
 
     // Retira a carta da mão do jogador
     const card = cards.splice(cardIndex, 1)[0];
-    
+
     // Cancela qualquer balão de fala do jogador anterior
     delete this.hand.voiceBubble[playerIdx];
 
@@ -769,19 +768,19 @@ class TrucoGame {
   // Mazo (Correr / Ir para o baralho)
   foldPlayer(playerIdx) {
     if (!this.hand || this.state !== 'playing') return false;
-    
+
     const player = this.players[playerIdx];
     const team = player.team;
 
     this.hand.voiceBubble[playerIdx] = '¡ME VOU AO MAZO!';
     this.log(`${player.name} foi ao Mazo.`);
-    
+
     // Se for na primeira rodada e o time correr/ir ao mazo, vale no mínimo 2 pontos
     let pointsWon = this.hand.trucoPoints;
     if (this.hand.currentRound === 0 && pointsWon < 2) {
       pointsWon = 2;
     }
-    
+
     if (this.mode === '1v1') {
       const opponentTeam = team === 0 ? 1 : 0;
       this.endHand(opponentTeam, pointsWon);
@@ -789,7 +788,7 @@ class TrucoGame {
       // No 2v2:
       this.hand.foldedPlayers.add(playerIdx);
       const partnerIdx = (playerIdx + 2) % 4;
-      
+
       // Se ambos os jogadores da equipe dobraram, a outra equipe vence
       if (this.hand.foldedPlayers.has(partnerIdx)) {
         const opponentTeam = team === 0 ? 1 : 0;
@@ -818,15 +817,15 @@ class TrucoGame {
     if (roundPlays.length < expectedPlaysCount) {
       // Ainda faltam jogadores jogarem nesta rodada
       let nextPlayer = (this.hand.currentPlayer + 1) % this.maxPlayers;
-      
+
       // Pular jogadores que já descartaram suas mãos ou foram ao mazo
       while (
-        this.hand.foldedPlayers.has(nextPlayer) || 
+        this.hand.foldedPlayers.has(nextPlayer) ||
         this.hand.hands[nextPlayer].length === 0 && this.hand.playedCards.filter(p => p.playerIdx === nextPlayer && p.round === currentRound).length === 0
       ) {
         nextPlayer = (nextPlayer + 1) % this.maxPlayers;
       }
-      
+
       this.hand.currentPlayer = nextPlayer;
     } else {
       // Fim da rodada (todos os jogadores ativos jogaram)
@@ -878,7 +877,7 @@ class TrucoGame {
     } else {
       // Avança para a próxima rodada
       this.hand.currentRound++;
-      
+
       // Quem começa a próxima rodada é quem ganhou a rodada anterior.
       // Se deu empate, quem começa é o "Mão" da rodada anterior (ou o primeiro ativo a partir do mão).
       if (isTie) {
@@ -897,7 +896,7 @@ class TrucoGame {
   // Verifica se temos um vencedor para a mão atual
   checkHandWinner() {
     const r = this.hand.roundsWon;
-    
+
     // Contar vitórias de cada time
     const t0Wins = r.filter(w => w === 0).length;
     const t1Wins = r.filter(w => w === 1).length;
@@ -965,7 +964,7 @@ class TrucoGame {
     // Passar o carteador para o próximo
     this.dealerIndex = (this.dealerIndex + 1) % this.maxPlayers;
     this.hand = null;
-    
+
     // Delay para iniciar próxima mão de forma limpa (gerenciado no server.js)
     this.state = 'hand_end';
   }
@@ -1040,7 +1039,7 @@ class TrucoGame {
       logs: this.gameLogs,
       dealerIndex: this.dealerIndex,
       lastHandSummary: this.lastHandSummary,
-      
+
       // Detalhes da mão
       hand: {
         hands: maskedHands,
@@ -1050,7 +1049,7 @@ class TrucoGame {
         currentRound: this.hand.currentRound,
         mão: this.hand.mão,
         currentPlayer: this.hand.currentPlayer,
-        
+
         // Truco
         trucoState: this.hand.trucoState,
         trucoPoints: this.hand.trucoPoints,
@@ -1058,7 +1057,7 @@ class TrucoGame {
         trucoResponsePending: this.hand.trucoResponsePending,
         trucoPendingTeam: this.hand.trucoPendingTeam,
         trucoChant: this.hand.trucoChant,
-        
+
         // Envido
         envidoState: this.hand.envidoState,
         envidoPointsAtStake: this.hand.envidoPointsAtStake,
@@ -1069,7 +1068,7 @@ class TrucoGame {
         envidoWinnerInfo: this.hand.envidoWinnerInfo,
         envidoHistory: this.hand.envidoHistory,
         canCallEnvido: this.hand.canCallEnvido,
-        
+
         // Flor
         florState: this.hand.florState,
         florPointsAtStake: this.hand.florPointsAtStake,
@@ -1078,7 +1077,7 @@ class TrucoGame {
         florPendingTeam: this.hand.florPendingTeam,
         florChant: this.hand.florChant,
         florWinnerInfo: this.hand.florWinnerInfo,
-        
+
         // Folds e voice
         foldedPlayers: Array.from(this.hand.foldedPlayers),
         voiceBubble: this.hand.voiceBubble
