@@ -1,14 +1,14 @@
 // public/js/app.js
 // Controlador do Cliente para o Truco Gaúcho
 
-const socket = window.location.hostname.includes('vercel.app') 
-  ? io('https://truco-river.onrender.com') 
+const socket = window.location.hostname.includes('vercel.app')
+  ? io('https://truco-river.onrender.com')
   : io();
 
 // Configuração padrão das vozes do usuário (com carregamento do localStorage)
 let myVoiceConfig = {
   truco: { path: '/audio/truco.ogg', pitch: 1.0 },
-  retruco: { path: '/audio/retruco.ogg', pitch: 1.0 },
+  retruco: { path: '/audio/re', pitch: 1.0 },
   vale4: { path: '', pitch: 1.0 },
   envido: { path: '/audio/envido.ogg', pitch: 1.0 },
   real_envido: { path: '', pitch: 1.0 },
@@ -488,7 +488,7 @@ window.addEventListener('touchstart', startAutoplay);
 socket.on('available_rooms', (rooms) => {
   roomsList.innerHTML = '';
   if (rooms.length === 0) {
-    roomsList.innerHTML = '<li class="empty-list-msg">Nenhuma sala criada no momento. Crie uma acima!</li>';
+    roomsList.innerHTML = '<li class="empty-list-msg">Nenhuma sala aberta no momento. Crie a sua!</li>';
     return;
   }
 
@@ -599,10 +599,10 @@ function renderLobbyScreen(gameState) {
     if (p) {
       const isMe = p.id === myPlayerId;
       const isHost = gameState.players[0] && gameState.players[0].id === myPlayerId;
-      
+
       const canChangeTeam = gameState.mode === '2v2' && (isMe || (isHost && p.isBot));
       const changeTeamBtnHtml = canChangeTeam
-        ? `<button class="change-team-btn btn btn-secondary btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Mudar Time</button>` 
+        ? `<button class="change-team-btn btn btn-secondary btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 8px; font-size: 0.75rem;"><i class="fa-solid fa-right-left"></i> Mudar Time</button>`
         : '';
 
       const kickBtnHtml = (isHost && !isMe)
@@ -624,7 +624,7 @@ function renderLobbyScreen(gameState) {
           ${p.ready ? 'Pronto' : 'Aguardando'}
         </span>
       `;
-      
+
       if (canChangeTeam) {
         setTimeout(() => {
           const btn = div.querySelector('.change-team-btn');
@@ -709,6 +709,12 @@ function renderGameScreen(gameState) {
   if (mobileLimit) {
     mobileLimit.textContent = `(${limit} pts)`;
   }
+
+  // Barras de progresso até o limite de pontos
+  [0, 1].forEach(t => {
+    const bar = document.getElementById(`score-bar-team${t}`);
+    if (bar) bar.style.width = `${Math.min(100, (gameState.score[t] / limit) * 100)}%`;
+  });
 
   // Desenhar os palitos gaúchos (pontos)
   drawMatchsticks(sticksTeam0, gameState.score[0]);
@@ -873,7 +879,20 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
     seat.classList.remove('hidden-seat');
 
     // Atualizar info
-    seat.querySelector('.seat-name').textContent = p.isBot ? `🤖 ${p.name}` : p.name;
+    seat.querySelector('.seat-name').textContent = p.name;
+
+    // Avatar: inicial do nome (ou ícone de robô) e cor do time em relação a mim
+    const initialEl = seat.querySelector('.seat-initial');
+    if (initialEl) {
+      if (p.isBot) {
+        initialEl.innerHTML = '<i class="fa-solid fa-robot"></i>';
+      } else {
+        initialEl.textContent = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
+      }
+    }
+    const myTeamIdx = players[mySeatIndex] ? players[mySeatIndex].team : 0;
+    seat.classList.toggle('team-us', p.team === myTeamIdx);
+    seat.classList.toggle('team-them', p.team !== myTeamIdx);
 
     // Distintivo do Carteador (D) ou Mão (M)
     const roleBadge = seat.querySelector('.seat-role');
@@ -1398,7 +1417,7 @@ function setupActionButtons(gameState) {
   const myPlayer = gameState.players[mySeatIndex];
   const myTeam = myPlayer.team;
   const isMyTurn = hand.currentPlayer === mySeatIndex;
-  
+
   // Regra do Pé: no 2v2 apenas os pés (índices 2 e 3) controlam o Envido
   const isPe = (gameState.mode === '1v1') || (mySeatIndex === 2 || mySeatIndex === 3);
 
@@ -1535,9 +1554,9 @@ function setupActionButtons(gameState) {
     groupFlor.classList.add('hide');
 
     // 2. Verifica se existia alguma opção de Envido ou Flor ativa no painel
-    const hasEnvidoOption = !btnEnvido.classList.contains('hide') || 
-                             !btnRealEnvido.classList.contains('hide') || 
-                             !btnFaltaEnvido.classList.contains('hide');
+    const hasEnvidoOption = !btnEnvido.classList.contains('hide') ||
+      !btnRealEnvido.classList.contains('hide') ||
+      !btnFaltaEnvido.classList.contains('hide');
     const hasFlorOption = !btnFlor.classList.contains('hide');
 
     if (hasEnvidoOption || hasFlorOption) {
@@ -1546,7 +1565,7 @@ function setupActionButtons(gameState) {
         btnEnvidoMobileTrigger.classList.remove('hide');
         btnEnvidoMobileTrigger.disabled = false;
       }
-      
+
       // 4. Copia os estados ativos/inativos dos botões reais para o sub-menu
       const updateSubMenuButton = (desktopBtn, subBtn) => {
         if (!desktopBtn || !subBtn) return;

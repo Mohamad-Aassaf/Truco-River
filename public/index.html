@@ -18,10 +18,10 @@
 
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2306180475075767"
-     crossorigin="anonymous"></script>
+    crossorigin="anonymous"></script>
 
   <!-- CSS Customizado -->
-  <link rel="stylesheet" href="/css/style.css?v=2.0">
+  <link rel="stylesheet" href="/css/style.css?v=3.0">
 </head>
 
 <body data-screen="home">
@@ -49,19 +49,19 @@
   <div id="screen-lobby" class="screen active">
     <!-- Google AdSense - Lateral Esquerda -->
     <div class="lobby-ad-side left-ad">
-      <ins class="adsbygoogle"
-           style="display:block;width:100%;height:100%"
-           data-ad-client="ca-pub-2306180475075767"
-           data-ad-slot="7465590884"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
+      <ins class="adsbygoogle" style="display:block;width:100%;height:100%" data-ad-client="ca-pub-2306180475075767"
+        data-ad-slot="7465590884" data-ad-format="auto" data-full-width-responsive="true"></ins>
       <script>
-           (adsbygoogle = window.adsbygoogle || []).push({});
+        (adsbygoogle = window.adsbygoogle || []).push({});
       </script>
     </div>
 
     <div class="lobby-card glassmorphism">
-      <h1 class="rustic-title">Truco River</h1>
+      <div class="lobby-hero">
+        <div class="hero-suits" aria-hidden="true"><span>♠</span><span>♣</span><span>♥</span><span>♦</span></div>
+        <h1 class="rustic-title">Truco River</h1>
+        <p class="lobby-tagline">Truco gaúcho online · 1v1 e em dupla</p>
+      </div>
 
       <div class="input-group">
         <label for="username"><i class="fa-solid fa-user"></i> Nome do Jogador:</label>
@@ -74,14 +74,17 @@
           <button type="button" class="deck-option active" data-deck="traditional">Tradicional</button>
           <button type="button" class="deck-option" data-deck="pixel">Pixel Art</button>
         </div>
-        <div class="deck-preview-container" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 10px;">
-          <button type="button" id="prev-preview-btn" class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 1rem; border-radius: 6px; cursor: pointer;">&lt;</button>
-          <div class="deck-preview-cards" style="display: flex; gap: 8px;">
-            <img id="deck-preview-img-1" class="preview-card-img" style="width: 60px; height: 90px; border-radius: 6px; border: 1.5px solid var(--gold-dark); transition: transform 0.2s;" src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="card1">
-            <img id="deck-preview-img-2" class="preview-card-img" style="width: 60px; height: 90px; border-radius: 6px; border: 1.5px solid var(--gold-dark); transition: transform 0.2s;" src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="card2">
-            <img id="deck-preview-img-3" class="preview-card-img" style="width: 60px; height: 90px; border-radius: 6px; border: 1.5px solid var(--gold-dark); transition: transform 0.2s;" src="/Baralho_Espanhol_Organizado/Copas/3.png" alt="card3">
+        <div class="deck-preview-container">
+          <button type="button" id="prev-preview-btn" class="icon-btn" title="Anterior"><i class="fa-solid fa-chevron-left"></i></button>
+          <div class="deck-preview-cards">
+            <img id="deck-preview-img-1" class="preview-card-img"
+              src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="card1">
+            <img id="deck-preview-img-2" class="preview-card-img"
+              src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="card2">
+            <img id="deck-preview-img-3" class="preview-card-img"
+              src="/Baralho_Espanhol_Organizado/Copas/3.png" alt="card3">
           </div>
-          <button type="button" id="next-preview-btn" class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 1rem; border-radius: 6px; cursor: pointer;">&gt;</button>
+          <button type="button" id="next-preview-btn" class="icon-btn" title="Próxima"><i class="fa-solid fa-chevron-right"></i></button>
         </div>
       </div>
 
@@ -120,37 +123,34 @@
         </div>
 
         <!-- Linha divisória -->
-        <div class="divider">ou</div>
+        <div class="divider"><span>ou</span></div>
 
         <!-- Entrar em Sala -->
-        <div class="lobby-action-box">
+        <div class="lobby-action-box join-box">
           <h3>Entrar em Sala</h3>
           <div class="input-group">
             <input type="text" id="join-room-id" placeholder="Código da Sala" maxlength="6">
           </div>
           <button id="join-room-btn" class="btn btn-secondary">Entrar na Sala</button>
+
+          <!-- Salas Disponíveis -->
+          <div class="available-rooms-section">
+            <h3>Salas no Lobby</h3>
+            <ul id="rooms-list" class="rooms-list">
+              <li class="empty-list-msg">Nenhuma sala aberta no momento. Crie a sua!</li>
+            </ul>
+          </div>
         </div>
       </div>
 
-      <!-- Salas Disponíveis -->
-      <div class="available-rooms-section">
-        <h3>Salas no Lobby</h3>
-        <ul id="rooms-list" class="rooms-list">
-          <li class="empty-list-msg">Nenhuma sala criada no momento. Crie uma acima!</li>
-        </ul>
-      </div>
     </div>
 
     <!-- Google AdSense - Lateral Direita -->
     <div class="lobby-ad-side right-ad">
-      <ins class="adsbygoogle"
-           style="display:block;width:100%;height:100%"
-           data-ad-client="ca-pub-2306180475075767"
-           data-ad-slot="7465590884"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
+      <ins class="adsbygoogle" style="display:block;width:100%;height:100%" data-ad-client="ca-pub-2306180475075767"
+        data-ad-slot="7465590884" data-ad-format="auto" data-full-width-responsive="true"></ins>
       <script>
-           (adsbygoogle = window.adsbygoogle || []).push({});
+        (adsbygoogle = window.adsbygoogle || []).push({});
       </script>
     </div>
   </div>
@@ -168,8 +168,8 @@
         </div>
       </div>
 
-      <div class="waiting-actions" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center;">
-        <select id="bot-difficulty-select" style="background: rgba(0, 0, 0, 0.6); color: white; border: 1px solid var(--gold-dark); border-radius: 6px; padding: 10px 14px; font-size: 0.9rem; cursor: pointer; font-family: 'Outfit', sans-serif;">
+      <div class="waiting-actions">
+        <select id="bot-difficulty-select" class="select-input">
           <option value="easy">Bot Fácil</option>
           <option value="medium" selected>Bot Médio</option>
           <option value="hard">Bot Difícil</option>
@@ -188,7 +188,7 @@
 
       <!-- LADO ESQUERDO: PAINEL DE INFORMAÇÕES E PLACAR -->
       <div class="info-sidebar glassmorphism">
-        <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div class="sidebar-header">
           <button id="game-leave-btn" class="btn-sidebar-exit" title="Sair da partida e voltar ao lobby">
             <i class="fa-solid fa-right-from-bracket"></i> Abandonar
           </button>
@@ -197,7 +197,7 @@
           </button>
         </div>
 
-        <h3 class="sidebar-title">Marcador de Pontos</h3>
+        <h3 class="sidebar-title">Truco River</h3>
 
         <!-- Painel Unificado de Pontuação com Alternador -->
         <div class="scoreboard-card">
@@ -214,13 +214,15 @@
           <div id="view-score-digital" class="score-view-pane">
             <div class="scoreboard-digital">
               <div class="team-score score-team0">
-                <span class="team-name">Nós (Time 1)</span>
+                <span class="team-name">Nós</span>
                 <span id="score-val-team0" class="score-number">00</span>
+                <div class="team-progress"><span id="score-bar-team0"></span></div>
               </div>
               <div class="vs-badge">VS</div>
               <div class="team-score score-team1">
-                <span class="team-name">Eles (Time 2)</span>
+                <span class="team-name">Eles</span>
                 <span id="score-val-team1" class="score-number">00</span>
+                <div class="team-progress"><span id="score-bar-team1"></span></div>
               </div>
             </div>
           </div>
@@ -251,11 +253,13 @@
 
         <!-- LOGS DA PARTIDA -->
         <div class="logs-container">
-          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px;">
-            <h4 style="margin: 0; border: none; padding: 0;">Narrativa da Partida</h4>
-            <div class="resize-controls" style="display: flex; gap: 4px;">
-              <button type="button" class="resize-btn" id="btn-increase-logs" title="Aumentar" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-plus"></i></button>
-              <button type="button" class="resize-btn" id="btn-decrease-logs" title="Diminuir" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-minus"></i></button>
+          <div class="panel-header">
+            <h4><i class="fa-solid fa-scroll"></i> Narrativa</h4>
+            <div class="resize-controls">
+              <button type="button" class="resize-btn" id="btn-increase-logs" title="Aumentar"><i
+                  class="fa-solid fa-plus"></i></button>
+              <button type="button" class="resize-btn" id="btn-decrease-logs" title="Diminuir"><i
+                  class="fa-solid fa-minus"></i></button>
             </div>
           </div>
           <div id="game-logs" class="game-logs">
@@ -265,11 +269,13 @@
 
         <!-- CHAT DO LOBBY -->
         <div class="chat-container">
-          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px; border-bottom: 1px solid rgba(223, 177, 91, 0.1); padding-bottom: 4px;">
-            <h4 style="margin: 0; border: none; padding: 0;">Conversa do Lobby</h4>
-            <div class="resize-controls" style="display: flex; gap: 4px;">
-              <button type="button" class="resize-btn" id="btn-increase-chat" title="Aumentar" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-plus"></i></button>
-              <button type="button" class="resize-btn" id="btn-decrease-chat" title="Diminuir" style="background: none; border: none; color: var(--gold); cursor: pointer; padding: 2px 6px; font-size: 0.85rem;"><i class="fa-solid fa-minus"></i></button>
+          <div class="panel-header">
+            <h4><i class="fa-solid fa-comments"></i> Conversa</h4>
+            <div class="resize-controls">
+              <button type="button" class="resize-btn" id="btn-increase-chat" title="Aumentar"><i
+                  class="fa-solid fa-plus"></i></button>
+              <button type="button" class="resize-btn" id="btn-decrease-chat" title="Diminuir"><i
+                  class="fa-solid fa-minus"></i></button>
             </div>
           </div>
           <div id="chat-messages" class="chat-messages">
@@ -287,7 +293,7 @@
       <div class="table-area">
         <!-- BOTÕES E INFO EXCLUSIVOS PARA MOBILE -->
         <div class="mobile-header-bar mobile-only">
-          <div class="mobile-header-left" style="display: flex; gap: 8px; align-items: center;">
+          <div class="mobile-header-left">
             <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Ver Placar e Chat">
               <i class="fa-solid fa-bars"></i>
             </button>
@@ -300,9 +306,9 @@
             <span class="score-team score-team0" id="mobile-score-us">00</span>
             <span class="score-vs">x</span>
             <span class="score-team score-team1" id="mobile-score-them">00</span>
-            <span id="mobile-score-limit" style="font-size: 0.72rem; opacity: 0.6; margin-left: 6px;">(24 pts)</span>
+            <span id="mobile-score-limit" class="mobile-score-limit">(24 pts)</span>
           </div>
-          <div style="width: 80px;"></div> <!-- Espaçador para equilibrar o layout -->
+          <div class="mobile-header-spacer"></div>
         </div>
 
         <!-- BANNER DE ALERTA DE TURNO NO TOPO DA ARENA (TOTALMENTE FORA DA MESA) -->
@@ -318,8 +324,11 @@
           <!-- Player 0: Bottom (Você) -->
           <div id="seat-bottom" class="player-seat active-seat">
             <div class="avatar-card">
-              <span class="seat-name">Você</span>
-              <span class="seat-role badge">Mão</span>
+              <div class="seat-avatar"><span class="seat-initial">V</span></div>
+              <div class="seat-info">
+                <span class="seat-name">Você</span>
+                <span class="seat-role badge">Mão</span>
+              </div>
               <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-bottom"></div>
@@ -328,8 +337,11 @@
           <!-- Player 1: Top (No 1v1 é o oponente. No 2v2 é o parceiro) -->
           <div id="seat-top" class="player-seat">
             <div class="avatar-card">
-              <span class="seat-name">Oponente</span>
-              <span class="seat-role badge">Pé</span>
+              <div class="seat-avatar"><span class="seat-initial">O</span></div>
+              <div class="seat-info">
+                <span class="seat-name">Oponente</span>
+                <span class="seat-role badge">Pé</span>
+              </div>
               <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-top"></div>
@@ -338,8 +350,11 @@
           <!-- Player 2: Left (Apenas no 2v2 - Oponente) -->
           <div id="seat-left" class="player-seat hidden-seat">
             <div class="avatar-card">
-              <span class="seat-name">Eles 1</span>
-              <span class="seat-role badge">Mão</span>
+              <div class="seat-avatar"><span class="seat-initial">E</span></div>
+              <div class="seat-info">
+                <span class="seat-name">Eles 1</span>
+                <span class="seat-role badge">Mão</span>
+              </div>
               <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-left"></div>
@@ -348,8 +363,11 @@
           <!-- Player 3: Right (Apenas no 2v2 - Oponente) -->
           <div id="seat-right" class="player-seat hidden-seat">
             <div class="avatar-card">
-              <span class="seat-name">Eles 2</span>
-              <span class="seat-role badge">Pé</span>
+              <div class="seat-avatar"><span class="seat-initial">E</span></div>
+              <div class="seat-info">
+                <span class="seat-name">Eles 2</span>
+                <span class="seat-role badge">Pé</span>
+              </div>
               <div class="seat-cards"></div>
             </div>
             <div class="voice-bubble" id="bubble-right"></div>
@@ -394,58 +412,61 @@
         <!-- PAINEL DE BOTÕES DE AÇÃO DO JOGADOR
              O slot tem altura fixa para a mesa não pular quando os botões mudam -->
         <div class="action-panel-slot">
-        <div id="action-panel" class="action-panel">
-          <!-- Banner explicativo de vez -->
-          <div id="action-panel-status" class="action-panel-status hide">Vez do adversário...</div>
-          <!-- Apostas Normais de Truco -->
-          <div class="action-group" id="group-truco">
-            <button id="btn-truco" class="action-btn btn-truco">Truco!</button>
-            <button id="btn-retruco" class="action-btn btn-truco hide">Retruco!</button>
-            <button id="btn-vale4" class="action-btn btn-truco hide">Vale 4!</button>
-          </div>
+          <div id="action-panel" class="action-panel">
+            <!-- Banner explicativo de vez -->
+            <div id="action-panel-status" class="action-panel-status hide">Vez do adversário...</div>
+            <!-- Apostas Normais de Truco -->
+            <div class="action-group" id="group-truco">
+              <button id="btn-truco" class="action-btn btn-truco">Truco!</button>
+              <button id="btn-retruco" class="action-btn btn-truco hide">Retruco!</button>
+              <button id="btn-vale4" class="action-btn btn-truco hide">Vale 4!</button>
+            </div>
 
-          <!-- Apostas de Envido -->
-          <div class="action-group" id="group-envido">
-            <button id="btn-envido" class="action-btn btn-envido">Envido</button>
-            <button id="btn-real-envido" class="action-btn btn-envido">Real Envido</button>
-            <button id="btn-falta-envido" class="action-btn btn-envido">Falta Envido</button>
-          </div>
+            <!-- Apostas de Envido -->
+            <div class="action-group" id="group-envido">
+              <button id="btn-envido" class="action-btn btn-envido">Envido</button>
+              <button id="btn-real-envido" class="action-btn btn-envido">Real Envido</button>
+              <button id="btn-falta-envido" class="action-btn btn-envido">Falta Envido</button>
+            </div>
 
-          <!-- Canto de Flor -->
-          <div class="action-group" id="group-flor">
-            <button id="btn-flor" class="action-btn btn-flor">Flor!</button>
-          </div>
+            <!-- Canto de Flor -->
+            <div class="action-group" id="group-flor">
+              <button id="btn-flor" class="action-btn btn-flor">Flor!</button>
+            </div>
 
-          <!-- Respostas Contextuais (Quero/Não Quero) -->
-          <div class="action-group hide" id="group-response">
-            <button id="btn-quero" class="action-btn btn-success">Quero!</button>
-            <button id="btn-nao-quero" class="action-btn btn-danger">Não Quero!</button>
-          </div>
+            <!-- Respostas Contextuais (Quero/Não Quero) -->
+            <div class="action-group hide" id="group-response">
+              <button id="btn-quero" class="action-btn btn-success">Quero!</button>
+              <button id="btn-nao-quero" class="action-btn btn-danger">Não Quero!</button>
+            </div>
 
-          <!-- Respostas Especiais de Flor (Contra-Flor) -->
-          <div class="action-group hide" id="group-flor-response">
-            <button id="btn-contra-flor" class="action-btn btn-flor">Contra-Flor!</button>
-            <button id="btn-contra-flor-resto" class="action-btn btn-flor">Contra-Flor e o Resto!</button>
-            <button id="btn-achique" class="action-btn btn-danger">Achique!</button>
-          </div>
+            <!-- Respostas Especiais de Flor (Contra-Flor) -->
+            <div class="action-group hide" id="group-flor-response">
+              <button id="btn-contra-flor" class="action-btn btn-flor">Contra-Flor!</button>
+              <button id="btn-contra-flor-resto" class="action-btn btn-flor">Contra-Flor e o Resto!</button>
+              <button id="btn-achique" class="action-btn btn-danger">Achique!</button>
+            </div>
 
-          <!-- Ir ao Baralho -->
-          <div class="action-group">
-            <button id="btn-fold" class="action-btn btn-dark">Ir ao Baralho (Mazo)</button>
-          </div>
+            <!-- Ir ao Baralho -->
+            <div class="action-group">
+              <button id="btn-fold" class="action-btn btn-dark">Ir ao Baralho (Mazo)</button>
+            </div>
 
-          <!-- Botão Principal de Envido/Flor (Mobile Only) -->
-          <button id="btn-envido-mobile-trigger" class="action-btn btn-envido mobile-only hide">Envido / Flor...</button>
+            <!-- Botão Principal de Envido/Flor (Mobile Only) -->
+            <button id="btn-envido-mobile-trigger" class="action-btn btn-envido mobile-only hide">Envido /
+              Flor...</button>
 
-          <!-- Sub-grupo de Envido/Flor (Mobile Only) -->
-          <div id="group-envido-mobile-sub" class="action-group mobile-only hide" style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;">
-            <button id="btn-envido-sub-envido" class="action-btn btn-envido hide">Envido</button>
-            <button id="btn-envido-sub-real" class="action-btn btn-envido hide">Real Envido</button>
-            <button id="btn-envido-sub-falta" class="action-btn btn-envido hide">Falta Envido</button>
-            <button id="btn-envido-sub-flor" class="action-btn btn-flor hide">Flor</button>
-            <button id="btn-envido-sub-back" class="action-btn btn-dark"><i class="fa-solid fa-arrow-left"></i> Voltar</button>
+            <!-- Sub-grupo de Envido/Flor (Mobile Only) -->
+            <div id="group-envido-mobile-sub" class="action-group mobile-only hide"
+              style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;">
+              <button id="btn-envido-sub-envido" class="action-btn btn-envido hide">Envido</button>
+              <button id="btn-envido-sub-real" class="action-btn btn-envido hide">Real Envido</button>
+              <button id="btn-envido-sub-falta" class="action-btn btn-envido hide">Falta Envido</button>
+              <button id="btn-envido-sub-flor" class="action-btn btn-flor hide">Flor</button>
+              <button id="btn-envido-sub-back" class="action-btn btn-dark"><i class="fa-solid fa-arrow-left"></i>
+                Voltar</button>
+            </div>
           </div>
-        </div>
         </div>
 
       </div>
@@ -462,11 +483,11 @@
 
       <div class="final-score-box">
         <div class="final-score">
-          <span>Nós (Time 1):</span>
+          <span>Nós (Time 1)</span>
           <strong id="final-score-t0">24</strong>
         </div>
         <div class="final-score">
-          <span>Eles (Time 2):</span>
+          <span>Eles (Time 2)</span>
           <strong id="final-score-t1">15</strong>
         </div>
       </div>
@@ -485,23 +506,28 @@
       <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
         <!-- Controle de Som (Volume) -->
         <div class="settings-section">
-          <label style="font-weight: 600; font-size: 0.9rem; color: var(--gold); display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: 'Outfit', sans-serif;">
+          <label
+            style="font-weight: 600; font-size: 0.9rem; color: var(--gold); display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: 'Outfit', sans-serif;">
             <i class="fa-solid fa-volume-high"></i> Volume Geral
           </label>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <button id="mobile-mute-btn" class="btn btn-sm btn-secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; justify-content: center; align-items: center;">
+            <button id="mobile-mute-btn" class="btn btn-sm btn-secondary"
+              style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; justify-content: center; align-items: center;">
               <i class="fa-solid fa-volume-high"></i>
             </button>
-            <input type="range" id="mobile-volume-slider" min="0" max="1" step="0.1" value="0.3" style="flex: 1; accent-color: var(--gold); height: 5px;">
+            <input type="range" id="mobile-volume-slider" min="0" max="1" step="0.1" value="0.3"
+              style="flex: 1; accent-color: var(--gold); height: 5px;">
           </div>
         </div>
 
         <!-- Botões de Ação de Configurações -->
-        <button id="mobile-voice-btn" class="btn btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+        <button id="mobile-voice-btn" class="btn btn-primary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
           <i class="fa-solid fa-microphone"></i> Configurar Vozes
         </button>
 
-        <button id="mobile-admin-btn" class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+        <button id="mobile-admin-btn" class="btn btn-secondary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
           <i class="fa-solid fa-screwdriver-wrench"></i> Painel Admin
         </button>
       </div>
@@ -527,6 +553,7 @@
               <label for="select-voice-truco">Áudio base:</label>
               <select id="select-voice-truco" class="voice-select">
                 <option value="/audio/truco.ogg">Truco Gaúcho</option>
+                <option value="/audio/trucoNickolas.mp3">Truco Nickolas</option>
                 <option value="">Nenhum (Sintético)</option>
               </select>
             </div>

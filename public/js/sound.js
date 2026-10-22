@@ -10,7 +10,7 @@ class SoundManager {
     this.muted = false;
 
     // Música de fundo opcional (o usuário escolherá o arquivo depois)
-    this.bgMusicPath = '/js/musica.mp3';
+    this.bgMusicPath = '/js/musga.mp3';
   }
 
   initAudio() {
