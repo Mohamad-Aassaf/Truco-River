@@ -1554,7 +1554,8 @@ function setupActionButtons(gameState) {
   }
 
   // --- ADAPTAÇÃO DO ENVIDO/FLOR PARA CELULAR ---
-  const isMobile = window.innerWidth <= 850;
+  // Mesmo critério do CSS: celular em pé ou deitado
+  const isMobile = window.matchMedia('(max-width: 850px), (max-height: 500px) and (orientation: landscape)').matches;
   if (isMobile) {
     // 1. Oculta os botões normais do desktop
     groupEnvido.classList.add('hide');

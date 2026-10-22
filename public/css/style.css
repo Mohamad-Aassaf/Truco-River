@@ -2592,8 +2592,8 @@ body[data-screen="game_end"] .feedback-top-bar {
   .score-number { font-size: 2rem; }
 }
 
-/* --- Celular e tablets estreitos --- */
-@media (max-width: 850px) {
+/* --- Celular (em pé ou deitado) e tablets estreitos --- */
+@media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
   .mobile-only {
     display: flex !important;
   }
@@ -2609,11 +2609,35 @@ body[data-screen="game_end"] .feedback-top-bar {
   }
 
   /* Lobby */
+  /* margin:auto centraliza sem cortar o topo quando o conteúdo é maior que a tela */
+  #screen-lobby,
+  #screen-waiting,
+  #screen-game-end {
+    padding: 16px 0;
+  }
+
   .lobby-card,
-  .waiting-card {
+  .waiting-card,
+  .game-end-card {
     width: 94%;
     padding: 24px 18px;
-    margin: 16px auto;
+    margin: auto;
+  }
+
+  /* Sala de espera mais compacta */
+  .player-slot {
+    padding: 10px 12px;
+    align-items: flex-start;
+  }
+
+  .player-slot-name {
+    font-size: 0.88rem;
+    row-gap: 6px;
+  }
+
+  .final-score {
+    font-size: 0.66rem;
+    letter-spacing: 0.04em;
   }
 
   .rustic-title { font-size: 2.3rem; }
@@ -2882,4 +2906,83 @@ body[data-screen="game_end"] .feedback-top-bar {
 @media (max-width: 400px) {
   .mobile-score-lbl { display: none; }
   .mobile-header-spacer { width: 40px; }
+}
+
+/* --- Tablets em pé: mesa e cartas maiores --- */
+@media (min-width: 600px) and (max-width: 850px) and (min-height: 760px) {
+  .truco-table {
+    width: min(86vw, 600px);
+    max-height: calc(min(86vw, 600px) * 1.2);
+    --table-radius: 150px;
+  }
+  .felt-surface { border-radius: calc(var(--table-radius) - 17px); }
+  .played-cards-arena { --slot-max: 160px; }
+  .player-hand-container { width: 420px; }
+  .player-hand { height: 180px; min-height: 180px; }
+  .player-hand .card-lift-wrapper { width: 112px; height: 180px; }
+  .player-hand .card { width: 112px; height: 168px; }
+  .action-btn { height: 40px; font-size: 0.8rem; padding: 0 16px; }
+}
+
+/* --- Celular deitado: mesa à esquerda; banner, mão e botões numa coluna à direita --- */
+@media (max-height: 500px) and (orientation: landscape) {
+  .mobile-header-bar { height: 42px; }
+
+  .table-area {
+    padding-top: 42px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(220px, 34%, 300px);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    align-items: stretch;
+  }
+
+  .game-alert-banner {
+    grid-column: 2;
+    grid-row: 1;
+    height: auto;
+    min-height: 54px;
+    padding: 8px 8px 0;
+  }
+
+  #game-alert-text {
+    white-space: normal;
+    font-size: 0.72rem;
+    padding: 6px 12px;
+    max-width: 100%;
+  }
+
+  .truco-table {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: stretch;
+    width: auto;
+    max-height: none;
+    min-height: 0;
+    margin: 30px 18px 26px;
+    --table-radius: 80px;
+  }
+
+  .player-hand-container {
+    grid-column: 2;
+    grid-row: 3;
+    width: 100%;
+    margin: 0;
+  }
+
+  .player-hand { height: 112px; min-height: 112px; }
+  .player-hand .card-lift-wrapper { width: 66px; height: 112px; }
+  .player-hand .card { width: 66px; height: 99px; }
+  .player-hand .card-lift-wrapper:hover .card {
+    transform: translateY(-18px) scale(1.06) rotate(0deg) !important;
+  }
+
+  .action-panel-slot {
+    grid-column: 2;
+    grid-row: 4;
+    height: 84px;
+    margin: 4px 0 8px;
+    align-items: center;
+  }
+
+  .action-panel { max-width: 96%; }
 }
