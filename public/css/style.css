@@ -2304,44 +2304,13 @@ body[data-deck-style="pixel"] .card.hidden {
   padding: 14px;
 }
 
-/* Vozes */
-.voice-settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  text-align: left;
-}
-
-.voice-action-group {
-  background: var(--inset-bg);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: border-color 0.2s;
-}
-
-.voice-action-group:hover {
-  border-color: rgba(223, 177, 91, 0.4);
-}
-
-.voice-action-group h3 {
-  font-family: var(--font-title);
-  font-size: 0.95rem;
-  color: var(--gold);
-}
-
-.voice-selector-wrapper,
-.voice-pitch-wrapper {
+.voice-selector-wrapper {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.voice-selector-wrapper label,
-.voice-pitch-wrapper label {
+.voice-selector-wrapper label {
   font-size: 0.75rem;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -2351,42 +2320,6 @@ body[data-deck-style="pixel"] .card.hidden {
 .voice-select {
   padding: 8px 30px 8px 10px;
   font-size: 0.85rem;
-}
-
-.pitch-options {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 9px;
-}
-
-.pitch-btn {
-  flex: 1;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  padding: 6px 0;
-  border-radius: 7px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-
-.pitch-btn:hover {
-  color: var(--cream);
-  background: rgba(223, 177, 91, 0.08);
-}
-
-.pitch-btn.active {
-  background: var(--gold);
-  color: var(--wood-dark);
-  font-weight: 800;
-}
-
-.btn-preview-voice {
-  margin-top: auto;
 }
 
 /* ============================================================
@@ -2664,8 +2597,6 @@ body[data-screen="game_end"] .feedback-top-bar {
   }
 
   .room-title { font-size: 1.6rem; }
-
-  .voice-settings-grid { grid-template-columns: 1fr; }
 
   /* Estrutura do jogo */
   .game-container {

@@ -5,49 +5,6 @@ const socket = window.location.hostname.includes('vercel.app')
   ? io('https://truco-river.onrender.com')
   : io();
 
-// Configuração padrão das vozes do usuário (com carregamento do localStorage)
-let myVoiceConfig = {
-  truco: { path: '/audio/truco.ogg', pitch: 1.0 },
-  retruco: { path: '/audio/re', pitch: 1.0 },
-  vale4: { path: '', pitch: 1.0 },
-  envido: { path: '/audio/envido.ogg', pitch: 1.0 },
-  real_envido: { path: '', pitch: 1.0 },
-  falta_envido: { path: '', pitch: 1.0 },
-  flor: { path: '', pitch: 1.0 },
-  contra_flor: { path: '', pitch: 1.0 },
-  contra_flor_resto: { path: '', pitch: 1.0 },
-  quero: { path: '/audio/quero.ogg', pitch: 1.0 },
-  nao_quero: { path: '', pitch: 1.0 },
-  achique: { path: '', pitch: 1.0 },
-  mazo: { path: '', pitch: 1.0 },
-  flor_sobre_envido: { path: '', pitch: 1.0 }
-};
-
-const VOICE_ACTIONS = [
-  'truco', 'retruco', 'vale4',
-  'envido', 'real_envido', 'falta_envido',
-  'flor', 'contra_flor', 'contra_flor_resto',
-  'quero', 'nao_quero', 'achique', 'mazo',
-  'flor_sobre_envido'
-];
-
-const savedVoiceConfig = localStorage.getItem('truco_voice_config');
-if (savedVoiceConfig) {
-  try {
-    myVoiceConfig = JSON.parse(savedVoiceConfig);
-  } catch (e) {
-    console.warn("Erro ao ler truco_voice_config do localStorage", e);
-  }
-}
-
-// Áudios da Contra-Flor foram removidos: configurações salvas que ainda
-// apontam para eles voltam para a voz sintética
-['contra_flor', 'contra_flor_resto'].forEach(action => {
-  if (myVoiceConfig[action] && /contra_flor/.test(myVoiceConfig[action].path || '')) {
-    myVoiceConfig[action].path = '';
-  }
-});
-
 // Elementos da Interface
 const screenLobby = document.getElementById('screen-lobby');
 const screenWaiting = document.getElementById('screen-waiting');
@@ -91,7 +48,6 @@ const modalMobileSettings = document.getElementById('modal-mobile-settings');
 const closeMobileSettings = document.getElementById('close-mobile-settings');
 const mobileMuteBtn = document.getElementById('mobile-mute-btn');
 const mobileVolumeSlider = document.getElementById('mobile-volume-slider');
-const mobileVoiceBtn = document.getElementById('mobile-voice-btn');
 const mobileAdminBtn = document.getElementById('mobile-admin-btn');
 
 const seatBottom = document.getElementById('seat-bottom');
@@ -547,12 +503,6 @@ socket.on('game_state', (gameState) => {
   lastGameState = gameState; // Armazena a cópia local para verificação nos botões
   myPlayerId = socket.id;
   currentRoomMode = gameState.mode;
-
-  // Sincronizar configuração de voz local com o servidor se necessário
-  const me = gameState.players.find(p => p.id === myPlayerId || p.socketId === myPlayerId);
-  if (me && JSON.stringify(me.voiceConfig) !== JSON.stringify(myVoiceConfig)) {
-    socket.emit('update_voice_config', myVoiceConfig);
-  }
 
   if (gameEndTimeout) {
     clearTimeout(gameEndTimeout);
@@ -1334,13 +1284,6 @@ function renderVoiceBubbles(voiceBubbles, players) {
         void bubble.offsetWidth; // reinicia a animação
         bubble.classList.add('show');
       }
-
-      // Tocar som de grito se for um grito novo (usa voz)
-      if (prevVoiceBubbles[playerIdx] !== text) {
-        const playerObj = players && players[playerIdx];
-        const customConfig = playerObj ? playerObj.voiceConfig : null;
-        window.soundManager.playVoiceChant(text, customConfig);
-      }
     }
   });
 
@@ -1830,122 +1773,6 @@ gameLeaveBtn.addEventListener('click', () => {
   }
 });
 
-// --- CONFIGURAÇÃO DE VOZES / PERSONALIZAÇÃO EVENTOS ---
-
-// Elementos da Configuração de Vozes
-const btnVoiceSettings = document.getElementById('voice-settings-btn');
-const modalVoiceSettings = document.getElementById('modal-voice-settings');
-const btnCloseVoiceSettings = document.getElementById('close-voice-settings');
-const btnSaveVoiceSettings = document.getElementById('save-voice-settings');
-
-// Sincronizar UI com as configurações locais
-function syncVoiceSettingsUI() {
-  VOICE_ACTIONS.forEach(action => {
-    const el = document.getElementById(`select-voice-${action}`);
-    if (el && myVoiceConfig[action]) {
-      el.value = myVoiceConfig[action].path;
-    }
-  });
-
-  // Atualizar botões de pitch ativos
-  document.querySelectorAll('.pitch-btn').forEach(btn => {
-    const action = btn.getAttribute('data-action');
-    const pitch = parseFloat(btn.getAttribute('data-pitch'));
-    if (myVoiceConfig[action] && Math.abs(myVoiceConfig[action].pitch - pitch) < 0.05) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
-}
-
-// Abrir modal de configurações
-if (btnVoiceSettings) {
-  btnVoiceSettings.addEventListener('click', () => {
-    syncVoiceSettingsUI();
-    modalVoiceSettings.classList.remove('hide');
-  });
-}
-
-// Fechar modal
-if (btnCloseVoiceSettings) {
-  btnCloseVoiceSettings.addEventListener('click', () => {
-    modalVoiceSettings.classList.add('hide');
-  });
-}
-
-// Evento nos botões de pitch para alternar classe ativo e atualizar localmente
-document.querySelectorAll('.pitch-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    const action = btn.getAttribute('data-action');
-    const pitch = parseFloat(btn.getAttribute('data-pitch'));
-
-    // Desativar outros botões de pitch para a mesma ação
-    document.querySelectorAll(`.pitch-btn[data-action="${action}"]`).forEach(b => {
-      b.classList.remove('active');
-    });
-
-    btn.classList.add('active');
-    if (!myVoiceConfig[action]) myVoiceConfig[action] = { path: '', pitch: 1.0 };
-    myVoiceConfig[action].pitch = pitch;
-  });
-});
-
-// Eventos de mudança nos dropdowns de áudio base (dinâmico)
-VOICE_ACTIONS.forEach(action => {
-  const el = document.getElementById(`select-voice-${action}`);
-  if (el) {
-    el.addEventListener('change', (e) => {
-      if (!myVoiceConfig[action]) myVoiceConfig[action] = { path: '', pitch: 1.0 };
-      myVoiceConfig[action].path = e.target.value;
-    });
-  }
-});
-
-// Testar som individualmente (preview)
-document.querySelectorAll('.btn-preview-voice').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    const action = btn.getAttribute('data-action');
-    const config = myVoiceConfig[action];
-
-    if (window.soundManager && config) {
-      window.soundManager.initAudio();
-
-      let path = config.path;
-      if (!path) {
-        // Fallback padrão se não selecionado
-        path = `/audio/${action}.ogg`;
-      }
-
-      const audio = new Audio(path);
-      audio.volume = window.soundManager.sfxVolume;
-      audio.playbackRate = config.pitch;
-      audio.play().catch(err => {
-        console.warn("Falha ao tocar preview de áudio", err);
-        window.soundManager.playChantAlertSound();
-      });
-    }
-  });
-});
-
-// Salvar e aplicar
-if (btnSaveVoiceSettings) {
-  btnSaveVoiceSettings.addEventListener('click', () => {
-    localStorage.setItem('truco_voice_config', JSON.stringify(myVoiceConfig));
-    modalVoiceSettings.classList.add('hide');
-
-    // Se o jogo estiver ativo, envia para o servidor
-    if (lastGameState) {
-      socket.emit('update_voice_config', myVoiceConfig);
-    }
-
-    // Tocar um feedback sonoro amigável
-    if (window.soundManager) {
-      window.soundManager.playVictorySound();
-    }
-  });
-}
-
 // --- PAINEL ADMIN (TESTES) EVENTOS ---
 const btnAdminPanel = document.getElementById('admin-panel-btn');
 const modalAdminPanel = document.getElementById('modal-admin-panel');
@@ -2118,14 +1945,6 @@ if (mobileVolumeSlider) {
     window.soundManager.setMusicVolume(vol);
     const desktopSlider = document.getElementById('music-volume');
     if (desktopSlider) desktopSlider.value = vol;
-  });
-}
-
-if (mobileVoiceBtn) {
-  mobileVoiceBtn.addEventListener('click', () => {
-    modalMobileSettings.classList.add('hide');
-    const voiceSettingsBtn = document.getElementById('voice-settings-btn');
-    if (voiceSettingsBtn) voiceSettingsBtn.click();
   });
 }
 

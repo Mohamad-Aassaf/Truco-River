@@ -23,7 +23,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'mateusraeder'; // Senha de
 // Servir arquivos estáticos da pasta public
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/pixelDeck', express.static(path.join(__dirname, 'pixelDeck')));
-app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
 // Banco de dados em memória para salas ativas
 const activeGames = {};
@@ -407,17 +406,6 @@ io.on('connection', (socket) => {
 
     // Se o jogo continuar ativo, dispara a lógica de bots
     runBotLogic(currentRoomId);
-  });
-
-  // Atualizar configuração de voz do jogador
-  socket.on('update_voice_config', (voiceConfig) => {
-    const game = activeGames[currentRoomId];
-    if (!game) return;
-    const p = game.players.find(player => player.socketId === socket.id);
-    if (p) {
-      p.voiceConfig = voiceConfig;
-      broadcastState(currentRoomId);
-    }
   });
 
   // Enviar mensagem de chat no lobby
