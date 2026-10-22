@@ -40,6 +40,14 @@ if (savedVoiceConfig) {
   }
 }
 
+// Áudios da Contra-Flor foram removidos: configurações salvas que ainda
+// apontam para eles voltam para a voz sintética
+['contra_flor', 'contra_flor_resto'].forEach(action => {
+  if (myVoiceConfig[action] && /contra_flor/.test(myVoiceConfig[action].path || '')) {
+    myVoiceConfig[action].path = '';
+  }
+});
+
 // Elementos da Interface
 const screenLobby = document.getElementById('screen-lobby');
 const screenWaiting = document.getElementById('screen-waiting');
@@ -819,6 +827,15 @@ function renderGameScreen(gameState) {
   }
 }
 
+// Posição na mesa de um jogador, do ponto de vista local (eu sempre embaixo).
+// O jogo corre no sentido anti-horário, como no truco de verdade:
+// o próximo a jogar fica à minha direita, depois o parceiro em cima, depois a esquerda.
+function seatOf(playerIdx) {
+  if (currentRoomMode === '1v1') return playerIdx === mySeatIndex ? 'bottom' : 'top';
+  const diff = (playerIdx - mySeatIndex + 4) % 4;
+  return ['bottom', 'right', 'top', 'left'][diff];
+}
+
 // Mapeia e atualiza visualmente os assentos de cada jogador
 function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = null) {
   // Ocultar todos por padrão
@@ -827,7 +844,7 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
 
   // Remover marcações ativas anteriores
   document.querySelectorAll('.player-seat').forEach(seat => {
-    seat.classList.remove('active-seat');
+    seat.classList.remove('active-seat', 'folded');
     seat.querySelector('.seat-role').classList.remove('ready');
     seat.querySelector('.seat-role').textContent = '';
     const seatCardsEl = seat.querySelector('.seat-cards');
@@ -844,34 +861,8 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
 
   const maxPlayers = players.length;
 
-  const suitSymbols = {
-    'espadas': '⚔️',
-    'paus': '♣',
-    'copas': '♥',
-    'ouros': '🪙'
-  };
-  const suitClasses = {
-    'espadas': 'sword',
-    'paus': 'club',
-    'copas': 'cup',
-    'ouros': 'gold'
-  };
-
   players.forEach((p, idx) => {
-    let position = 'bottom';
-
-    if (currentRoomMode === '1v1') {
-      // 1v1: Me = bottom, Oponente = top
-      position = (idx === mySeatIndex) ? 'bottom' : 'top';
-    } else {
-      // 2v2:
-      // Posição relativa a mim
-      const diff = (idx - mySeatIndex + 4) % 4;
-      if (diff === 0) position = 'bottom'; // Eu
-      else if (diff === 1) position = 'left';  // Oponente 1
-      else if (diff === 2) position = 'top';   // Parceiro
-      else if (diff === 3) position = 'right'; // Oponente 2
-    }
+    const position = seatOf(idx);
 
     const seat = getSeatElement(position);
     if (!seat) return;
@@ -908,6 +899,13 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
       seat.classList.add('active-seat');
     }
 
+    // Foi ao mazo (2v2): plaquinha apagada e etiqueta "Mazo"
+    if (activeHand && (activeHand.foldedPlayers || []).includes(idx)) {
+      seat.classList.add('folded');
+      roleBadge.textContent = 'Mazo';
+      roleBadge.classList.remove('ready');
+    }
+
     // Renderizar mini-cartas do jogador na mesa
     const seatCardsEl = seat.querySelector('.seat-cards');
     if (seatCardsEl && activeHand && activeHand.hands && activeHand.hands[idx]) {
@@ -917,13 +915,8 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
         if (card.hidden) {
           cardsHtml += `<span class="mini-card-badge hidden-card"></span>`;
         } else {
-          const cls = suitClasses[card.suit] || '';
-          const svgMarkup = SUIT_SVGS[card.suit] || '';
-          cardsHtml += `
-            <span class="mini-card-badge ${cls}">
-              <span>${card.value}</span>
-              <div class="mini-card-suit-wrapper">${svgMarkup}</div>
-            </span>`;
+          // Cartas visíveis (parceiro no 2v2): mostra a carta de verdade
+          cardsHtml += `<span class="mini-card-badge face ${card.suit}"><img src="${getCardImgSrc(card)}" alt="${card.value} de ${card.suit}"></span>`;
         }
       });
       seatCardsEl.innerHTML = cardsHtml;
@@ -1214,8 +1207,9 @@ function renderPlayedCards(playedCards, players, gameState) {
   // (recriá-las a cada atualização fazia todas piscarem).
   const wanted = new Set();
 
-  // Limpar e atualizar os marcadores de rodadas (bolinhas)
-  for (let r = 0; r < 3; r++) {
+  // Limpar e atualizar os marcadores de rodadas (bolinhas).
+  // No fim da mão (sem gameState) mantém as bolinhas como estavam.
+  for (let r = 0; r < 3 && gameState; r++) {
     const dotEl = document.getElementById(`round-dot-${r}`);
     if (dotEl) {
       dotEl.className = 'round-dot';
@@ -1242,18 +1236,8 @@ function renderPlayedCards(playedCards, players, gameState) {
 
   playedCards.forEach(play => {
     // Determinar em qual assento o jogador está sentado
-    let seat = 'bottom';
     const playerIdx = play.playerIdx;
-
-    if (currentRoomMode === '1v1') {
-      seat = (playerIdx === mySeatIndex) ? 'bottom' : 'top';
-    } else {
-      const diff = (playerIdx - mySeatIndex + 4) % 4;
-      if (diff === 0) seat = 'bottom';
-      else if (diff === 1) seat = 'left';
-      else if (diff === 2) seat = 'top';
-      else if (diff === 3) seat = 'right';
-    }
+    const seat = seatOf(playerIdx);
 
     const slot = document.getElementById(`arena-slot-${seat}`);
     if (slot) {
@@ -1268,13 +1252,22 @@ function renderPlayedCards(playedCards, players, gameState) {
       cardEl.className = `played-card ${card.suit} entering`;
       cardEl.dataset.key = key;
 
-      // Cascata para baixo e direita, proporcional ao tamanho da carta
-      // (o CSS dos slots reserva exatamente este espaço: 30% x 8% por rodada).
-      // Usa as propriedades `translate`/`rotate` para não conflitar com o
-      // `transform` da animação de entrada.
-      cardEl.style.translate = `${round * 30}% ${round * 8}%`;
-      cardEl.style.rotate = `${(round - 1) * 8}deg`;
+      // Posição por rodada, proporcional ao tamanho da carta (o CSS dos slots
+      // reserva exatamente este espaço):
+      // - cima/baixo: uma coluna por rodada (112% = carta + espaço), alinhadas
+      //   entre os dois jogadores;
+      // - laterais (2v2): pilha vertical centrada, 34% por rodada.
+      // Usa `translate`/`rotate` para não conflitar com o `transform` da animação.
+      const tilt = [-2, 1.5, -1][round] || 0;
+      if (seat === 'top' || seat === 'bottom') {
+        cardEl.style.translate = `${round * 112}% 0`;
+      } else {
+        cardEl.style.translate = `0 ${(round - 1) * 34}%`;
+      }
+      cardEl.style.rotate = `${tilt}deg`;
       cardEl.style.zIndex = 10 + round;
+      cardEl.dataset.round = round;
+      cardEl.dataset.player = playerIdx;
 
       cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
       cardEl.addEventListener('animationend', () => cardEl.classList.remove('entering'), { once: true });
@@ -1286,6 +1279,16 @@ function renderPlayedCards(playedCards, players, gameState) {
   document.querySelectorAll('.played-card:not(.leaving)').forEach(el => {
     if (!wanted.has(el.dataset.key)) removePlayedCard(el);
   });
+
+  // Destaca quem venceu cada rodada: carta vencedora brilha, as outras escurecem
+  const winners = gameState && gameState.hand && gameState.hand.roundWinners;
+  if (winners) {
+    document.querySelectorAll('.played-card:not(.leaving)').forEach(el => {
+      const w = winners[Number(el.dataset.round)];
+      el.classList.toggle('round-win', w !== undefined && w !== -1 && w === Number(el.dataset.player));
+      el.classList.toggle('round-lose', w !== undefined && w !== -1 && w !== Number(el.dataset.player));
+    });
+  }
 }
 
 function removePlayedCard(el) {
@@ -1314,16 +1317,7 @@ function renderVoiceBubbles(voiceBubbles, players) {
     const playerIdx = parseInt(key);
     const text = voiceBubbles[playerIdx];
 
-    let seat = 'bottom';
-    if (currentRoomMode === '1v1') {
-      seat = (playerIdx === mySeatIndex) ? 'bottom' : 'top';
-    } else {
-      const diff = (playerIdx - mySeatIndex + 4) % 4;
-      if (diff === 0) seat = 'bottom';
-      else if (diff === 1) seat = 'left';
-      else if (diff === 2) seat = 'top';
-      else if (diff === 3) seat = 'right';
-    }
+    const seat = seatOf(playerIdx);
 
     const bubble = document.getElementById(`bubble-${seat}`);
     if (bubble) {
@@ -1375,7 +1369,7 @@ function updateAlertBanner(gameState) {
   const myTeam = gameState.players[mySeatIndex].team;
 
   // 1. Resposta pendente de Flor para o meu time
-  if (hand.florResponsePending && hand.florPendingTeam === myTeam) {
+  if (hand.florResponsePending && hand.florPendingTeam === myTeam && myPlayer.hasFlor) {
     gameAlertText.textContent = `Flor cantada! Tens contra-flor para rebater?`;
     gameAlertBanner.classList.remove('hide');
     return;
@@ -1419,13 +1413,25 @@ function setupActionButtons(gameState) {
   const isMyTurn = hand.currentPlayer === mySeatIndex;
 
   // Regra do Pé: no 2v2 apenas os pés (índices 2 e 3) controlam o Envido
-  const isPe = (gameState.mode === '1v1') || (mySeatIndex === 2 || mySeatIndex === 3);
+  // Pé: quem controla o Envido na dupla (muda a cada mão, vem do servidor)
+  const isPe = gameState.mode === '1v1' || !hand.pes || hand.pes.includes(mySeatIndex);
+  const iFolded = (hand.foldedPlayers || []).includes(mySeatIndex);
 
   const statusEl = document.getElementById('action-panel-status');
 
+  // --- FUI AO MAZO: só assisto o parceiro jogar sozinho ---
+  if (iFolded) {
+    if (statusEl) {
+      statusEl.textContent = 'Você foi ao mazo. Seu parceiro segue sozinho...';
+      statusEl.classList.remove('hide');
+    }
+    return;
+  }
+
   // --- SE HOUVER APOSTA PENDENTE PARA O MEU TIME RESPONDER ---
 
-  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
+  const betPending = hand.envidoResponsePending || hand.florResponsePending;
+  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam && !betPending) {
     if (statusEl) statusEl.classList.add('hide');
     groupResponse.classList.remove('hide');
     showAndEnableButton(btnQuero);
@@ -1444,13 +1450,14 @@ function setupActionButtons(gameState) {
     // Só na primeira rodada e se o jogador não jogou ainda
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isPe) {
-      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+      if (isPe && !myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
         showAndEnableButton(btnRealEnvido);
         showAndEnableButton(btnFaltaEnvido);
       }
+      // Flor pode ser cantada por qualquer jogador que tenha (não só o pé)
       if (myPlayer.hasFlor && hand.florState === 'none') {
         groupFlor.classList.remove('hide');
         showAndEnableButton(btnFlor);
@@ -1522,16 +1529,16 @@ function setupActionButtons(gameState) {
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
 
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isPe) {
-      // 2. Botão de Envido / Real / Falta
-      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+      // 2. Botão de Envido / Real / Falta (só o pé da dupla)
+      if (isPe && !myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
         showAndEnableButton(btnRealEnvido);
         showAndEnableButton(btnFaltaEnvido);
       }
 
-      // 3. Botão de Flor
+      // 3. Botão de Flor (qualquer jogador que tenha flor)
       if (myPlayer.hasFlor && hand.florState === 'none') {
         groupFlor.classList.remove('hide');
         showAndEnableButton(btnFlor);

@@ -304,7 +304,7 @@ function handleBotAction(game, playerIdx) {
   if (game.hand.currentRound === 0 && !game.hasPlayerPlayedCard(playerIdx) && game.hand.canCallEnvido) {
     if (player.hasFlor && game.hand.florState === 'none') {
       return { action: 'call_flor' };
-    } else if (!player.hasFlor && game.hand.envidoState === 'none') {
+    } else if (!player.hasFlor && game.hand.envidoState === 'none' && game.isPe(playerIdx)) {
       const envidoScore = player.envidoScore;
       
       if (difficulty === 'easy') {

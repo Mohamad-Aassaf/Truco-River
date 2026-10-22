@@ -1411,8 +1411,9 @@ body[data-screen="lobby"] #screen-waiting {
   min-height: 220px;
   position: relative;
   margin: 8px 24px 14px;
+  --table-radius: clamp(90px, 22vh, 190px);
   border: 22px solid transparent;
-  border-radius: 50% / 40%;
+  border-radius: var(--table-radius);
   /* Feltro por dentro, trilho de madeira na borda */
   background:
     radial-gradient(ellipse at 50% 38%, var(--felt-light) 0%, var(--felt-green) 48%, var(--felt-dark) 100%) padding-box,
@@ -1429,7 +1430,7 @@ body[data-screen="lobby"] #screen-waiting {
 .felt-surface {
   position: absolute;
   inset: 7px;
-  border-radius: 50% / 40%;
+  border-radius: calc(var(--table-radius) - 29px);
   border: 1.5px solid rgba(223, 177, 91, 0.3);
   background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
   background-size: 4px 4px;
@@ -1543,6 +1544,18 @@ body[data-screen="lobby"] #screen-waiting {
   display: none;
 }
 
+/* Foi ao mazo (2v2): plaquinha apagada */
+.player-seat.folded .avatar-card {
+  opacity: 0.55;
+  filter: grayscale(0.8);
+}
+
+.player-seat.folded .seat-role {
+  background: rgba(192, 57, 43, 0.25);
+  color: #f1948a;
+  border: 1px solid rgba(192, 57, 43, 0.5);
+}
+
 /* "Doador" em tom mais discreto que "Mão" */
 .seat-role.ready {
   background: rgba(244, 237, 210, 0.12);
@@ -1607,6 +1620,33 @@ body[data-screen="lobby"] #screen-waiting {
 .mini-card-badge.club { border-color: #2ecc71; color: #27ae60; }
 .mini-card-badge.cup { border-color: #e74c3c; color: #c0392b; }
 
+/* Cartas visíveis do parceiro: a carta de verdade, maior */
+.mini-card-badge.face {
+  width: 38px;
+  height: 57px;
+  padding: 0;
+  background: #fff;
+  border: 1.5px solid var(--gold-dark);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.mini-card-badge.face img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+}
+
+.mini-card-badge.face + .mini-card-badge.face {
+  margin-left: -8px;
+}
+
+/* As minhas cartas já aparecem na mão */
+#seat-bottom .seat-cards {
+  display: none;
+}
+
 /* Verso: mesma arte do baralho */
 .mini-card-badge.hidden-card {
   background: #1f3a5c url('/Baralho_Espanhol_Organizado/verso.png') center / cover;
@@ -1666,12 +1706,19 @@ body[data-screen="lobby"] #screen-waiting {
   animation: popChant 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-/* Cima/baixo: ao lado da plaquinha (não cobre as cartas nem as bolinhas).
-   Laterais: acima da plaquinha. */
-#seat-bottom .voice-bubble,
-#seat-top .voice-bubble { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
-#seat-left .voice-bubble,
-#seat-right .voice-bubble { bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+/* Cada balão vai para um "canto" diferente da mesa, então nunca se cruzam:
+   embaixo → à direita, direita → acima, cima → à esquerda, esquerda → abaixo. */
+.voice-bubble {
+  max-width: 220px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+  width: max-content;
+}
+#seat-bottom .voice-bubble { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
+#seat-top .voice-bubble { right: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
+#seat-right .voice-bubble { bottom: calc(100% + 8px); right: 0; }
+#seat-left .voice-bubble { top: calc(100% + 8px); left: 0; }
 
 /* ============================================================
    9. JOGO: CENTRO DA MESA E CARTAS JOGADAS
@@ -1679,34 +1726,30 @@ body[data-screen="lobby"] #screen-waiting {
 /* Recuado o suficiente para não invadir os assentos */
 .table-center {
   position: absolute;
-  inset: max(13%, 44px) max(10%, 40px);
+  inset: max(10%, 40px) max(10%, 40px);
 }
 
 .truco-table:has(#seat-left:not(.hidden-seat)) .table-center {
-  inset: max(13%, 44px) max(12%, 100px);
+  inset: max(10%, 40px) max(12%, 100px);
 }
 
-/* Bolinhas de rodada */
+/* Bolinhas de rodada: no meio da arena, uma por coluna (rodada) */
 .round-indicators {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   display: flex;
-  gap: 7px;
-  padding: 4px 9px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(223, 177, 91, 0.15);
+  gap: calc(var(--col) - var(--dot));
   z-index: 100;
 }
 
 .round-dot {
-  width: 10px;
-  height: 10px;
+  width: var(--dot);
+  height: var(--dot);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1.5px solid rgba(223, 177, 91, 0.35);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
   transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
@@ -1746,35 +1789,63 @@ body[data-screen="lobby"] #screen-waiting {
 }
 
 /*
-  Arena das cartas jogadas: escala com o tamanho da mesa (unidades cq*),
-  então as pilhas nunca se sobrepõem. Cada pilha cresce 30% da largura e
-  8% da altura por rodada (ver app.js).
+  Arena das cartas jogadas (escala com a mesa via unidades cq*):
+  - cima/baixo: uma fileira com 3 colunas (uma por rodada). As colunas dos
+    dois jogadores ficam alinhadas, e as bolinhas de rodada ficam no meio.
+  - laterais (2v2): pilha vertical centrada (34% da altura por rodada).
+  Os deslocamentos de cada carta vêm do app.js (112% por coluna).
 */
 .played-cards-arena {
   position: absolute;
-  top: 26px; /* abaixo das bolinhas de rodada */
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   pointer-events: none;
   container-type: size;
-  --slot-max: 120px;
-  --slot-h: min(var(--slot-max), 36cqh);
+  --slot-max: 170px;
+  --slot-h: min(var(--slot-max), 45cqh, 44cqw);
   --slot-w: calc(var(--slot-h) * 2 / 3);
+  --col: calc(var(--slot-w) * 1.12); /* passo entre colunas */
+  --dot: 12px;
 }
 
+/* 2v2: o tamanho é o maior entre duas arrumações que não se sobrepõem:
+   - pilhas laterais ao lado das fileiras (limite pela largura: 26cqw);
+   - pilhas laterais entre as fileiras, em mesas altas (27cqh), sem
+     encostar nas bolinhas (32cqw). */
 .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena {
-  --slot-h: min(var(--slot-max), 36cqh, 30cqw);
+  --slot-h: min(var(--slot-max), 45cqh, max(27cqw, min(27cqh, 32cqw)));
 }
 
 .played-card-slot-container {
   position: absolute;
+  height: var(--slot-h);
+}
+
+.slot-row {
+  left: 50%;
+  width: calc(var(--slot-w) * 3.24);
+  transform: translateX(-50%);
+}
+
+.slot-col {
+  top: 50%;
+  width: var(--slot-w);
+  transform: translateY(-50%);
+}
+
+/* Contornos das posições vazias */
+.slot-ph {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: var(--slot-w);
   height: var(--slot-h);
-  border: 1.5px dashed rgba(223, 177, 91, 0.18);
+  border: 1.5px dashed rgba(223, 177, 91, 0.16);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.1);
 }
+
+.slot-row .slot-ph:nth-child(2) { translate: 112% 0; }
+.slot-row .slot-ph:nth-child(3) { translate: 224% 0; }
 
 /* 1v1: ninguém senta nas laterais */
 .truco-table:has(#seat-left.hidden-seat) #arena-slot-left,
@@ -1782,24 +1853,34 @@ body[data-screen="lobby"] #screen-waiting {
   display: none;
 }
 
-/* Deslocamentos compensam a cascata para a pilha ficar centralizada.
-   --enter-x/y: de onde a carta vem ao ser jogada. */
-#arena-slot-top { top: 2%; left: 50%; transform: translateX(-80%); --enter-x: 0; --enter-y: -70%; }
-#arena-slot-bottom { bottom: calc(2% + var(--slot-h) * 0.2); left: 50%; transform: translateX(-80%); --enter-x: 0; --enter-y: 70%; }
-#arena-slot-left { left: 2%; top: 50%; transform: translateY(-58%); --enter-x: -70%; --enter-y: 0; }
-#arena-slot-right { right: calc(2% + var(--slot-w) * 0.65); top: 50%; transform: translateY(-58%); --enter-x: 70%; --enter-y: 0; }
+/* --enter-x/y: de onde a carta vem ao ser jogada */
+#arena-slot-top { top: 0; --enter-x: 0; --enter-y: -60%; }
+#arena-slot-bottom { bottom: 0; --enter-x: 0; --enter-y: 60%; }
+#arena-slot-left { left: 0; --enter-x: -60%; --enter-y: 0; }
+#arena-slot-right { right: 0; --enter-x: 60%; --enter-y: 0; }
 
 .played-card {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 7px;
+  width: var(--slot-w);
+  height: var(--slot-h);
+  border-radius: 8px;
   background: #1c2833;
   border: 1.5px solid var(--gold-dark);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  transition: filter 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+/* Resultado da rodada */
+.played-card.round-lose {
+  filter: brightness(0.55) saturate(0.7);
+}
+
+.played-card.round-win {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(223, 177, 91, 0.45), 0 0 18px rgba(223, 177, 91, 0.55), 0 6px 14px rgba(0, 0, 0, 0.5);
 }
 
 /* Entrada só com transform/opacity; a posição na pilha usa translate/rotate */
@@ -1819,10 +1900,10 @@ body[data-screen="lobby"] #screen-waiting {
   order: 2; /* Mesa → botões → mão */
   flex-shrink: 0;
   align-self: center;
-  width: 380px;
+  width: 470px;
   max-width: 100%;
   margin-bottom: 18px; /* folga para as cartas inclinadas */
-  z-index: 250;
+  z-index: 400; /* a carta levantada passa por cima do painel de botões */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1833,14 +1914,14 @@ body[data-screen="lobby"] #screen-waiting {
   justify-content: center;
   align-items: flex-end;
   gap: 4px;
-  height: 235px;
-  min-height: 235px; /* 180px de carta + zona de hover */
+  height: 236px;
+  min-height: 236px; /* 219px de carta + folga; ao passar o mouse ela sobe por cima do painel */
   position: relative;
 }
 
 /* Zona de clique estável (não se move quando a carta sobe) */
 .card-lift-wrapper {
-  width: 120px;
+  width: 146px;
   height: 100%;
   display: flex;
   align-items: flex-end;
@@ -1850,8 +1931,8 @@ body[data-screen="lobby"] #screen-waiting {
 }
 
 .card {
-  width: 120px;
-  height: 180px;
+  width: 146px;
+  height: 219px;
   background: #1c2833;
   border-radius: 10px;
   border: 2px solid var(--gold-dark);
@@ -1903,7 +1984,7 @@ body[data-screen="lobby"] #screen-waiting {
 }
 
 .player-hand .card-lift-wrapper:hover .card {
-  transform: translateY(-45px) scale(1.12) rotate(0deg) !important;
+  transform: translateY(-42px) scale(1.1) rotate(0deg) !important;
   z-index: 500;
   filter: none;
   border-color: var(--gold);
@@ -2490,9 +2571,9 @@ body[data-screen="game_end"] .feedback-top-bar {
 
 /* --- PC com pouca altura: mão menor para sobrar espaço para a mesa --- */
 @media (min-width: 851px) and (max-height: 820px) {
-  .player-hand { height: 190px; min-height: 190px; }
-  .player-hand .card-lift-wrapper { width: 100px; }
-  .player-hand .card { width: 100px; height: 150px; }
+  .player-hand { height: 194px; min-height: 194px; }
+  .player-hand .card-lift-wrapper { width: 120px; }
+  .player-hand .card { width: 120px; height: 180px; }
   .player-hand .card-lift-wrapper:hover .card {
     transform: translateY(-30px) scale(1.1) rotate(0deg) !important;
   }
@@ -2501,9 +2582,9 @@ body[data-screen="game_end"] .feedback-top-bar {
 }
 
 @media (min-width: 851px) and (max-height: 680px) {
-  .player-hand { height: 155px; min-height: 155px; }
-  .player-hand .card-lift-wrapper { width: 80px; }
-  .player-hand .card { width: 80px; height: 120px; }
+  .player-hand { height: 162px; min-height: 162px; }
+  .player-hand .card-lift-wrapper { width: 100px; }
+  .player-hand .card { width: 100px; height: 150px; }
   .player-hand .card-lift-wrapper:hover .card {
     transform: translateY(-22px) scale(1.08) rotate(0deg) !important;
   }
@@ -2615,12 +2696,12 @@ body[data-screen="game_end"] .feedback-top-bar {
     max-height: calc(min(84vw, 340px) * 1.35);
     margin: 24px auto 26px;
     border-width: 12px;
-    border-radius: 50%;
+    --table-radius: 96px;
   }
 
   .felt-surface {
     inset: 5px;
-    border-radius: 50%;
+    border-radius: calc(var(--table-radius) - 17px);
   }
 
   .felt-surface::after {
@@ -2681,6 +2762,12 @@ body[data-screen="game_end"] .feedback-top-bar {
 
   .mini-card-badge + .mini-card-badge { margin-left: -6px; }
 
+  .mini-card-badge.face {
+    width: 28px;
+    height: 42px;
+    border-radius: 4px;
+  }
+
   .mini-card-suit-wrapper {
     width: 9px;
     height: 9px;
@@ -2692,18 +2779,19 @@ body[data-screen="game_end"] .feedback-top-bar {
     border-width: 1.5px;
   }
 
-  #seat-bottom .voice-bubble,
-  #seat-top .voice-bubble { left: calc(100% + 6px); }
-  #seat-left .voice-bubble,
+  .voice-bubble { max-width: 118px; }
+  #seat-bottom .voice-bubble { left: calc(100% + 6px); }
+  #seat-top .voice-bubble { right: calc(100% + 6px); }
   #seat-right .voice-bubble { bottom: calc(100% + 6px); }
+  #seat-left .voice-bubble { top: calc(100% + 6px); }
 
   /* Centro da mesa */
   .table-center {
-    inset: max(12%, 36px) 8%;
+    inset: max(9%, 32px) 7%;
   }
 
   .truco-table:has(#seat-left:not(.hidden-seat)) .table-center {
-    inset: max(12%, 36px) max(10%, 58px);
+    inset: max(9%, 32px) max(10%, 56px);
   }
 
   .card-deck-stack {
@@ -2711,18 +2799,8 @@ body[data-screen="game_end"] .feedback-top-bar {
   }
 
   .played-cards-arena {
-    top: 22px;
-    --slot-max: 78px;
-  }
-
-  .round-indicators {
-    padding: 3px 7px;
-    gap: 5px;
-  }
-
-  .round-dot {
-    width: 8px;
-    height: 8px;
+    --slot-max: 124px;
+    --dot: 9px;
   }
 
   /* Mão (acima dos botões no celular) */
@@ -2730,29 +2808,29 @@ body[data-screen="game_end"] .feedback-top-bar {
     order: 1;
     margin-top: auto;
     margin-bottom: 0;
-    width: 260px;
+    width: 320px;
   }
 
   .player-hand {
     width: 100%;
-    height: 130px;
-    min-height: 130px;
+    height: 136px;
+    min-height: 136px;
     justify-content: center;
   }
 
   .card-lift-wrapper {
-    width: 65px;
-    height: 130px;
+    width: 82px;
+    height: 136px;
   }
 
   .card {
-    width: 65px;
-    height: 98px;
-    border-radius: 7px;
+    width: 82px;
+    height: 123px;
+    border-radius: 8px;
   }
 
   .player-hand .card-lift-wrapper:hover .card {
-    transform: translateY(-28px) scale(1.1) rotate(0deg) !important;
+    transform: translateY(-24px) scale(1.08) rotate(0deg) !important;
   }
 
   /* Botões (abaixo da mão) */
@@ -2789,6 +2867,15 @@ body[data-screen="game_end"] .feedback-top-bar {
   .final-score strong { font-size: 2rem; }
 
   .mobile-score-badge { white-space: nowrap; }
+}
+
+/* Celulares baixos: mão um pouco menor para sobrar altura para a mesa */
+@media (max-width: 850px) and (max-height: 700px) {
+  .player-hand { height: 116px; min-height: 116px; }
+  .card-lift-wrapper { width: 70px; height: 116px; }
+  .card { width: 70px; height: 105px; }
+  .truco-table { margin: 20px auto 22px; }
+  .game-alert-banner { height: 40px; padding-top: 5px; }
 }
 
 /* Celulares estreitos: placar do cabeçalho sem rótulo */

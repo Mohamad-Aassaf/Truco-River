@@ -151,9 +151,9 @@ function runBotLogic(roomId) {
     activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && p.hasFlor && !game.hand.foldedPlayers.has(idx));
   } else if (game.hand.envidoResponsePending) {
     const pendingTeam = game.hand.envidoPendingTeam;
-    // No 2v2 apenas o Pé (índices 2 e 3) responde o Envido
+    // No 2v2 apenas o Pé da dupla responde o Envido
     activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && !game.hand.foldedPlayers.has(idx)
-      && (game.mode !== '2v2' || idx === 2 || idx === 3));
+      && game.isPe(idx));
   } else if (game.hand.trucoResponsePending) {
     const pendingTeam = game.hand.trucoPendingTeam;
     // O bot que deve responder na equipe

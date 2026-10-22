@@ -255,8 +255,9 @@ class SoundManager {
     }
 
     // Se não houver caminho customizado, determinar padrão
+    // (Contra-Flor não tem arquivo de áudio: usa direto a voz sintética)
     if (!path) {
-      if (!actionKey) {
+      if (!actionKey || actionKey === 'contra_flor' || actionKey === 'contra_flor_resto') {
         this.playChantAlertSound();
         return;
       }

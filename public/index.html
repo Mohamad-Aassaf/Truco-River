@@ -21,7 +21,7 @@
     crossorigin="anonymous"></script>
 
   <!-- CSS Customizado -->
-  <link rel="stylesheet" href="/css/style.css?v=3.0">
+  <link rel="stylesheet" href="/css/style.css?v=3.2">
 </head>
 
 <body data-screen="home">
@@ -375,14 +375,6 @@
 
           <!-- CENTRO DA MESA: DECK E CARTAS JOGADAS -->
           <div class="table-center">
-
-            <!-- Indicadores Coloridos de Rodadas (Bolinhas de Status) -->
-            <div class="round-indicators">
-              <span class="round-dot" id="round-dot-0" title="1ª Rodada"></span>
-              <span class="round-dot" id="round-dot-1" title="2ª Rodada"></span>
-              <span class="round-dot" id="round-dot-2" title="3ª Rodada"></span>
-            </div>
-
             <!-- Monte de Cartas (Baralho de Amostra/Decoração) -->
             <div class="card-deck-stack">
               <div class="deck-card back"></div>
@@ -390,12 +382,18 @@
               <div class="deck-card back"></div>
             </div>
 
-            <!-- Cartas Jogadas por Jogador (Estilo Blyts - Pilha acumulada) -->
+            <!-- Cartas jogadas: cima/baixo em colunas por rodada (alinhadas), laterais em pilha -->
             <div class="played-cards-arena">
-              <div class="played-card-slot-container" id="arena-slot-bottom"></div>
-              <div class="played-card-slot-container" id="arena-slot-left"></div>
-              <div class="played-card-slot-container" id="arena-slot-top"></div>
-              <div class="played-card-slot-container" id="arena-slot-right"></div>
+              <!-- Bolinhas de rodada: entre as duas fileiras, alinhadas às colunas -->
+              <div class="round-indicators">
+                <span class="round-dot" id="round-dot-0" title="1ª Rodada"></span>
+                <span class="round-dot" id="round-dot-1" title="2ª Rodada"></span>
+                <span class="round-dot" id="round-dot-2" title="3ª Rodada"></span>
+              </div>
+              <div class="played-card-slot-container slot-row" id="arena-slot-bottom"><i class="slot-ph"></i><i class="slot-ph"></i><i class="slot-ph"></i></div>
+              <div class="played-card-slot-container slot-col" id="arena-slot-left"><i class="slot-ph"></i></div>
+              <div class="played-card-slot-container slot-row" id="arena-slot-top"><i class="slot-ph"></i><i class="slot-ph"></i><i class="slot-ph"></i></div>
+              <div class="played-card-slot-container slot-col" id="arena-slot-right"><i class="slot-ph"></i></div>
             </div>
 
           </div>
@@ -714,7 +712,6 @@
             <div class="voice-selector-wrapper">
               <label for="select-voice-contra_flor">Áudio base:</label>
               <select id="select-voice-contra_flor" class="voice-select">
-                <option value="/audio/contra_flor.ogg">Contra-Flor</option>
                 <option value="">Nenhum (Sintético)</option>
               </select>
             </div>
@@ -737,7 +734,6 @@
             <div class="voice-selector-wrapper">
               <label for="select-voice-contra_flor_resto">Áudio base:</label>
               <select id="select-voice-contra_flor_resto" class="voice-select">
-                <option value="/audio/contra_flor_resto.ogg">Contra-Flor e Resto</option>
                 <option value="">Nenhum (Sintético)</option>
               </select>
             </div>

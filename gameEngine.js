@@ -307,6 +307,23 @@ class TrucoGame { // TRUCO GURIZINHO
     return true;
   }
 
+  // Jogador foi ao mazo nesta mão?
+  isFolded(playerIdx) {
+    return !!(this.hand && this.hand.foldedPlayers.has(playerIdx));
+  }
+
+  // "Pé" de cada dupla: quem joga por último no time, a partir do Mão.
+  // Ordem da mão: mão, mão+1, mão+2, mão+3 → pés são mão+2 e mão+3.
+  // Se o pé foi ao mazo, o parceiro assume. No 1v1 todos são pé.
+  isPe(playerIdx) {
+    if (this.mode !== '2v2' || !this.hand) return true;
+    const mao = this.hand.mão;
+    const pes = [(mao + 2) % 4, (mao + 3) % 4];
+    if (pes.includes(playerIdx)) return true;
+    const partnerIdx = (playerIdx + 2) % 4;
+    return pes.includes(partnerIdx) && this.isFolded(partnerIdx);
+  }
+
   // Verifica se o jogador já jogou alguma carta nesta mão
   hasPlayerPlayedCard(playerIdx) {
     if (!this.hand) return false;
@@ -333,6 +350,7 @@ class TrucoGame { // TRUCO GURIZINHO
   // Gritos / Cantos
   callTruco(playerIdx) {
     if (!this.hand || this.hand.trucoResponsePending || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
+    if (this.isFolded(playerIdx)) return false;
 
     const team = this.players[playerIdx].team;
 
@@ -367,6 +385,7 @@ class TrucoGame { // TRUCO GURIZINHO
 
   respondTruco(playerIdx, response) {
     if (!this.hand || !this.hand.trucoResponsePending) return false;
+    if (this.isFolded(playerIdx)) return false;
 
     const player = this.players[playerIdx];
     const team = player.team;
@@ -414,8 +433,8 @@ class TrucoGame { // TRUCO GURIZINHO
       if (callingTeam !== this.hand.trucoPendingTeam) return false;
     }
 
-    // No 2v2, apenas o Pé (jogadores 2 e 3) pode cantar ou responder Envido
-    if (this.mode === '2v2' && playerIdx !== 2 && playerIdx !== 3) return false;
+    // No 2v2, apenas o Pé de cada dupla pode cantar ou responder Envido
+    if (!this.isPe(playerIdx) || this.isFolded(playerIdx)) return false;
 
     // Envido só pode ser chamado na primeira rodada
     if (this.hand.currentRound !== 0) return false;
@@ -481,8 +500,8 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   respondEnvido(playerIdx, response) {
-    if (this.mode === '2v2' && playerIdx !== 2 && playerIdx !== 3) return false;
     if (!this.hand || !this.hand.envidoResponsePending) return false;
+    if (!this.isPe(playerIdx) || this.isFolded(playerIdx)) return false;
 
     const player = this.players[playerIdx];
     const team = player.team;
@@ -578,6 +597,8 @@ class TrucoGame { // TRUCO GURIZINHO
 
   callFlor(playerIdx) {
     if (!this.hand || this.hand.florResponsePending) return false;
+    if (this.isFolded(playerIdx)) return false;
+    if (this.hand.florState !== 'none') return false; // a dupla já cantou
 
     // Se o truco estiver pendente, apenas o time que deve responder ao truco pode chamar flor
     if (this.hand.trucoResponsePending) {
@@ -644,7 +665,7 @@ class TrucoGame { // TRUCO GURIZINHO
     const team = player.team;
 
     if (team !== this.hand.florPendingTeam) return false;
-    if (!player.hasFlor) return false; // Apenas quem tem flor pode responder à Contra-Flor
+    if (!player.hasFlor || this.isFolded(playerIdx)) return false; // Apenas quem tem flor pode responder à Contra-Flor
 
     this.hand.florResponsePending = false;
     delete this.hand.voiceBubble[playerIdx];
@@ -739,6 +760,7 @@ class TrucoGame { // TRUCO GURIZINHO
     if (this.hand.trucoResponsePending || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
 
     if (this.hand.currentPlayer !== playerIdx) return false;
+    if (this.isFolded(playerIdx)) return false;
 
     const cards = this.hand.hands[playerIdx];
     if (cardIndex < 0 || cardIndex >= cards.length) return false;
@@ -785,8 +807,10 @@ class TrucoGame { // TRUCO GURIZINHO
       const opponentTeam = team === 0 ? 1 : 0;
       this.endHand(opponentTeam, pointsWon);
     } else {
-      // No 2v2:
+      // No 2v2: o jogador larga as cartas e o parceiro segue sozinho
+      if (this.isFolded(playerIdx)) return false;
       this.hand.foldedPlayers.add(playerIdx);
+      this.hand.hands[playerIdx] = [];
       const partnerIdx = (playerIdx + 2) % 4;
 
       // Se ambos os jogadores da equipe dobraram, a outra equipe vence
@@ -795,7 +819,8 @@ class TrucoGame { // TRUCO GURIZINHO
         this.endHand(opponentTeam, pointsWon);
       } else {
         // Se apenas um dobrou, o jogo continua apenas com o parceiro.
-        // Avança o turno se for o jogador que dobrou
+        this.log(`${this.players[partnerIdx].name} segue sozinho pela dupla.`, team);
+        // Avança o turno se era a vez de quem foi ao mazo
         if (this.hand.currentPlayer === playerIdx) {
           this.nextTurn();
         }
@@ -805,37 +830,30 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   nextTurn() {
-    const activePlayersCount = this.players.length;
     const currentRound = this.hand.currentRound;
-
-    // Jogadas feitas na rodada atual
     const roundPlays = this.hand.playedCards.filter(p => p.round === currentRound);
 
-    // Quantos jogadores ativos restaram para jogar nesta rodada (não contam os que foram ao mazo)
-    const expectedPlaysCount = activePlayersCount - this.hand.foldedPlayers.size;
+    // Ainda precisa jogar nesta rodada: não foi ao mazo e não jogou ainda
+    const needsToPlay = (idx) =>
+      !this.hand.foldedPlayers.has(idx) &&
+      !roundPlays.some(p => p.playerIdx === idx);
 
-    if (roundPlays.length < expectedPlaysCount) {
-      // Ainda faltam jogadores jogarem nesta rodada
-      let nextPlayer = (this.hand.currentPlayer + 1) % this.maxPlayers;
-
-      // Pular jogadores que já descartaram suas mãos ou foram ao mazo
-      while (
-        this.hand.foldedPlayers.has(nextPlayer) ||
-        this.hand.hands[nextPlayer].length === 0 && this.hand.playedCards.filter(p => p.playerIdx === nextPlayer && p.round === currentRound).length === 0
-      ) {
-        nextPlayer = (nextPlayer + 1) % this.maxPlayers;
+    // Procura o próximo na ordem de jogo
+    for (let step = 1; step <= this.maxPlayers; step++) {
+      const idx = (this.hand.currentPlayer + step) % this.maxPlayers;
+      if (needsToPlay(idx)) {
+        this.hand.currentPlayer = idx;
+        return;
       }
-
-      this.hand.currentPlayer = nextPlayer;
-    } else {
-      // Fim da rodada (todos os jogadores ativos jogaram)
-      this.resolveRound();
     }
+
+    // Todos os jogadores ativos jogaram: fim da rodada
+    this.resolveRound();
   }
 
   resolveRound() {
     const currentRound = this.hand.currentRound;
-    const roundPlays = this.hand.playedCards.filter(p => p.round === currentRound);
+    const roundPlays = this.hand.playedCards.filter(p => p.round === currentRound && !this.hand.foldedPlayers.has(p.playerIdx));
 
     if (roundPlays.length === 0) return;
 
@@ -1078,8 +1096,9 @@ class TrucoGame { // TRUCO GURIZINHO
         florChant: this.hand.florChant,
         florWinnerInfo: this.hand.florWinnerInfo,
 
-        // Folds e voice
+        // Folds, pés (quem controla o Envido no 2v2) e voice
         foldedPlayers: Array.from(this.hand.foldedPlayers),
+        pes: this.players.map((_, i) => i).filter(i => this.isPe(i)),
         voiceBubble: this.hand.voiceBubble
       }
     };
