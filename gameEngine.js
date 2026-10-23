@@ -383,6 +383,17 @@ class TrucoGame { // TRUCO GURIZINHO
     return pes.includes(partnerIdx) && this.isFolded(partnerIdx);
   }
 
+  // Quem responde a um canto: o próximo adversário na ordem de jogo depois de
+  // quem cantou (se ele foi ao mazo, o parceiro dele)
+  responderAfter(callerIdx) {
+    const callerTeam = this.players[callerIdx].team;
+    for (let k = 1; k < this.maxPlayers; k++) {
+      const idx = (callerIdx + k) % this.maxPlayers;
+      if (this.players[idx].team !== callerTeam && !this.isFolded(idx)) return idx;
+    }
+    return -1;
+  }
+
   // Verifica se o jogador já jogou alguma carta nesta mão
   hasPlayerPlayedCard(playerIdx) {
     if (!this.hand) return false;
@@ -435,6 +446,7 @@ class TrucoGame { // TRUCO GURIZINHO
     this.hand.trucoCallerTeam = team;
     this.hand.trucoResponsePending = true;
     this.hand.trucoPendingTeam = team === 0 ? 1 : 0;
+    this.hand.trucoResponderIdx = this.responderAfter(playerIdx);
     this.hand.trucoChant = chant;
     this.hand.voiceBubble[playerIdx] = chant;
 
@@ -450,6 +462,8 @@ class TrucoGame { // TRUCO GURIZINHO
     const team = player.team;
 
     if (team !== this.hand.trucoPendingTeam) return false;
+    // Só o próximo depois de quem cantou responde
+    if (this.hand.trucoResponderIdx !== undefined && this.hand.trucoResponderIdx !== playerIdx) return false;
 
     this.hand.trucoResponsePending = false;
     delete this.hand.voiceBubble[playerIdx];
@@ -483,22 +497,26 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   // Chamadas de Envido
-  callEnvido(playerIdx, type) {
+  callEnvido(playerIdx, type, isRaise = false) {
     if (!this.hand || this.hand.envidoResponsePending || this.hand.florResponsePending) return false;
+    if (this.isFolded(playerIdx)) return false;
 
-    // Se o truco estiver pendente, apenas o time que deve responder ao truco pode chamar envido
-    if (this.hand.trucoResponsePending) {
+    if (isRaise) {
+      // Aumento: feito por quem estava respondendo (já validado em respondEnvido)
+    } else if (this.hand.trucoResponsePending) {
+      // "O envido está primeiro": quem vai responder o Truco pode cantar Envido antes
       const callingTeam = this.players[playerIdx].team;
       if (callingTeam !== this.hand.trucoPendingTeam) return false;
+      if (this.hand.trucoResponderIdx !== undefined && this.hand.trucoResponderIdx !== playerIdx) return false;
+    } else if (!this.isPe(playerIdx)) {
+      // No 2v2, apenas o Pé de cada dupla pode cantar o Envido
+      return false;
     }
-
-    // No 2v2, apenas o Pé de cada dupla pode cantar ou responder Envido
-    if (!this.isPe(playerIdx) || this.isFolded(playerIdx)) return false;
 
     // Envido só pode ser chamado na primeira rodada
     if (this.hand.currentRound !== 0) return false;
     if (!this.hand.canCallEnvido) return false;
-    if (this.hasPlayerPlayedCard(playerIdx)) return false;
+    if (!isRaise && this.hasPlayerPlayedCard(playerIdx)) return false;
 
     // Validar transições permitidas de aumento de Envido
     if (this.hand.envidoHistory.length > 0) {
@@ -541,6 +559,7 @@ class TrucoGame { // TRUCO GURIZINHO
     this.hand.envidoCallerIdx = playerIdx;
     this.hand.envidoResponsePending = true;
     this.hand.envidoPendingTeam = team === 0 ? 1 : 0;
+    this.hand.envidoResponderIdx = this.responderAfter(playerIdx);
     this.hand.voiceBubble[playerIdx] = chant;
 
     // Guardar os pontos anteriores antes de atualizar
@@ -558,14 +577,30 @@ class TrucoGame { // TRUCO GURIZINHO
     return true;
   }
 
+  // O aumento do Envido é permitido? (mesmas regras do callEnvido)
+  canRaiseEnvido(type, player) {
+    if (player.hasFlor || this.hand.currentRound !== 0) return false;
+    const history = this.hand.envidoHistory;
+    const lastCall = history[history.length - 1];
+    if (type === 'envido') return lastCall === 'envido' && history.filter(c => c === 'envido').length < 2;
+    if (type === 'real_envido') return lastCall === 'envido';
+    if (type === 'falta_envido') return lastCall === 'envido' || lastCall === 'real_envido';
+    return false;
+  }
+
   respondEnvido(playerIdx, response) {
     if (!this.hand || !this.hand.envidoResponsePending) return false;
-    if (!this.isPe(playerIdx) || this.isFolded(playerIdx)) return false;
+    if (this.isFolded(playerIdx)) return false;
 
     const player = this.players[playerIdx];
     const team = player.team;
 
     if (team !== this.hand.envidoPendingTeam) return false;
+    // Só o próximo depois de quem cantou responde
+    if (this.hand.envidoResponderIdx !== undefined && this.hand.envidoResponderIdx !== playerIdx) return false;
+    if (!['quero', 'nao_quero', 'envido', 'real_envido', 'falta_envido'].includes(response)) return false;
+    // Aumento inválido não pode "engolir" a resposta pendente
+    if (response !== 'quero' && response !== 'nao_quero' && !this.canRaiseEnvido(response, player)) return false;
 
     this.hand.envidoResponsePending = false;
     delete this.hand.voiceBubble[playerIdx];
@@ -608,7 +643,7 @@ class TrucoGame { // TRUCO GURIZINHO
       this.hand.canCallEnvido = false;
     } else if (['envido', 'real_envido', 'falta_envido'].includes(response)) {
       // Aumentar aposta do Envido
-      this.callEnvido(playerIdx, response);
+      this.callEnvido(playerIdx, response, true);
     }
     return true;
   }
@@ -690,7 +725,8 @@ class TrucoGame { // TRUCO GURIZINHO
 
     // Verificar se o time adversário tem alguém com Flor
     const opponentTeam = team === 0 ? 1 : 0;
-    const opponentHasFlor = this.players.some(p => p.team === opponentTeam && p.hasFlor);
+    // Quem foi ao mazo não responde a Flor
+    const opponentHasFlor = this.players.some((p, i) => p.team === opponentTeam && p.hasFlor && !this.isFolded(i));
 
     if (opponentHasFlor) {
       // Pausa o jogo para o time adversário se manifestar
@@ -716,6 +752,21 @@ class TrucoGame { // TRUCO GURIZINHO
       this.checkGameWinner();
     }
     return true;
+  }
+
+  // A dupla que devia responder a Flor ficou sem ninguém com Flor (mazo): perde a aposta
+  autoAchique(team) {
+    const opponentTeam = team === 0 ? 1 : 0;
+    const history = this.hand.florHistory;
+    const prevCall = history.length > 1 ? history[history.length - 2] : 'flor';
+    const pointsWon = prevCall === 'contra_flor' ? 6 : 3;
+    this.hand.florResponsePending = false;
+    this.hand.florState = 'refused';
+    this.hand.canCallEnvido = false;
+    this.score[opponentTeam] += pointsWon;
+    this.log(`Ninguém respondeu a Flor. Time ${opponentTeam + 1} ganha ${pointsWon} ponto(s).`, opponentTeam);
+    this.hand.florCallers.filter(i => this.players[i].team === opponentTeam).forEach(i => this.addFlorProof(i));
+    this.checkGameWinner();
   }
 
   respondFlor(playerIdx, response) {
@@ -886,6 +937,14 @@ class TrucoGame { // TRUCO GURIZINHO
       } else {
         // Se apenas um dobrou, o jogo continua apenas com o parceiro.
         this.log(`${this.players[partnerIdx].name} segue sozinho pela dupla.`, team);
+        // Se ele ia responder um canto, quem responde passa a ser o parceiro
+        if (this.hand.trucoResponderIdx === playerIdx) this.hand.trucoResponderIdx = partnerIdx;
+        if (this.hand.envidoResponderIdx === playerIdx) this.hand.envidoResponderIdx = partnerIdx;
+        // Era o único da dupla com Flor para responder: a dupla "achica"
+        const florHolderLeft = this.players.some((p, i) => p.team === team && p.hasFlor && !this.isFolded(i));
+        if (this.hand.florResponsePending && this.hand.florPendingTeam === team && !florHolderLeft) {
+          this.autoAchique(team);
+        }
         // Avança o turno se era a vez de quem foi ao mazo
         if (this.hand.currentPlayer === playerIdx) {
           this.nextTurn();
@@ -1167,6 +1226,7 @@ class TrucoGame { // TRUCO GURIZINHO
         trucoResponsePending: this.hand.trucoResponsePending,
         trucoPendingTeam: this.hand.trucoPendingTeam,
         trucoChant: this.hand.trucoChant,
+        trucoResponderIdx: this.hand.trucoResponderIdx,
 
         // Envido
         envidoState: this.hand.envidoState,
@@ -1175,6 +1235,7 @@ class TrucoGame { // TRUCO GURIZINHO
         envidoResponsePending: this.hand.envidoResponsePending,
         envidoPendingTeam: this.hand.envidoPendingTeam,
         envidoChant: this.hand.envidoChant,
+        envidoResponderIdx: this.hand.envidoResponderIdx,
         envidoWinnerInfo: this.hand.envidoWinnerInfo,
         envidoHistory: this.hand.envidoHistory,
         canCallEnvido: this.hand.canCallEnvido,

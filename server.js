@@ -236,14 +236,12 @@ function runBotLogic(roomId) {
     const pendingTeam = game.hand.florPendingTeam;
     activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && p.hasFlor && !game.hand.foldedPlayers.has(idx));
   } else if (game.hand.envidoResponsePending) {
-    const pendingTeam = game.hand.envidoPendingTeam;
-    // No 2v2 apenas o Pé da dupla responde o Envido
-    activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && !game.hand.foldedPlayers.has(idx)
-      && game.isPe(idx));
+    // Só responde o próximo depois de quem cantou
+    const r = game.hand.envidoResponderIdx;
+    if (game.players[r] && game.players[r].isBot) activeBotIdx = r;
   } else if (game.hand.trucoResponsePending) {
-    const pendingTeam = game.hand.trucoPendingTeam;
-    // O bot que deve responder na equipe
-    activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && !game.hand.foldedPlayers.has(idx));
+    const r = game.hand.trucoResponderIdx;
+    if (game.players[r] && game.players[r].isBot) activeBotIdx = r;
   } else {
     // Turno normal de carta
     const curr = game.hand.currentPlayer;

@@ -1241,18 +1241,11 @@ function renderPlayedCards(playedCards, players, gameState) {
       cardEl.className = `played-card ${card.suit} entering`;
       cardEl.dataset.key = key;
 
-      // Posição por rodada, proporcional ao tamanho da carta (o CSS dos slots
-      // reserva exatamente este espaço):
-      // - cima/baixo: uma coluna por rodada (112% = carta + espaço), alinhadas
-      //   entre os dois jogadores;
-      // - laterais (2v2): pilha vertical centrada, 34% por rodada.
-      // Usa `translate`/`rotate` para não conflitar com o `transform` da animação.
+      // Posição pela rodada: o CSS usa --r (colunas nas fileiras, leque ou
+      // pilha nas laterais). Usa `translate`/`rotate` para não conflitar com
+      // o `transform` da animação.
       const tilt = [-2, 1.5, -1][round] || 0;
-      if (seat === 'top' || seat === 'bottom') {
-        cardEl.style.translate = `${round * 112}% 0`;
-      } else {
-        cardEl.style.translate = `0 ${(round - 1) * 34}%`;
-      }
+      cardEl.style.setProperty('--r', round);
       cardEl.style.rotate = `${tilt}deg`;
       cardEl.style.zIndex = 10 + round;
       cardEl.dataset.round = round;
@@ -1356,7 +1349,9 @@ function updateAlertBanner(gameState) {
   gameAlertBanner.classList.add('hide');
 
   const hand = gameState.hand;
-  const myTeam = gameState.players[mySeatIndex].team;
+  const myPlayer = gameState.players[mySeatIndex];
+  const myTeam = myPlayer.team;
+  const nameOf = idx => (gameState.players[idx] ? gameState.players[idx].name : 'seu parceiro');
 
   // 1. Resposta pendente de Flor para o meu time
   if (hand.florResponsePending && hand.florPendingTeam === myTeam && myPlayer.hasFlor) {
@@ -1368,14 +1363,18 @@ function updateAlertBanner(gameState) {
   // 2. Resposta pendente de Envido para o meu time
   if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam) {
     const currentCall = hand.envidoChant;
-    gameAlertText.textContent = `Eles gritaram ${currentCall}! Aceitas a aposta?`;
+    gameAlertText.textContent = hand.envidoResponderIdx === mySeatIndex
+      ? `Eles gritaram ${currentCall}! Aceitas a aposta?`
+      : `Eles gritaram ${currentCall}! ${nameOf(hand.envidoResponderIdx)} responde...`;
     gameAlertBanner.classList.remove('hide');
     return;
   }
 
   // 3. Resposta pendente de Truco para o meu time
   if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam) {
-    gameAlertText.textContent = `Time adversário gritou ${hand.trucoChant}! O que fazes?`;
+    gameAlertText.textContent = hand.trucoResponderIdx === mySeatIndex
+      ? `Time adversário gritou ${hand.trucoChant}! O que fazes?`
+      : `Time adversário gritou ${hand.trucoChant}! ${nameOf(hand.trucoResponderIdx)} responde...`;
     gameAlertBanner.classList.remove('hide');
     return;
   }
@@ -1420,6 +1419,20 @@ function setupActionButtons(gameState) {
 
   // --- SE HOUVER APOSTA PENDENTE PARA O MEU TIME RESPONDER ---
 
+  // Só responde quem é o próximo depois de quem cantou; o parceiro espera
+  const waitingPartner = (pending, team, responder) => pending && team === myTeam && responder !== mySeatIndex;
+  if (waitingPartner(hand.envidoResponsePending, hand.envidoPendingTeam, hand.envidoResponderIdx)
+    || (!hand.envidoResponsePending && !hand.florResponsePending
+      && waitingPartner(hand.trucoResponsePending, hand.trucoPendingTeam, hand.trucoResponderIdx))) {
+    const responder = hand.envidoResponsePending ? hand.envidoResponderIdx : hand.trucoResponderIdx;
+    const who = gameState.players[responder] ? gameState.players[responder].name : 'Seu parceiro';
+    if (statusEl) {
+      statusEl.textContent = `${who} responde a aposta...`;
+      statusEl.classList.remove('hide');
+    }
+    return;
+  }
+
   const betPending = hand.envidoResponsePending || hand.florResponsePending;
   if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam && !betPending) {
     if (statusEl) statusEl.classList.add('hide');
@@ -1441,7 +1454,7 @@ function setupActionButtons(gameState) {
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
     if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
-      if (isPe && !myPlayer.hasFlor && hand.envidoState === 'none') {
+      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
         showAndEnableButton(btnRealEnvido);
@@ -1456,7 +1469,7 @@ function setupActionButtons(gameState) {
     return; // Impede outras ações simultâneas
   }
 
-  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && isPe) {
+  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && hand.envidoResponderIdx === mySeatIndex) {
     if (statusEl) statusEl.classList.add('hide');
     groupResponse.classList.remove('hide');
     showAndEnableButton(btnQuero);
@@ -1489,7 +1502,7 @@ function setupActionButtons(gameState) {
     return;
   }
 
-  if (hand.florResponsePending && hand.florPendingTeam === myTeam) {
+  if (hand.florResponsePending && hand.florPendingTeam === myTeam && myPlayer.hasFlor) {
     if (statusEl) statusEl.classList.add('hide');
     groupFlorResponse.classList.remove('hide');
     showAndEnableButton(btnContraFlor);

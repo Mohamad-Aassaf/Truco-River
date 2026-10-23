@@ -1792,8 +1792,10 @@ body[data-screen="lobby"] #screen-waiting {
   Arena das cartas jogadas (escala com a mesa via unidades cq*):
   - cima/baixo: uma fileira com 3 colunas (uma por rodada). As colunas dos
     dois jogadores ficam alinhadas, e as bolinhas de rodada ficam no meio.
-  - laterais (2v2): pilha vertical centrada (34% da altura por rodada).
-  Os deslocamentos de cada carta vêm do app.js (112% por coluna).
+  - laterais (2v2): na altura das bolinhas, coladas nas fileiras. Em mesa
+    larga as cartas abrem em leque para o lado (50% da largura por rodada);
+    em mesa alta (celular em pé) empilham para baixo (34% da altura).
+  O app.js só informa a rodada de cada carta (--r); a posição vem daqui.
 */
 .played-cards-arena {
   position: absolute;
@@ -1807,12 +1809,10 @@ body[data-screen="lobby"] #screen-waiting {
   --dot: 12px;
 }
 
-/* 2v2: o tamanho é o maior entre duas arrumações que não se sobrepõem:
-   - pilhas laterais ao lado das fileiras (limite pela largura: 26cqw);
-   - pilhas laterais entre as fileiras, em mesas altas (27cqh), sem
-     encostar nas bolinhas (32cqw). */
+/* 2v2 em mesa larga: fileiras (3,24 cartas) + dois leques laterais
+   (2 cartas cada) + folgas cabem na largura: ~7,9 larguras de carta */
 .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena {
-  --slot-h: min(var(--slot-max), 45cqh, max(27cqw, min(27cqh, 32cqw)));
+  --slot-h: min(var(--slot-max), 45cqh, 18.5cqw);
 }
 
 .played-card-slot-container {
@@ -1847,6 +1847,74 @@ body[data-screen="lobby"] #screen-waiting {
 .slot-row .slot-ph:nth-child(2) { translate: 112% 0; }
 .slot-row .slot-ph:nth-child(3) { translate: 224% 0; }
 
+/* Posição de cada carta pela rodada (--r): colunas nas fileiras */
+.slot-row .played-card { translate: calc(var(--r, 0) * 112%) 0; }
+
+/* Laterais do 2v2: leque na altura das bolinhas, colado nas fileiras */
+.slot-col {
+  --side-gap: calc(var(--slot-w) * 0.3);
+  width: calc(var(--slot-w) * 2);
+}
+
+#arena-slot-left { left: auto; right: calc(50% + var(--slot-w) * 1.62 + var(--side-gap)); }
+#arena-slot-right { right: auto; left: calc(50% + var(--slot-w) * 1.62 + var(--side-gap)); }
+
+.slot-col .played-card { translate: calc(var(--r, 0) * 50%) 0; }
+.slot-col .slot-ph { width: 100%; height: 100%; }
+
+/* Mesa alta (celular em pé): as laterais ficam entre as fileiras, uma de
+   cada lado das bolinhas, empilhando para baixo. Altura: fileira + pilha
+   (1,68 carta) + fileira = 3,68 cartas. */
+@container (aspect-ratio < 1) {
+  /* --row-h: cartas das fileiras; --side-h: cartas laterais, um pouco
+     menores para não encostar nos assentos das laterais */
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > * {
+    --row-h: min(var(--slot-max), 27cqh, calc(32cqw - 20px));
+    --side-h: min(var(--row-h), calc(75cqw - var(--col) * 1.5 - 75px), calc(50cqh - var(--row-h) - 6px));
+    --slot-h: var(--row-h);
+    --slot-w: calc(var(--slot-h) * 2 / 3);
+    --col: calc(var(--row-h) * 2 / 3 * 1.12);
+  }
+
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: var(--side-h);
+    width: var(--slot-w);
+    /* a 1ª carta fica na altura das bolinhas; as outras descem por cima */
+    height: var(--slot-h);
+  }
+
+  #arena-slot-left { right: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+  #arena-slot-right { left: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+
+  .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
+}
+
+/* Celular/tablet em pé: mesma arrumação em pilha, mesmo se a arena
+   ficar mais larga que alta (os assentos laterais ocupam as bordas) */
+@media (max-width: 850px) and (orientation: portrait) {
+  /* --row-h: cartas das fileiras; --side-h: cartas laterais, um pouco
+     menores para não encostar nos assentos das laterais */
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > * {
+    --row-h: min(var(--slot-max), 27cqh, calc(32cqw - 20px));
+    --side-h: min(var(--row-h), calc(75cqw - var(--col) * 1.5 - 75px), calc(50cqh - var(--row-h) - 6px));
+    --slot-h: var(--row-h);
+    --slot-w: calc(var(--slot-h) * 2 / 3);
+    --col: calc(var(--row-h) * 2 / 3 * 1.12);
+  }
+
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: var(--side-h);
+    width: var(--slot-w);
+    /* a 1ª carta fica na altura das bolinhas; as outras descem por cima */
+    height: var(--slot-h);
+  }
+
+  #arena-slot-left { right: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+  #arena-slot-right { left: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+
+  .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
+}
+
 /* 1v1: ninguém senta nas laterais */
 .truco-table:has(#seat-left.hidden-seat) #arena-slot-left,
 .truco-table:has(#seat-right.hidden-seat) #arena-slot-right {
@@ -1856,8 +1924,8 @@ body[data-screen="lobby"] #screen-waiting {
 /* --enter-x/y: de onde a carta vem ao ser jogada */
 #arena-slot-top { top: 0; --enter-x: 0; --enter-y: -60%; }
 #arena-slot-bottom { bottom: 0; --enter-x: 0; --enter-y: 60%; }
-#arena-slot-left { left: 0; --enter-x: -60%; --enter-y: 0; }
-#arena-slot-right { right: 0; --enter-x: 60%; --enter-y: 0; }
+#arena-slot-left { --enter-x: -60%; --enter-y: 0; }
+#arena-slot-right { --enter-x: 60%; --enter-y: 0; }
 
 .played-card {
   position: absolute;
@@ -2916,4 +2984,23 @@ body[data-screen="game_end"] .feedback-top-bar {
   }
 
   .action-panel { max-width: 96%; }
+}
+
+/* 2v2 com celular em pé: as cartas laterais ficam no meio da mesa (entre as
+   fileiras), então a arena pode usar quase toda a largura.
+   Fica no fim para valer sobre o bloco do celular. */
+@media (max-width: 850px) and (orientation: portrait) {
+  .truco-table:has(#seat-left:not(.hidden-seat)) .table-center {
+    inset: max(9%, 32px) max(5%, 16px);
+  }
+
+  /* Assentos laterais mais estreitos para sobrar espaço às cartas */
+  #seat-left .seat-name,
+  #seat-right .seat-name {
+    max-width: 52px;
+    font-size: 0.62rem;
+  }
+
+  #seat-left { left: -20px; }
+  #seat-right { right: -20px; }
 }
