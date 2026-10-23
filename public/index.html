@@ -27,7 +27,8 @@
   <script defer src="/_vercel/insights/script.js"></script>
 
   <!-- CSS Customizado -->
-  <link rel="stylesheet" href="/css/style.css?v=3.3">
+  <link rel="stylesheet" href="/css/style.css?v=3.4">
+  <link rel="stylesheet" href="/css/home.css?v=1.1">
 </head>
 
 <body data-screen="home">
@@ -52,6 +53,11 @@
 
   <!-- TELA 1: LOBBY INICIAL / CONEXÃO -->
   <div id="screen-lobby" class="screen active">
+    <!-- Naipes flutuando ao fundo -->
+    <div class="lobby-bg-suits" aria-hidden="true">
+      <span>♠</span><span>♣</span><span>♥</span><span>♦</span><span>♠</span><span>♣</span>
+      <span>♥</span><span>♦</span><span>♠</span><span>♣</span><span>♥</span><span>♦</span>
+    </div>
     <!-- Google AdSense - Lateral Esquerda -->
     <div class="lobby-ad-side left-ad">
       <ins class="adsbygoogle" style="display:block;width:100%;height:100%" data-ad-client="ca-pub-2306180475075767"
@@ -63,9 +69,39 @@
 
     <div class="lobby-card glassmorphism">
       <div class="lobby-hero">
+        <div class="hero-fan" aria-hidden="true">
+          <img src="/Baralho_Espanhol_Organizado/Bastos/1.png" alt="">
+          <img src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="">
+          <img src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="">
+        </div>
         <div class="hero-suits" aria-hidden="true"><span>♠</span><span>♣</span><span>♥</span><span>♦</span></div>
         <h1 class="rustic-title">Truco River</h1>
         <p class="lobby-tagline">Truco gaúcho online · 1v1 e em dupla</p>
+        <button type="button" id="open-rules-btn" class="rules-cta">
+          <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
+        </button>
+      </div>
+
+      <!-- Conta: convidado ou logado (preenchido pelo social.js) -->
+      <div id="account-strip" class="account-strip is-guest">
+        <div class="account-avatar" id="account-avatar"><i class="fa-solid fa-user"></i></div>
+        <div class="account-info">
+          <span class="account-name" id="account-name">Convidado</span>
+          <span class="account-sub" id="account-sub">Crie uma conta para adicionar amigos e guardar suas vitórias</span>
+        </div>
+        <div class="account-actions guest-only">
+          <button type="button" id="open-login-btn" class="btn btn-sm btn-secondary">Entrar</button>
+          <button type="button" id="open-register-btn" class="btn btn-sm btn-primary">Criar conta</button>
+        </div>
+        <div class="account-actions user-only">
+          <button type="button" id="open-friends-btn" class="btn btn-sm btn-secondary friends-btn">
+            <i class="fa-solid fa-user-group"></i> Amigos
+            <span class="notif-badge hide" id="friends-badge">0</span>
+          </button>
+          <button type="button" id="logout-btn" class="icon-btn" title="Sair da conta" aria-label="Sair da conta">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
       </div>
 
       <div class="input-group">
@@ -78,6 +114,8 @@
         <div class="deck-selector-container">
           <button type="button" class="deck-option active" data-deck="traditional">Tradicional</button>
           <button type="button" class="deck-option" data-deck="pixel">Pixel Art</button>
+          <button type="button" class="deck-option" data-deck="classico">Clássico</button>
+          <button type="button" class="deck-option" data-deck="frances">Francês</button>
         </div>
         <div class="deck-preview-container">
           <button type="button" id="prev-preview-btn" class="icon-btn" title="Anterior"><i class="fa-solid fa-chevron-left"></i></button>
@@ -180,6 +218,7 @@
           <option value="hard">Bot Difícil</option>
         </select>
         <button id="add-bot-btn" class="btn btn-info"><i class="fa-solid fa-robot"></i> Adicionar Bot</button>
+        <button id="invite-friends-btn" class="btn btn-secondary hide"><i class="fa-solid fa-user-plus"></i> Convidar amigos</button>
         <button id="ready-btn" class="btn btn-success"><i class="fa-solid fa-check"></i> Pronto</button>
         <button id="leave-room-btn" class="btn btn-danger"><i class="fa-solid fa-arrow-right-from-bracket"></i>
           Abandonar</button>
@@ -570,6 +609,401 @@
     </div>
   </div>
 
+  <!-- MODAL DE CONTA: ENTRAR / CRIAR CONTA / CONVIDADO -->
+  <div id="modal-auth" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="modal-card auth-card">
+      <div class="modal-header">
+        <h2 id="auth-title"><i class="fa-solid fa-hat-cowboy"></i> Bem-vindo ao galpão</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="auth-tabs lobby-option-group" role="tablist">
+          <button type="button" class="lobby-toggle-btn active" data-auth-tab="login" role="tab">Entrar</button>
+          <button type="button" class="lobby-toggle-btn" data-auth-tab="register" role="tab">Criar conta</button>
+        </div>
+
+        <form id="auth-form" class="auth-form" autocomplete="on" novalidate>
+          <div class="input-group">
+            <label for="auth-username"><i class="fa-solid fa-user"></i> Usuário</label>
+            <input type="text" id="auth-username" name="username" maxlength="16" autocomplete="username"
+              placeholder="ex: gaucho_bom" spellcheck="false" autocapitalize="off">
+            <small class="field-hint register-only">3 a 16 caracteres: letras, números ou _</small>
+          </div>
+          <div class="input-group">
+            <label for="auth-password"><i class="fa-solid fa-key"></i> Senha</label>
+            <div class="password-field">
+              <input type="password" id="auth-password" name="password" maxlength="72" autocomplete="current-password"
+                placeholder="mínimo 6 caracteres">
+              <button type="button" class="password-toggle" id="auth-password-toggle" aria-label="Mostrar senha">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="input-group register-only">
+            <label for="auth-password2"><i class="fa-solid fa-key"></i> Repita a senha</label>
+            <input type="password" id="auth-password2" maxlength="72" autocomplete="new-password">
+          </div>
+
+          <p id="auth-error" class="form-error" role="alert"></p>
+
+          <button type="submit" id="auth-submit" class="btn btn-primary auth-submit">
+            <span class="login-only">Entrar</span><span class="register-only">Criar minha conta</span>
+          </button>
+        </form>
+
+        <ul class="auth-perks register-only">
+          <li><i class="fa-solid fa-user-group"></i> Adicione amigos e veja quem está online</li>
+          <li><i class="fa-solid fa-envelope-open-text"></i> Convide a gurizada para a sua sala</li>
+          <li><i class="fa-solid fa-trophy"></i> Guarde suas vitórias e partidas</li>
+        </ul>
+
+        <div class="auth-or"><span>ou</span></div>
+
+        <button type="button" id="auth-guest-btn" class="btn btn-secondary auth-guest">
+          <i class="fa-solid fa-person-walking"></i> Jogar como convidado
+        </button>
+        <p class="auth-guest-note">Sem conta você joga normalmente, só não tem amigos nem histórico.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE AMIGOS -->
+  <div id="modal-friends" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="friends-title">
+    <div class="modal-card friends-card">
+      <div class="modal-header">
+        <h2 id="friends-title"><i class="fa-solid fa-user-group"></i> Amigos</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-friend-form" class="add-friend-form">
+          <input type="text" id="add-friend-input" maxlength="16" placeholder="Usuário do amigo"
+            autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Usuário do amigo">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-user-plus"></i> Adicionar</button>
+        </form>
+        <p id="add-friend-msg" class="form-msg" role="status"></p>
+
+        <section id="friends-requests-in" class="friends-section hide">
+          <h3><i class="fa-solid fa-bell"></i> Pedidos recebidos</h3>
+          <ul class="friends-list" id="requests-in-list"></ul>
+        </section>
+
+        <section class="friends-section">
+          <h3><i class="fa-solid fa-users"></i> Seus amigos <span class="friends-count" id="friends-count"></span></h3>
+          <ul class="friends-list" id="friends-list"></ul>
+        </section>
+
+        <section id="friends-requests-out" class="friends-section hide">
+          <h3><i class="fa-solid fa-paper-plane"></i> Pedidos enviados</h3>
+          <ul class="friends-list" id="requests-out-list"></ul>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE REGRAS DO TRUCO GAÚCHO -->
+  <div id="modal-rules" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+    <div class="modal-card rules-card">
+      <div class="modal-header">
+        <h2 id="rules-title"><i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="rules-layout">
+        <nav class="rules-nav" role="tablist" aria-label="Seções das regras">
+          <button class="rules-tab active" data-rules-tab="geral" role="tab"><i class="fa-solid fa-compass"></i><span>O jogo</span></button>
+          <button class="rules-tab" data-rules-tab="cartas" role="tab"><i class="fa-solid fa-layer-group"></i><span>Cartas</span></button>
+          <button class="rules-tab" data-rules-tab="rodadas" role="tab"><i class="fa-solid fa-scale-balanced"></i><span>Rodadas</span></button>
+          <button class="rules-tab" data-rules-tab="truco" role="tab"><i class="fa-solid fa-fire"></i><span>Truco</span></button>
+          <button class="rules-tab" data-rules-tab="envido" role="tab"><i class="fa-solid fa-calculator"></i><span>Envido</span></button>
+          <button class="rules-tab" data-rules-tab="flor" role="tab"><i class="fa-solid fa-spa"></i><span>Flor</span></button>
+          <button class="rules-tab" data-rules-tab="glossario" role="tab"><i class="fa-solid fa-comments"></i><span>Dicionário</span></button>
+        </nav>
+
+        <div class="rules-content" id="rules-content">
+
+          <!-- O JOGO -->
+          <section class="rules-panel active" data-rules-panel="geral">
+            <div class="rules-hero">
+              <div class="rules-hero-fan" aria-hidden="true">
+                <img src="/Baralho_Espanhol_Organizado/Bastos/1.png" alt="">
+                <img src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="">
+                <img src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="">
+              </div>
+              <div>
+                <h3>O truco do Sul</h3>
+                <p>O Truco Gaúcho é o truco jogado no Rio Grande do Sul e em boa parte de Santa Catarina e do Paraná.
+                  Ele vem do <em>truco</em> do Uruguai e da Argentina: usa o <strong>baralho espanhol</strong>, tem
+                  <strong>Envido</strong> e <strong>Flor</strong>, e é bem diferente do truco paulista (que usa
+                  baralho comum e "vira").</p>
+              </div>
+            </div>
+
+            <div class="rules-facts">
+              <div class="rules-fact"><i class="fa-solid fa-clone"></i><strong>40 cartas</strong><span>baralho espanhol, sem 8, 9 e coringas</span></div>
+              <div class="rules-fact"><i class="fa-solid fa-user-group"></i><strong>1v1 ou duplas</strong><span>na dupla, o parceiro senta à sua frente</span></div>
+              <div class="rules-fact"><i class="fa-solid fa-hand"></i><strong>3 cartas</strong><span>para cada jogador, em toda mão</span></div>
+              <div class="rules-fact"><i class="fa-solid fa-flag-checkered"></i><strong>24 tentos</strong><span>vence quem chegar primeiro (12 "malas" + 12 "boas")</span></div>
+            </div>
+
+            <h4>Como funciona uma mão</h4>
+            <ol class="rules-steps">
+              <li><b>Dá as cartas.</b> Cada jogador recebe 3 cartas. O jogo gira para a <strong>direita</strong>
+                (sentido anti-horário) e quem dá as cartas muda a cada mão.</li>
+              <li><b>Canta, se tiver o quê.</b> Antes de jogar a primeira carta dá para cantar
+                <strong>Envido</strong> (pontos das cartas) ou <strong>Flor</strong> (três do mesmo naipe).</li>
+              <li><b>Joga as rodadas.</b> Cada um joga uma carta por vez; a mais forte ganha a rodada (a "vaza").
+                Quem ganha <strong>duas de três</strong> leva a mão.</li>
+              <li><b>Trucar, a qualquer momento.</b> Na sua vez, você pode gritar <strong>Truco</strong> para a mão
+                valer mais. O outro lado quer, não quer ou aumenta.</li>
+              <li><b>Marca os tentos.</b> A mão vale 1 tento sem truco. Somam-se os tentos do Envido/Flor e começa a
+                próxima mão.</li>
+            </ol>
+
+            <div class="rules-callout">
+              <i class="fa-solid fa-chess-king"></i>
+              <p><strong>Mão e pé.</strong> O <em>mão</em> é o primeiro a jogar (à direita de quem deu as cartas) e
+                ganha os empates. O <em>pé</em> é o último a jogar de cada lado. Nas duplas, é o pé quem canta e
+                responde o Envido pela dupla.</p>
+            </div>
+          </section>
+
+          <!-- CARTAS -->
+          <section class="rules-panel" data-rules-panel="cartas">
+            <h3>A força das cartas</h3>
+            <p>No truco gaúcho a ordem <strong>não</strong> segue o número da carta. Da mais forte para a mais fraca:</p>
+
+            <ol class="rank-list">
+              <li class="rank-row top"><span class="rank-num">1</span>
+                <span class="rank-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/1.png" alt="Ás de Espadas"></span>
+                <span class="rank-name"><b>Espadão</b><small>Ás de Espadas · a maior de todas</small></span></li>
+              <li class="rank-row top"><span class="rank-num">2</span>
+                <span class="rank-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/1.png" alt="Ás de Paus"></span>
+                <span class="rank-name"><b>Bastião</b><small>Ás de Paus</small></span></li>
+              <li class="rank-row top"><span class="rank-num">3</span>
+                <span class="rank-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="Sete de Espadas"></span>
+                <span class="rank-name"><b>Sete de Espadas</b><small>a terceira manilha</small></span></li>
+              <li class="rank-row top"><span class="rank-num">4</span>
+                <span class="rank-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/7.png" alt="Sete de Ouros"></span>
+                <span class="rank-name"><b>Sete de Ouros</b><small>a quarta manilha</small></span></li>
+              <li class="rank-row"><span class="rank-num">5</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/3.png" alt="Três de Espadas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/3.png" alt="Três de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/3.png" alt="Três de Ouros"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/3.png" alt="Três de Paus"></span>
+                <span class="rank-name"><b>Os Três</b><small>todos valem igual</small></span></li>
+              <li class="rank-row"><span class="rank-num">6</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/2.png" alt="Dois de Espadas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/2.png" alt="Dois de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/2.png" alt="Dois de Ouros"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/2.png" alt="Dois de Paus"></span>
+                <span class="rank-name"><b>Os Dois</b><small>todos valem igual</small></span></li>
+              <li class="rank-row"><span class="rank-num">7</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/1.png" alt="Ás de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/1.png" alt="Ás de Ouros"></span>
+                <span class="rank-name"><b>Ases falsos</b><small>Ás de Copas e Ás de Ouros</small></span></li>
+              <li class="rank-row"><span class="rank-num">8</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/12.png" alt="Rei de Espadas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/12.png" alt="Rei de Copas"></span>
+                <span class="rank-name"><b>Reis (12)</b><small>todos os naipes</small></span></li>
+              <li class="rank-row"><span class="rank-num">9</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/11.png" alt="Cavalo de Ouros"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/11.png" alt="Cavalo de Paus"></span>
+                <span class="rank-name"><b>Cavalos (11)</b><small>todos os naipes</small></span></li>
+              <li class="rank-row"><span class="rank-num">10</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/10.png" alt="Sota de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/10.png" alt="Sota de Espadas"></span>
+                <span class="rank-name"><b>Sotas (10)</b><small>também chamadas de valete</small></span></li>
+              <li class="rank-row"><span class="rank-num">11</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/7.png" alt="Sete de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/7.png" alt="Sete de Paus"></span>
+                <span class="rank-name"><b>Setes falsos</b><small>Sete de Copas e Sete de Paus</small></span></li>
+              <li class="rank-row"><span class="rank-num">12</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/6.png" alt="Seis de Ouros"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/6.png" alt="Seis de Espadas"></span>
+                <span class="rank-name"><b>Seis</b><small>todos os naipes</small></span></li>
+              <li class="rank-row"><span class="rank-num">13</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/5.png" alt="Cinco de Paus"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/5.png" alt="Cinco de Copas"></span>
+                <span class="rank-name"><b>Cincos</b><small>todos os naipes</small></span></li>
+              <li class="rank-row low"><span class="rank-num">14</span>
+                <span class="rank-cards stack"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/4.png" alt="Quatro de Espadas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/4.png" alt="Quatro de Ouros"></span>
+                <span class="rank-name"><b>Quatros</b><small>as mais fracas do baralho</small></span></li>
+            </ol>
+
+            <div class="rules-callout">
+              <i class="fa-solid fa-crown"></i>
+              <p>As quatro primeiras são as <strong>manilhas</strong>: só existe uma de cada. Nas outras, cartas do
+                mesmo número empatam, não importa o naipe.</p>
+            </div>
+          </section>
+
+          <!-- RODADAS -->
+          <section class="rules-panel" data-rules-panel="rodadas">
+            <h3>Rodadas (vazas) e empates</h3>
+            <p>A mão tem até <strong>três rodadas</strong>. Em cada uma, todo mundo joga uma carta e a mais forte
+              ganha. Quem ganha a rodada começa a próxima. A dupla ou jogador que vencer <strong>duas rodadas</strong>
+              leva a mão.</p>
+
+            <h4>Quando empata (a "parda")</h4>
+            <div class="parda-grid">
+              <div class="parda-case">
+                <div class="parda-dots"><i class="d tie">=</i><i class="d us">✓</i><i class="d none">·</i></div>
+                <p><b>Empatou a 1ª:</b> quem ganhar a 2ª leva a mão.</p>
+              </div>
+              <div class="parda-case">
+                <div class="parda-dots"><i class="d us">✓</i><i class="d tie">=</i><i class="d none">·</i></div>
+                <p><b>Empatou a 2ª:</b> quem ganhou a 1ª leva.</p>
+              </div>
+              <div class="parda-case">
+                <div class="parda-dots"><i class="d us">✓</i><i class="d them">✗</i><i class="d tie">=</i></div>
+                <p><b>Empatou a 3ª:</b> quem ganhou a 1ª leva.</p>
+              </div>
+              <div class="parda-case">
+                <div class="parda-dots"><i class="d tie">=</i><i class="d tie">=</i><i class="d tie">=</i></div>
+                <p><b>Empatou tudo:</b> quem é <em>mão</em> leva.</p>
+              </div>
+            </div>
+
+            <div class="rules-callout">
+              <i class="fa-solid fa-lightbulb"></i>
+              <p>Ganhou a primeira? Empatar a segunda já garante a mão. Por isso muita gente "<em>emparda</em>"
+                de propósito com uma carta mais fraca.</p>
+            </div>
+          </section>
+
+          <!-- TRUCO -->
+          <section class="rules-panel" data-rules-panel="truco">
+            <h3>Truco, Retruco e Vale Quatro</h3>
+            <p>O truco é a aposta de quem ganha a mão. Na sua vez, grite <strong>Truco!</strong> e o adversário
+              escolhe: <em>Quero</em> (aceita), <em>Não quero</em> (corre) ou aumenta.</p>
+
+            <div class="bet-ladder">
+              <div class="bet-step"><span class="bet-call">Sem truco</span><span class="bet-yes">1 tento</span><span class="bet-no">—</span></div>
+              <div class="bet-step"><span class="bet-call">¡Truco!</span><span class="bet-yes">2 tentos</span><span class="bet-no">corre: 1</span></div>
+              <div class="bet-step"><span class="bet-call">¡Retruco!</span><span class="bet-yes">3 tentos</span><span class="bet-no">corre: 2</span></div>
+              <div class="bet-step"><span class="bet-call">¡Vale Quatro!</span><span class="bet-yes">4 tentos</span><span class="bet-no">corre: 3</span></div>
+            </div>
+
+            <ul class="rules-bullets">
+              <li><b>A palavra troca de lado.</b> Só quem recebeu o grito pode aumentar: Truco → Retruco → Vale Quatro.
+                Um time nunca aumenta o próprio grito.</li>
+              <li><b>Quem aceitou pode aumentar depois.</b> Se você disse "Quero" ao Truco, mais tarde, na sua vez,
+                pode gritar Retruco.</li>
+              <li><b>O Envido vem primeiro.</b> Se trucarem você na 1ª rodada, ainda dá para cantar Envido ou Flor
+                antes de responder ao truco.</li>
+              <li><b>Ir ao mazo.</b> Desistir da mão: você larga as cartas e o adversário leva os tentos da mão. Se for
+                ainda na 1ª rodada, ele leva pelo menos 2.</li>
+              <li><b>Mazo na dupla.</b> Só quem foi ao mazo sai da mão; o parceiro segue jogando sozinho. Se os dois
+                forem, a dupla perde a mão.</li>
+            </ul>
+          </section>
+
+          <!-- ENVIDO -->
+          <section class="rules-panel" data-rules-panel="envido">
+            <h3>Envido: os pontos das cartas</h3>
+            <p>O Envido é uma aposta separada: ganha quem tiver mais <strong>pontos de envido</strong> na mão. Só pode
+              ser cantado na <strong>1ª rodada</strong>, antes de você jogar sua carta.</p>
+
+            <h4>Como contar</h4>
+            <ul class="rules-bullets">
+              <li><b>Duas do mesmo naipe:</b> 20 + o valor das duas.</li>
+              <li><b>Nenhuma do mesmo naipe:</b> vale só a carta mais alta.</li>
+              <li><b>Figuras (10, 11 e 12) valem 0.</b> As outras valem o próprio número.</li>
+              <li>O máximo é <strong>33</strong> (7 e 6 do mesmo naipe).</li>
+            </ul>
+
+            <div class="envido-examples">
+              <div class="envido-example">
+                <div class="ex-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/7.png" alt="7 de Espadas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/6.png" alt="6 de Espadas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/3.png" alt="3 de Copas"></div>
+                <p>20 + 7 + 6 = <b>33</b></p>
+              </div>
+              <div class="envido-example">
+                <div class="ex-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/5.png" alt="5 de Paus"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Bastos/12.png" alt="12 de Paus"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/2.png" alt="2 de Ouros"></div>
+                <p>20 + 5 + 0 = <b>25</b></p>
+              </div>
+              <div class="envido-example">
+                <div class="ex-cards"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/4.png" alt="4 de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Ouros/6.png" alt="6 de Ouros"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Espadas/11.png" alt="11 de Espadas"></div>
+                <p>naipes diferentes = <b>6</b></p>
+              </div>
+            </div>
+
+            <!-- Calculadora (montada pelo rules.js) -->
+            <div class="envido-calc" id="envido-calc">
+              <h4><i class="fa-solid fa-wand-magic-sparkles"></i> Calculadora de Envido</h4>
+              <p class="calc-help">Toque nas cartas para trocar o número e o naipe:</p>
+              <div class="calc-hand" id="calc-hand"></div>
+              <div class="calc-result" id="calc-result" aria-live="polite"></div>
+            </div>
+
+            <h4>Quanto vale</h4>
+            <table class="rules-table">
+              <thead><tr><th>Canto</th><th>Quero</th><th>Não quero</th></tr></thead>
+              <tbody>
+                <tr><td>Envido</td><td>2</td><td>1</td></tr>
+                <tr><td>Envido + Envido</td><td>4</td><td>2</td></tr>
+                <tr><td>Real Envido</td><td>3</td><td>1</td></tr>
+                <tr><td>Envido + Real Envido</td><td>5</td><td>2</td></tr>
+                <tr><td>Falta Envido</td><td>o que falta</td><td>o acumulado</td></tr>
+              </tbody>
+            </table>
+
+            <ul class="rules-bullets">
+              <li><b>Falta Envido:</b> vale os tentos que faltam para quem está na frente fechar as malas (12) ou,
+                se já estiver nas boas, para fechar o jogo (24).</li>
+              <li><b>Empate no envido:</b> ganha quem é mão (ou o mais perto do mão).</li>
+              <li><b>Quem tem Flor não canta Envido</b>: canta a Flor, que passa por cima do Envido.</li>
+            </ul>
+          </section>
+
+          <!-- FLOR -->
+          <section class="rules-panel" data-rules-panel="flor">
+            <h3>Flor: três do mesmo naipe</h3>
+            <div class="flor-show">
+              <div class="ex-cards bloom"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/7.png" alt="7 de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/5.png" alt="5 de Copas"><img loading="lazy" src="/Baralho_Espanhol_Organizado/Copas/11.png" alt="11 de Copas"></div>
+              <p>Pontos da Flor: 20 + 7 + 5 + 0 = <b>32</b></p>
+            </div>
+            <p>Quem recebe três cartas do mesmo naipe tem <strong>Flor</strong> e deve cantá-la na 1ª rodada, antes de
+              jogar a carta. A Flor cancela o Envido ("<em>Flor sobre Envido</em>").</p>
+
+            <table class="rules-table">
+              <thead><tr><th>Situação</th><th>Tentos</th></tr></thead>
+              <tbody>
+                <tr><td>Flor e ninguém do outro lado tem</td><td>3</td></tr>
+                <tr><td>Você e seu parceiro têm Flor</td><td>4</td></tr>
+                <tr><td>Os dois lados têm: disputa (Quero)</td><td>3 para a maior</td></tr>
+                <tr><td>Contra-Flor</td><td>6 para a maior</td></tr>
+                <tr><td>Contra-Flor e o Resto</td><td>o que falta para fechar o jogo</td></tr>
+                <tr><td>Achique (corre da Contra-Flor)</td><td>o outro lado leva o que estava valendo</td></tr>
+              </tbody>
+            </table>
+
+            <div class="rules-callout">
+              <i class="fa-solid fa-spa"></i>
+              <p>Só quem também tem Flor pode responder com Contra-Flor. Os pontos da Flor são contados como no
+                Envido, só que somando as três cartas.</p>
+            </div>
+          </section>
+
+          <!-- GLOSSÁRIO -->
+          <section class="rules-panel" data-rules-panel="glossario">
+            <h3>Dicionário do galpão</h3>
+            <dl class="glossary">
+              <div><dt>Tento</dt><dd>Cada ponto do placar. Antigamente marcado com grãos de feijão ou palitos.</dd></div>
+              <div><dt>Malas e boas</dt><dd>Os primeiros 12 tentos são as malas; dos 12 aos 24, as boas.</dd></div>
+              <div><dt>Mão</dt><dd>Quem joga primeiro na mão. Ganha os empates.</dd></div>
+              <div><dt>Pé</dt><dd>O último a jogar de cada lado. Nas duplas, quem canta o Envido.</dd></div>
+              <div><dt>Vaza</dt><dd>Cada uma das três rodadas de uma mão.</dd></div>
+              <div><dt>Parda</dt><dd>Rodada empatada: as cartas têm a mesma força.</dd></div>
+              <div><dt>Espadão</dt><dd>O Ás de Espadas, a carta mais forte do jogo.</dd></div>
+              <div><dt>Bastião</dt><dd>O Ás de Paus, a segunda mais forte.</dd></div>
+              <div><dt>Manilhas</dt><dd>As quatro cartas mais fortes: Espadão, Bastião, 7 de Espadas e 7 de Ouros.</dd></div>
+              <div><dt>Cantar</dt><dd>Gritar uma aposta: Truco, Envido, Flor…</dd></div>
+              <div><dt>Quero / Não quero</dt><dd>Aceitar ou recusar uma aposta.</dd></div>
+              <div><dt>Ir ao mazo</dt><dd>Desistir da mão e largar as cartas no monte.</dd></div>
+              <div><dt>Achicar</dt><dd>Fugir de uma Contra-Flor.</dd></div>
+              <div><dt>Trucar de mentira</dt><dd>Blefar: gritar Truco sem ter carta para isso. Faz parte!</dd></div>
+            </dl>
+
+            <div class="rules-callout tips">
+              <i class="fa-solid fa-hat-cowboy"></i>
+              <p><strong>Dica de galpão:</strong> guarde a manilha para a hora certa, preste atenção no que já saiu e
+                não tenha medo de trucar de mentira de vez em quando. Truco também é cara de pau!</p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AVISOS FLUTUANTES (convites, mensagens) -->
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
   <!-- Overlay para fundo da gaveta do celular -->
   <div id="sidebar-overlay" class="sidebar-overlay hide"></div>
 
@@ -577,6 +1011,8 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js"></script>
   <script src="/js/app.js"></script>
+  <script src="/js/social.js"></script>
+  <script src="/js/rules.js"></script>
 </body>
 
 </html>

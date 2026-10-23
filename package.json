@@ -9,7 +9,9 @@
     "test": "node testEngine.js"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "express": "^4.19.2",
+    "pg": "^8.23.1",
     "socket.io": "^4.7.5"
   }
 }

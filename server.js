@@ -7,6 +7,8 @@ const { Server } = require('socket.io');
 const path = require('path');
 const { TrucoGame } = require('./gameEngine');
 const bot = require('./bot');
+const { createAccounts } = require('./accounts');
+const { createSocial } = require('./social');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +29,38 @@ app.use('/pixelDeck', express.static(path.join(__dirname, 'pixelDeck')));
 // Banco de dados em memória para salas ativas
 const activeGames = {};
 
+// Contas e amigos
+const accounts = createAccounts();
+
+// Sala em que um socket está jogando (ou null)
+function roomOfSocket(socketId) {
+  for (const roomId of Object.keys(activeGames)) {
+    const game = activeGames[roomId];
+    if (game.players.some(p => !p.isBot && p.socketId === socketId)) return { game, roomId };
+  }
+  return null;
+}
+
+const social = createSocial(io, accounts, roomOfSocket);
+
+// Avisa os amigos de todos os humanos da sala que o status deles mudou
+function touchRoomPresence(game) {
+  game.players.forEach(p => { if (!p.isBot && p.socketId) social.presenceChanged(p.socketId); });
+}
+
+// Nome do jogador: quem tem conta joga com o nome da conta
+function resolvePlayerName(socket, playerName) {
+  const acc = socket.data.account;
+  if (acc) return accounts.displayName(acc);
+  const name = typeof playerName === 'string' ? playerName.trim().slice(0, 18) : '';
+  return name || 'Jogador Anônimo';
+}
+
+function markAccount(game, socket) {
+  const p = game.players.find(pl => pl.socketId === socket.id);
+  if (p) p.account = socket.data.account || null;
+}
+
 function generateUniqueRoomId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -43,6 +77,21 @@ function generateUniqueRoomId() {
 function broadcastState(roomId) {
   const game = activeGames[roomId];
   if (!game) return;
+
+  // Fim de partida: registra vitórias/derrotas de quem tem conta
+  if (game.state === 'game_end' && !game.statsRecorded) {
+    game.statsRecorded = true;
+    game.players.forEach(p => {
+      if (p.account && !p.isBot) accounts.recordResult(p.account, p.team === game.winner);
+    });
+  }
+
+  // Mudou a fase ou o número de jogadores: atualiza o status para os amigos
+  const presenceKey = `${game.state === 'hand_end' ? 'playing' : game.state}:${game.players.length}`;
+  if (game.presenceKey !== presenceKey) {
+    game.presenceKey = presenceKey;
+    touchRoomPresence(game);
+  }
 
   // Se o jogo terminou na mão anterior, checar transição
   if (game.state === 'hand_end') {
@@ -189,6 +238,8 @@ io.on('connection', (socket) => {
 
   let currentRoomId = null;
 
+  social.attach(socket);
+
   // Validar senha de administrador
   socket.on('validate_admin', ({ password }) => {
     if (password === ADMIN_PASSWORD) {
@@ -213,10 +264,12 @@ io.on('connection', (socket) => {
   socket.on('create_room', ({ roomName, mode, playerName, maxPoints, isPrivate }) => {
     const roomId = generateUniqueRoomId();
     
-    let finalRoomName = roomName ? roomName.trim() : '';
+    if (roomOfSocket(socket.id)) return; // já está numa sala
+    playerName = resolvePlayerName(socket, playerName);
+
+    let finalRoomName = typeof roomName === 'string' ? roomName.trim().slice(0, 20) : '';
     if (!finalRoomName) {
-      const pName = playerName ? playerName.trim() : 'Jogador Anônimo';
-      finalRoomName = `Sala de ${pName}`;
+      finalRoomName = `Sala de ${playerName}`;
     }
 
     const points = parseInt(maxPoints) || 24;
@@ -225,6 +278,7 @@ io.on('connection', (socket) => {
     game.isPrivate = !!isPrivate;
     activeGames[roomId] = game;
     game.addPlayer(socket.id, playerName, socket.id);
+    markAccount(game, socket);
 
     currentRoomId = roomId;
     socket.join(roomId);
@@ -243,6 +297,8 @@ io.on('connection', (socket) => {
 
   // Entrar na Sala
   socket.on('join_room', ({ roomId, playerName }) => {
+    if (typeof roomId !== 'string') return;
+    if (roomOfSocket(socket.id)) return; // já está numa sala
     const cleanRoomId = roomId.trim().toUpperCase();
     const game = activeGames[cleanRoomId];
 
@@ -256,7 +312,13 @@ io.on('connection', (socket) => {
       return;
     }
 
-    game.addPlayer(socket.id, playerName, socket.id);
+    if (game.state !== 'lobby') {
+      socket.emit('error_msg', 'Essa partida já começou.');
+      return;
+    }
+
+    game.addPlayer(socket.id, resolvePlayerName(socket, playerName), socket.id);
+    markAccount(game, socket);
     currentRoomId = cleanRoomId;
     socket.join(cleanRoomId);
 
@@ -372,6 +434,7 @@ io.on('connection', (socket) => {
       }
       game.players.splice(targetIdx, 1);
       game.log(`${targetPlayer.name} foi expulso da sala.`);
+      social.presenceChanged(targetPlayer.socketId);
     }
 
     broadcastState(currentRoomId);
@@ -431,6 +494,7 @@ io.on('connection', (socket) => {
     game.score[0] = 0;
     game.score[1] = 0;
     game.winner = null;
+    game.statsRecorded = false;
     game.lastHandSummary = null;
     game.dealerIndex = 0;
 
@@ -448,6 +512,11 @@ io.on('connection', (socket) => {
     console.log(`Cliente desconectado: ${socket.id}`);
     if (currentRoomId && activeGames[currentRoomId]) {
       const game = activeGames[currentRoomId];
+      // Quem abandona uma partida em andamento leva a derrota
+      const leaving = game.players.find(p => p.socketId === socket.id);
+      if (leaving && leaving.account && (game.state === 'playing' || game.state === 'hand_end')) {
+        accounts.recordResult(leaving.account, false);
+      }
       game.removePlayer(socket.id);
 
       // Se a sala ficar vazia de humanos, exclui a sala

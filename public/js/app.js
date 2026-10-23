@@ -170,6 +170,16 @@ const SUIT_MINIS = {
 // Estilo das Cartas (Tradicional ou Pixel)
 let currentDeckStyle = localStorage.getItem('truco_deck_style') || 'traditional';
 
+// Baralhos em public/decks/<nome>/<naipe>-<valor>.png (naipe: espadas, bastos, copas, ouros)
+const FILE_DECKS = ['classico', 'frances'];
+const PIXELATED_DECKS = ['pixel', 'frances'];
+const deckFile = (deck, suit, value) => `/decks/${deck}/${suit}-${value}.png`;
+const fileDeckPreviews = deck => [
+  [deckFile(deck, 'espadas', 1), deckFile(deck, 'espadas', 7), deckFile(deck, 'copas', 3)],
+  [deckFile(deck, 'bastos', 1), deckFile(deck, 'ouros', 7), deckFile(deck, 'espadas', 3)],
+  [deckFile(deck, 'ouros', 12), deckFile(deck, 'bastos', 11), deckFile(deck, 'copas', 10)]
+];
+
 const DECK_PREVIEWS = {
   traditional: [
     [
@@ -204,40 +214,63 @@ const DECK_PREVIEWS = {
       '/pixelDeck/pixelDeck/Basto/basto9.png',
       '/pixelDeck/pixelDeck/Copa/copa8.png'
     ]
-  ]
+  ],
+  classico: fileDeckPreviews('classico'),
+  frances: fileDeckPreviews('frances')
 };
+
+if (!DECK_PREVIEWS[currentDeckStyle]) currentDeckStyle = 'traditional';
 
 let currentPreviewSlideIndex = 0;
 
-function updateDeckPreview() {
+// Troca as cartas da prévia com uma virada rápida (uma carta de cada vez)
+const PREVIEW_FLIP_MS = 420;
+const PREVIEW_STAGGER_MS = 80;
+let previewFlipTimers = [];
+
+function updateDeckPreview(animate = false) {
   const slide = DECK_PREVIEWS[currentDeckStyle][currentPreviewSlideIndex];
-  if (slide) {
-    if (deckPreviewImg1) {
-      deckPreviewImg1.src = slide[0];
-      deckPreviewImg1.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
+  if (!slide) return;
+  const imgs = [deckPreviewImg1, deckPreviewImg2, deckPreviewImg3];
+  const rendering = PIXELATED_DECKS.includes(currentDeckStyle) ? 'pixelated' : 'auto';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  previewFlipTimers.forEach(clearTimeout);
+  previewFlipTimers = [];
+
+  imgs.forEach((img, i) => {
+    if (!img) return;
+    const apply = () => {
+      img.src = slide[i];
+      img.style.imageRendering = rendering;
+    };
+    if (!animate || reduceMotion) {
+      apply();
+      return;
     }
-    if (deckPreviewImg2) {
-      deckPreviewImg2.src = slide[1];
-      deckPreviewImg2.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
-    }
-    if (deckPreviewImg3) {
-      deckPreviewImg3.src = slide[2];
-      deckPreviewImg3.style.imageRendering = currentDeckStyle === 'pixel' ? 'pixelated' : 'auto';
-    }
-  }
+    new Image().src = slide[i]; // já começa a baixar a imagem nova
+    img.classList.remove('flipping');
+    void img.offsetWidth;
+    img.style.animationDelay = `${i * PREVIEW_STAGGER_MS}ms`;
+    img.classList.add('flipping');
+    // Troca a imagem quando a carta está de lado (metade da virada)
+    previewFlipTimers.push(setTimeout(apply, i * PREVIEW_STAGGER_MS + PREVIEW_FLIP_MS / 2));
+    previewFlipTimers.push(setTimeout(() => img.classList.remove('flipping'),
+      i * PREVIEW_STAGGER_MS + PREVIEW_FLIP_MS + 20));
+  });
 }
 
 if (prevPreviewBtn) {
   prevPreviewBtn.addEventListener('click', () => {
     currentPreviewSlideIndex = (currentPreviewSlideIndex - 1 + 3) % 3;
-    updateDeckPreview();
+    updateDeckPreview(true);
   });
 }
 
 if (nextPreviewBtn) {
   nextPreviewBtn.addEventListener('click', () => {
     currentPreviewSlideIndex = (currentPreviewSlideIndex + 1) % 3;
-    updateDeckPreview();
+    updateDeckPreview(true);
   });
 }
 
@@ -258,7 +291,7 @@ deckOptions.forEach(btn => {
     btn.classList.add('active');
     currentDeckStyle = btn.dataset.deck;
     localStorage.setItem('truco_deck_style', currentDeckStyle);
-    updateDeckPreview();
+    updateDeckPreview(true);
     updateBodyDeckStyle();
   });
 });
@@ -1018,6 +1051,10 @@ function getSuitFolder(suit) {
 }
 
 function getCardImgSrc(card) {
+  if (FILE_DECKS.includes(currentDeckStyle)) {
+    const suit = card.suit === 'paus' ? 'bastos' : card.suit;
+    return deckFile(currentDeckStyle, suit, card.value);
+  }
   if (currentDeckStyle === 'pixel') {
     let suitFolder = '';
     let imgPrefix = '';

@@ -60,6 +60,19 @@ Certifique-se de ter o **Node.js** (versão 16 ou superior) instalado em sua má
    http://localhost:3000
    ```
 
+### Contas de jogador e amigos
+
+Os jogadores podem criar conta (ou jogar como convidado), adicionar amigos e convidá-los para a sala.
+Onde as contas ficam salvas depende de uma variável de ambiente:
+
+- **Sem `DATABASE_URL`**: as contas ficam no arquivo `data/users.json` (ou em `DATA_DIR/users.json`).
+  Bom para rodar localmente.
+- **Com `DATABASE_URL`**: as contas ficam num banco **Postgres** (por exemplo Neon, Supabase ou o
+  Postgres do Render). A tabela `truco_users` é criada sozinha na primeira vez.
+
+> Em hospedagens com disco temporário, como o plano grátis do Render, o arquivo `data/users.json`
+> é apagado a cada reinício. Nesses casos configure `DATABASE_URL` para não perder as contas.
+
 ---
 
 ## 🧪 Rodando os Testes do Motor do Jogo
