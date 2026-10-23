@@ -749,8 +749,10 @@ function renderGameScreen(gameState) {
       prevPlayedCardsCount = currentPlayedCount;
     }
   } else if ((gameState.state === 'hand_end' || gameState.state === 'game_end') && gameState.lastHandSummary) {
-    // Fim de mão ou de jogo: manter as cartas jogadas na mesa para visualização e mostrar resultado
-    renderPlayedCards(gameState.lastHandSummary.playedCards, gameState.players);
+    // Fim de mão ou de jogo: manter as cartas jogadas na mesa para visualização e mostrar resultado.
+    // Quem ganhou Envido/Flor coloca na mesa as cartas que faltam para provar os pontos.
+    const proofPlays = (gameState.lastHandSummary.proofCards || []).map(pc => ({ ...pc, proof: true }));
+    renderPlayedCards(gameState.lastHandSummary.playedCards.concat(proofPlays), gameState.players);
 
     // Limpar mão local do jogador
     playerHand.innerHTML = '';
@@ -1230,7 +1232,7 @@ function renderPlayedCards(playedCards, players, gameState) {
     if (slot) {
       const card = play.card;
       const round = play.round; // 0, 1 ou 2
-      const key = `${playerIdx}-${round}-${card.value}-${card.suit}`;
+      const key = `${play.proof ? 'p' : ''}${playerIdx}-${round}-${card.value}-${card.suit}`;
       wanted.add(key);
 
       if (slot.querySelector(`.played-card[data-key="${key}"]:not(.leaving)`)) return; // já está na mesa
@@ -1257,6 +1259,14 @@ function renderPlayedCards(playedCards, players, gameState) {
       cardEl.dataset.player = playerIdx;
 
       cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
+
+      // Carta mostrada para provar o Envido/Flor
+      if (play.proof) {
+        cardEl.classList.add('proof-card', `proof-${play.kind}`);
+        cardEl.style.setProperty('--enter-y', '0%');
+        const label = play.kind === 'flor' ? 'Flor' : 'Envido';
+        cardEl.insertAdjacentHTML('beforeend', `<span class="proof-tag">${label} ${play.score}</span>`);
+      }
       cardEl.addEventListener('animationend', () => cardEl.classList.remove('entering'), { once: true });
       slot.appendChild(cardEl);
     }

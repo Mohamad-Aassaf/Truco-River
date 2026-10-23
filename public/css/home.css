@@ -1,6 +1,152 @@
 /* public/css/home.css
    Tela inicial: enfeites animados, conta, amigos, avisos e regras.
+   Também: baralhos extras e a janela dos pontos do Envido/Flor.
    Usa os tokens de cor do style.css (carregado antes). */
+
+/* --- Pontos do Envido/Flor aceitos --- */
+.reveal-card {
+  max-width: 380px;
+  padding: 22px 22px 20px;
+  text-align: center;
+  border-color: var(--gold);
+  box-shadow: var(--shadow-2), 0 0 0 4px rgba(223, 177, 91, 0.12), 0 0 40px rgba(223, 177, 91, 0.15);
+}
+
+#modal-reveal.is-flor .reveal-card {
+  border-color: #c39bd3;
+  box-shadow: var(--shadow-2), 0 0 0 4px rgba(155, 89, 182, 0.18), 0 0 40px rgba(155, 89, 182, 0.2);
+}
+
+.reveal-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+}
+
+#modal-reveal.is-flor .reveal-kind {
+  color: #fff;
+  background: linear-gradient(180deg, #a569bd, #7d3c98);
+}
+
+.reveal-head h2 {
+  margin: 10px 0 16px;
+  font-family: var(--font-title);
+  font-size: 1.15rem;
+  color: var(--gold);
+}
+
+.reveal-lines {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reveal-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--team-them);
+  animation: fadeUp 0.35s ease both;
+  animation-delay: calc(var(--i, 0) * 450ms + 150ms);
+}
+
+.reveal-line.team-us { border-left-color: var(--team-us); }
+.reveal-line.winner { border-color: rgba(223, 177, 91, 0.5); background: rgba(223, 177, 91, 0.1); }
+.reveal-line.team-us.winner { border-left-color: var(--team-us); }
+.reveal-line.team-them.winner { border-left-color: var(--team-them); }
+
+.reveal-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--cream);
+  text-align: left;
+}
+
+.reveal-name i { color: var(--gold); margin-right: 6px; }
+.reveal-name small { color: var(--text-muted); font-weight: 600; }
+
+.reveal-score {
+  font-family: var(--font-title);
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--gold-bright);
+  animation: numberPop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation-delay: inherit;
+}
+
+.reveal-hidden {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.reveal-result {
+  margin: 16px 0 16px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  animation: fadeUp 0.35s ease both;
+  animation-delay: calc(var(--i, 1) * 450ms + 150ms);
+}
+
+.reveal-result.us { color: #7ee2a8; }
+.reveal-result.them { color: #ff8a7a; }
+
+.reveal-ok { min-width: 140px; }
+
+/* Cartas mostradas na mesa para provar o Envido/Flor */
+.played-card.proof-card {
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 0 2px rgba(240, 201, 110, 0.55), 0 0 18px rgba(240, 201, 110, 0.45), 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+
+.played-card.proof-flor {
+  border-color: #d2b4de;
+  box-shadow: 0 0 0 2px rgba(187, 143, 206, 0.6), 0 0 18px rgba(155, 89, 182, 0.5), 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+
+.proof-tag {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 2px;
+  font-size: clamp(0.5rem, calc(var(--slot-w, 80px) * 0.11), 0.75rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+}
+
+.proof-flor .proof-tag {
+  color: #fff;
+  background: linear-gradient(180deg, #a569bd, #7d3c98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-line,
+  .reveal-score,
+  .reveal-result { animation: none; }
+}
 
 /* --- Naipes flutuando ao fundo do lobby --- */
 .lobby-bg-suits {
@@ -1352,4 +1498,15 @@ body[data-deck-style="frances"] .mini-card-badge.hidden-card {
 @media (prefers-reduced-motion: reduce) {
   .deck-preview-cards,
   .preview-card-img.flipping { animation: none; }
+}
+
+/* Resultado da mão no celular: o texto cabe sem cortar no meio */
+@media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
+  #game-alert-text > div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #game-alert-text > div:first-child { font-size: 1rem !important; }
+  #game-alert-text > div + div { font-size: 0.68rem !important; margin-top: 2px !important; }
 }

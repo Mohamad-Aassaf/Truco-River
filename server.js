@@ -93,6 +93,9 @@ function broadcastState(roomId) {
     touchRoomPresence(game);
   }
 
+  // Envido/Flor aceito: os bots esperam todos lerem os pontos (botão OK)
+  startRevealPause(game);
+
   // Se o jogo terminou na mão anterior, checar transição
   if (game.state === 'hand_end') {
     // Dispara temporizador para iniciar nova mão após 5 segundos
@@ -107,10 +110,36 @@ function broadcastState(roomId) {
   });
 }
 
+// Pausa depois de cantar os pontos do Envido/Flor: o jogo só segue (bots) quando
+// todos os humanos apertam OK, ou depois de REVEAL_MAX_MS
+const REVEAL_MAX_MS = 15000;
+function startRevealPause(game) {
+  const reveal = game.hand && game.hand.reveal;
+  if (!reveal || game.lastPausedRevealId === reveal.id) return;
+  game.lastPausedRevealId = reveal.id;
+  const pending = new Set(game.players.filter(p => !p.isBot && p.socketId).map(p => p.socketId));
+  game.revealPause = pending.size ? { id: reveal.id, pending, until: Date.now() + REVEAL_MAX_MS } : null;
+}
+
+// true enquanto alguém ainda está lendo os pontos
+function revealPaused(game) {
+  const pause = game.revealPause;
+  if (!pause) return false;
+  if (pause.pending.size === 0 || Date.now() >= pause.until) {
+    game.revealPause = null;
+    return false;
+  }
+  return true;
+}
+
 // Controla a transição automática de nova mão
 const nextHandTimers = {};
 function scheduleNextHand(roomId) {
   if (nextHandTimers[roomId]) return;
+  const ended = activeGames[roomId];
+  // Com cartas para provar o envido/flor, a mesa fica um pouco mais
+  const proofs = ended && ended.lastHandSummary && ended.lastHandSummary.proofCards;
+  const delay = proofs && proofs.length ? 8000 : 5000;
 
   nextHandTimers[roomId] = setTimeout(() => {
     delete nextHandTimers[roomId];
@@ -120,7 +149,7 @@ function scheduleNextHand(roomId) {
       broadcastState(roomId);
       runBotLogic(roomId);
     }
-  }, 5000);
+  }, delay);
 }
 
 // Executa ações dos jogadores (humanos ou bots)
@@ -190,6 +219,15 @@ function runBotLogic(roomId) {
   const game = activeGames[roomId];
   if (!game || game.state !== 'playing' || !game.hand) return;
 
+  // Alguém ainda está lendo os pontos do Envido/Flor: tenta de novo quando acabar o prazo
+  if (revealPaused(game)) {
+    botTimers[roomId] = setTimeout(() => {
+      delete botTimers[roomId];
+      runBotLogic(roomId);
+    }, Math.max(50, game.revealPause.until - Date.now()));
+    return;
+  }
+
   // Encontra se algum bot precisa agir
   let activeBotIdx = -1;
 
@@ -220,6 +258,7 @@ function runBotLogic(roomId) {
       delete botTimers[roomId];
       const g = activeGames[roomId];
       if (!g || g.state !== 'playing' || !g.hand) return;
+      if (revealPaused(g)) return runBotLogic(roomId);
 
       const decision = bot.handleBotAction(g, activeBotIdx);
       if (decision) {
@@ -472,6 +511,18 @@ io.on('connection', (socket) => {
   });
 
   // Enviar mensagem de chat no lobby
+  // Jogador apertou OK na janela dos pontos do Envido/Flor
+  socket.on('reveal_ack', (data) => {
+    const game = activeGames[currentRoomId];
+    const pause = game && game.revealPause;
+    if (!pause || !data || data.id !== pause.id) return;
+    pause.pending.delete(socket.id);
+    if (pause.pending.size === 0) {
+      game.revealPause = null;
+      runBotLogic(currentRoomId);
+    }
+  });
+
   socket.on('send_chat', (msg) => {
     const game = activeGames[currentRoomId];
     if (game && msg.trim()) {

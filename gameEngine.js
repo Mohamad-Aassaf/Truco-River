@@ -86,6 +86,21 @@ function calculateEnvidoScore(cards) {
   return maxScore;
 }
 
+// Cartas que formam o envido (as que precisam ser mostradas no fim da mão):
+// o par do mesmo naipe que dá mais pontos ou, sem par, a carta mais alta
+function envidoProofCards(cards) {
+  let best = null;
+  for (let i = 0; i < cards.length; i++) {
+    for (let j = i + 1; j < cards.length; j++) {
+      if (cards[i].suit !== cards[j].suit) continue;
+      const score = 20 + cards[i].envidoPoints + cards[j].envidoPoints;
+      if (!best || score > best.score) best = { score, cards: [cards[i], cards[j]] };
+    }
+  }
+  if (best) return best.cards;
+  return [cards.reduce((a, b) => (b.envidoPoints > a.envidoPoints ? b : a))];
+}
+
 // Calcula os pontos da flor
 function calculateFlorScore(cards) {
   if (cards[0].suit === cards[1].suit && cards[1].suit === cards[2].suit) {
@@ -108,6 +123,50 @@ class TrucoGame { // TRUCO GURIZINHO
     // Estado da rodada/mão atual
     this.dealerIndex = 0;
     this.hand = null;
+    this.revealSeq = 0; // id de cada "cantar os pontos" (envido/flor aceitos)
+  }
+
+  // Cantar os pontos depois de um Envido/Flor aceito.
+  // A partir do mão, quem está perdendo canta os pontos se tiver mais; se não tiver,
+  // diz "São boas" sem revelar. Parceiros de quem está ganhando não precisam cantar.
+  // Empate: ganha quem está mais perto do mão.
+  declarePoints(eligible, scoreOf) {
+    const order = [];
+    for (let i = 0; i < this.maxPlayers; i++) {
+      const idx = (this.hand.mão + i) % this.maxPlayers;
+      if (this.players[idx] && eligible(idx)) order.push(idx);
+    }
+    const pos = idx => order.indexOf(idx);
+    const decided = new Set();
+    const lines = [];
+    let best = -1;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const idx of order) {
+        if (decided.has(idx)) continue;
+        if (best !== -1 && this.players[idx].team === this.players[best].team) continue;
+        const score = scoreOf(idx);
+        const wins = best === -1 || score > scoreOf(best) || (score === scoreOf(best) && pos(idx) < pos(best));
+        decided.add(idx);
+        changed = true;
+        lines.push({ playerIdx: idx, name: this.players[idx].name, team: this.players[idx].team, score: wins ? score : null });
+        if (wins) best = idx;
+      }
+    }
+    return { winnerIdx: best, lines };
+  }
+
+  // Guarda as cartas que alguém vai ter que mostrar no fim da mão
+  addProof(playerIdx, kind, score, cards) {
+    if (!this.hand.proofs) this.hand.proofs = [];
+    if (this.hand.proofs.some(p => p.playerIdx === playerIdx && p.kind === kind)) return;
+    this.hand.proofs.push({ playerIdx, kind, score, cards: JSON.parse(JSON.stringify(cards)) });
+  }
+
+  addFlorProof(playerIdx) {
+    const p = this.players[playerIdx];
+    if (p && p.hasFlor) this.addProof(playerIdx, 'flor', p.florScore, this.hand.originalHands[playerIdx]);
   }
 
   log(message, team = null) {
@@ -555,28 +614,27 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   resolveEnvido() {
-    // Determinar o maior Envido
-    // Em caso de empate, vence quem for "Mão" ou o mais próximo do "Mão" no sentido horário (ordem de jogo)
-    let bestPlayerIdx = -1;
-    let bestScore = -1;
-
-    // Percorre em ordem de jogo a partir do Mão
-    for (let i = 0; i < this.maxPlayers; i++) {
-      const idx = (this.hand.mão + i) % this.maxPlayers;
-      const p = this.players[idx];
-
-      // Jogador com Flor não participa da disputa do Envido
-      if (p.hasFlor) continue;
-
-      if (p.envidoScore > bestScore) {
-        bestScore = p.envidoScore;
-        bestPlayerIdx = idx;
-      }
-    }
+    // Cada um canta os pontos em ordem a partir do Mão (quem tem Flor não participa)
+    const { winnerIdx, lines } = this.declarePoints(
+      idx => !this.players[idx].hasFlor && !this.isFolded(idx),
+      idx => this.players[idx].envidoScore
+    );
+    const bestPlayerIdx = winnerIdx;
+    const bestScore = winnerIdx !== -1 ? this.players[winnerIdx].envidoScore : -1;
 
     if (bestPlayerIdx !== -1) {
       const winner = this.players[bestPlayerIdx];
       const points = this.hand.envidoPointsAtStake;
+
+      this.hand.reveal = {
+        id: ++this.revealSeq,
+        kind: 'envido',
+        lines,
+        winnerIdx: bestPlayerIdx,
+        winnerTeam: winner.team,
+        tentos: points
+      };
+      this.addProof(bestPlayerIdx, 'envido', bestScore, envidoProofCards(this.hand.originalHands[bestPlayerIdx]));
 
       this.log(`Disputa de Envido vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
       this.score[winner.team] += points;
@@ -651,6 +709,8 @@ class TrucoGame { // TRUCO GURIZINHO
 
       this.score[team] += points;
       this.log(`Flor não contestada. Time ${team} ganha ${points} ponto(s).`);
+      this.addFlorProof(playerIdx);
+      if (points === 4) this.addFlorProof(partnerIdx);
       this.hand.florState = 'resolved';
       this.hand.canCallEnvido = false;
       this.checkGameWinner();
@@ -713,6 +773,7 @@ class TrucoGame { // TRUCO GURIZINHO
 
       this.log(`Contra-Flor recusada. Time ${opponentTeam} ganha ${pointsWon} ponto(s).`);
       this.score[opponentTeam] += pointsWon;
+      this.hand.florCallers.filter(i => this.players[i].team === opponentTeam).forEach(i => this.addFlorProof(i));
       this.hand.canCallEnvido = false;
       this.checkGameWinner();
     }
@@ -721,21 +782,26 @@ class TrucoGame { // TRUCO GURIZINHO
 
   resolveFlor() {
     // Determinar o maior placar de Flor entre todos que têm Flor
-    let bestPlayerIdx = -1;
-    let bestScore = -1;
-
-    for (let i = 0; i < this.maxPlayers; i++) {
-      const idx = (this.hand.mão + i) % this.maxPlayers;
-      const p = this.players[idx];
-      if (p.hasFlor && p.florScore > bestScore) {
-        bestScore = p.florScore;
-        bestPlayerIdx = idx;
-      }
-    }
+    const { winnerIdx, lines } = this.declarePoints(
+      idx => this.players[idx].hasFlor && !this.isFolded(idx),
+      idx => this.players[idx].florScore
+    );
+    const bestPlayerIdx = winnerIdx;
+    const bestScore = winnerIdx !== -1 ? this.players[winnerIdx].florScore : -1;
 
     if (bestPlayerIdx !== -1) {
       const winner = this.players[bestPlayerIdx];
       const points = this.hand.florPointsAtStake;
+
+      this.hand.reveal = {
+        id: ++this.revealSeq,
+        kind: 'flor',
+        lines,
+        winnerIdx: bestPlayerIdx,
+        winnerTeam: winner.team,
+        tentos: points
+      };
+      this.addFlorProof(bestPlayerIdx);
 
       this.log(`Disputa de Flor vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
       this.score[winner.team] += points;
@@ -971,7 +1037,9 @@ class TrucoGame { // TRUCO GURIZINHO
       roundWinners: this.hand.roundWinners,
       winnerTeam,
       pointsWon: points,
-      voiceBubble: { ...this.hand.voiceBubble }
+      voiceBubble: { ...this.hand.voiceBubble },
+      reveal: this.hand.reveal || null,
+      proofCards: this.buildProofCards()
     };
 
     // Verificar fim do jogo
@@ -985,6 +1053,27 @@ class TrucoGame { // TRUCO GURIZINHO
 
     // Delay para iniciar próxima mão de forma limpa (gerenciado no server.js)
     this.state = 'hand_end';
+  }
+
+  // Cartas para provar o Envido/Flor no fim da mão: só as que ainda não foram
+  // jogadas, nas colunas de rodada que o jogador deixou livres
+  buildProofCards() {
+    const out = [];
+    (this.hand.proofs || []).forEach(proof => {
+      const plays = this.hand.playedCards.filter(pl => pl.playerIdx === proof.playerIdx);
+      const usedRounds = new Set(plays.map(pl => pl.round));
+      out.filter(c => c.playerIdx === proof.playerIdx).forEach(c => usedRounds.add(c.round));
+      const same = (a, b) => a.value === b.value && a.suit === b.suit;
+      const alreadyShown = card => plays.some(pl => same(pl.card, card))
+        || out.some(c => c.playerIdx === proof.playerIdx && same(c.card, card));
+      proof.cards.filter(card => !alreadyShown(card)).forEach(card => {
+        let round = 0;
+        while (usedRounds.has(round)) round++;
+        usedRounds.add(round);
+        out.push({ playerIdx: proof.playerIdx, card, round, kind: proof.kind, score: proof.score });
+      });
+    });
+    return out;
   }
 
   checkGameWinner() {
@@ -1042,14 +1131,18 @@ class TrucoGame { // TRUCO GURIZINHO
       mode: this.mode,
       maxPoints: this.maxPoints || 24,
       maxPlayers: this.maxPlayers,
-      players: this.players.map(p => ({
-        id: p.id,
-        name: p.name,
-        isBot: p.isBot,
-        team: p.team,
-        hasFlor: p.hasFlor,
-        envidoScore: p.envidoScore, // Mostrado apenas no final ou disputa resolvida
-      })),
+      // Pontos de envido e flor só vão para o próprio jogador e o parceiro
+      players: this.players.map((p, idx) => {
+        const own = idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team);
+        return {
+          id: p.id,
+          name: p.name,
+          isBot: p.isBot,
+          team: p.team,
+          hasFlor: own ? p.hasFlor : undefined,
+          envidoScore: own ? p.envidoScore : undefined
+        };
+      }),
       score: this.score,
       state: this.state,
       winner: this.winner,
@@ -1094,6 +1187,9 @@ class TrucoGame { // TRUCO GURIZINHO
         florPendingTeam: this.hand.florPendingTeam,
         florChant: this.hand.florChant,
         florWinnerInfo: this.hand.florWinnerInfo,
+
+        // Pontos cantados no último Envido/Flor aceito
+        reveal: this.hand.reveal || null,
 
         // Folds, pés (quem controla o Envido no 2v2) e voice
         foldedPlayers: Array.from(this.hand.foldedPlayers),
