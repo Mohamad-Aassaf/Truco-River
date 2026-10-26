@@ -285,7 +285,7 @@
     }
     if (typeof initAudioContext === 'function') initAudioContext();
     closeModal('modal-friends');
-    socket.emit('join_room', { roomId, playerName: usernameInput.value.trim() || 'Jogador Anônimo' });
+    socket.emit('join_room', { roomId, playerName: usernameInput.value.trim() || 'Jogador Anônimo', clientId: CLIENT_ID });
   }
 
   function avatarHtml(name, extraClass = '') {

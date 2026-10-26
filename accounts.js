@@ -144,6 +144,10 @@ function createAccounts(options = {}) {
       users = u || {};
       loaded = true;
       console.log(`Contas carregadas (${store.kind}): ${Object.keys(users).length}`);
+      if (store.kind === 'arquivo' && process.env.RENDER) {
+        console.warn('ATENÇÃO: contas salvas em arquivo no Render. O disco do Render é apagado a cada reinício,'
+          + ' então as contas vão sumir. Configure a variável DATABASE_URL com um banco Postgres.');
+      }
       resolve();
     }).catch(err => {
       console.error(`Erro ao carregar contas (${store.kind}), tentando de novo em 5s:`, err.message);
@@ -336,6 +340,8 @@ function createAccounts(options = {}) {
   return {
     ready,
     store,
+    isLoaded: () => loaded,
+    count: () => Object.keys(users).length,
     key,
     get,
     publicUser,

@@ -20,7 +20,9 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'mateusraeder'; // Senha de administrador de sua escolha
+// Senha do painel admin: só pela variável de ambiente ADMIN_PASSWORD (o repositório
+// é público, então a senha não fica no código). Sem a variável, o painel fica desligado.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 // Servir arquivos estáticos da pasta public
 app.use(express.static(path.join(__dirname, 'public')));
@@ -31,6 +33,18 @@ const activeGames = {};
 
 // Contas e amigos
 const accounts = createAccounts();
+
+// Diagnóstico: onde as contas estão sendo salvas (sem dados pessoais)
+app.get('/api/status', (req, res) => {
+  res.json({
+    ok: true,
+    armazenamentoContas: accounts.store.kind,
+    contasPersistentes: accounts.store.kind === 'postgres',
+    contasCarregadas: accounts.isLoaded(),
+    totalContas: accounts.count(),
+    salasAtivas: Object.keys(activeGames).length
+  });
+});
 
 // Sala em que um socket está jogando (ou null)
 function roomOfSocket(socketId) {
@@ -58,7 +72,57 @@ function resolvePlayerName(socket, playerName) {
 
 function markAccount(game, socket) {
   const p = game.players.find(pl => pl.socketId === socket.id);
-  if (p) p.account = socket.data.account || null;
+  if (p) {
+    p.account = socket.data.account || null;
+    p.clientId = socket.data.clientId || null;
+  }
+}
+
+// Salas públicas para a lista do lobby
+function listRooms() {
+  return Object.keys(activeGames)
+    .filter(id => !activeGames[id].isPrivate)
+    .map(id => ({
+      id,
+      roomName: activeGames[id].roomName || id,
+      mode: activeGames[id].mode,
+      playersCount: activeGames[id].players.length,
+      maxPlayers: activeGames[id].maxPlayers
+    }));
+}
+
+// Identificador do navegador (guardado no localStorage do jogador) para voltar à partida
+function cleanClientId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9-]{16,64}$/.test(id) ? id : null;
+}
+
+// Quem fecha a aba ou cai a conexão tem este tempo para voltar à mesma partida
+const RECONNECT_MS = Number(process.env.RECONNECT_MS) || 30000;
+
+// Tira um jogador da sala de vez (saiu, foi expulso ou não voltou a tempo)
+function removeFromRoom(roomId, socketId) {
+  const game = activeGames[roomId];
+  if (!game) return;
+  const leaving = game.players.find(p => p.socketId === socketId);
+  if (!leaving) return;
+  if (leaving.reconnectTimer) clearTimeout(leaving.reconnectTimer);
+
+  // Quem abandona uma partida em andamento leva a derrota
+  if (leaving.account && (game.state === 'playing' || game.state === 'hand_end')) {
+    accounts.recordResult(leaving.account, false);
+  }
+  game.removePlayer(socketId);
+
+  // Se a sala ficar vazia de humanos, exclui a sala
+  const humanCount = game.players.filter(p => !p.isBot).length;
+  if (humanCount === 0) {
+    delete activeGames[roomId];
+    console.log(`Sala ${roomId} vazia deletada.`);
+  } else {
+    broadcastState(roomId);
+    runBotLogic(roomId);
+  }
+  io.emit('available_rooms', listRooms());
 }
 
 function generateUniqueRoomId() {
@@ -251,7 +315,9 @@ function runBotLogic(roomId) {
   }
 
   if (activeBotIdx !== -1) {
-    // Simula tempo de pensamento
+    // Simula tempo de pensamento: responder aposta demora um pouco mais que jogar carta
+    const h = game.hand;
+    const botDelay = (h.trucoResponsePending || h.envidoResponsePending || h.florResponsePending) ? 1300 : 900;
     botTimers[roomId] = setTimeout(() => {
       delete botTimers[roomId];
       const g = activeGames[roomId];
@@ -265,7 +331,7 @@ function runBotLogic(roomId) {
         // Chama recursivamente para tratar outras ações em sequência (ex: outro bot jogar)
         runBotLogic(roomId);
       }
-    }, 1500);
+    }, botDelay);
   }
 }
 
@@ -279,7 +345,7 @@ io.on('connection', (socket) => {
 
   // Validar senha de administrador
   socket.on('validate_admin', ({ password }) => {
-    if (password === ADMIN_PASSWORD) {
+    if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
       socket.isAdmin = true;
       socket.emit('admin_validated');
     } else {
@@ -288,20 +354,13 @@ io.on('connection', (socket) => {
   });
 
   // Envia salas disponíveis ao conectar
-  socket.emit('available_rooms', Object.keys(activeGames)
-    .filter(id => !activeGames[id].isPrivate)
-    .map(id => ({
-      id,
-      mode: activeGames[id].mode,
-      playersCount: activeGames[id].players.length,
-      maxPlayers: activeGames[id].maxPlayers
-    })));
+  socket.emit('available_rooms', listRooms());
 
   // Criar Sala
-  socket.on('create_room', ({ roomName, mode, playerName, maxPoints, isPrivate }) => {
-    const roomId = generateUniqueRoomId();
-    
+  socket.on('create_room', ({ roomName, mode, playerName, maxPoints, isPrivate, clientId }) => {
     if (roomOfSocket(socket.id)) return; // já está numa sala
+    socket.data.clientId = cleanClientId(clientId);
+    const roomId = generateUniqueRoomId();
     playerName = resolvePlayerName(socket, playerName);
 
     let finalRoomName = typeof roomName === 'string' ? roomName.trim().slice(0, 20) : '';
@@ -321,21 +380,14 @@ io.on('connection', (socket) => {
     socket.join(roomId);
 
     broadcastState(roomId);
-    io.emit('available_rooms', Object.keys(activeGames)
-      .filter(id => !activeGames[id].isPrivate)
-      .map(id => ({
-        id,
-        roomName: activeGames[id].roomName || id,
-        mode: activeGames[id].mode,
-        playersCount: activeGames[id].players.length,
-        maxPlayers: activeGames[id].maxPlayers
-      })));
+    io.emit('available_rooms', listRooms());
   });
 
   // Entrar na Sala
-  socket.on('join_room', ({ roomId, playerName }) => {
+  socket.on('join_room', ({ roomId, playerName, clientId }) => {
     if (typeof roomId !== 'string') return;
     if (roomOfSocket(socket.id)) return; // já está numa sala
+    socket.data.clientId = cleanClientId(clientId);
     const cleanRoomId = roomId.trim().toUpperCase();
     const game = activeGames[cleanRoomId];
 
@@ -360,14 +412,7 @@ io.on('connection', (socket) => {
     socket.join(cleanRoomId);
 
     broadcastState(cleanRoomId);
-    io.emit('available_rooms', Object.keys(activeGames)
-      .filter(id => !activeGames[id].isPrivate)
-      .map(id => ({
-        id,
-        mode: activeGames[id].mode,
-        playersCount: activeGames[id].players.length,
-        maxPlayers: activeGames[id].maxPlayers
-      })));
+    io.emit('available_rooms', listRooms());
   });
 
   // Adicionar Bot
@@ -475,15 +520,7 @@ io.on('connection', (socket) => {
     }
 
     broadcastState(currentRoomId);
-    io.emit('available_rooms', Object.keys(activeGames)
-      .filter(id => !activeGames[id].isPrivate)
-      .map(id => ({
-        id,
-        roomName: activeGames[id].roomName || id,
-        mode: activeGames[id].mode,
-        playersCount: activeGames[id].players.length,
-        maxPlayers: activeGames[id].maxPlayers
-      })));
+    io.emit('available_rooms', listRooms());
   });
 
   // Ações de jogo enviadas do cliente
@@ -556,36 +593,66 @@ io.on('connection', (socket) => {
     broadcastState(currentRoomId);
   });
 
-  // Desconexão
+  // Sair da sala de propósito (botão Abandonar): sai na hora, sem esperar
+  socket.on('leave_room', (data, cb) => {
+    if (currentRoomId) removeFromRoom(currentRoomId, socket.id);
+    currentRoomId = null;
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
+  // Voltar para a partida depois de fechar a aba ou cair a conexão
+  socket.on('rejoin', (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    const clientId = cleanClientId(data && data.clientId);
+    if (!clientId || roomOfSocket(socket.id)) return reply({ ok: false });
+
+    for (const roomId of Object.keys(activeGames)) {
+      const game = activeGames[roomId];
+      const p = game.players.find(pl => !pl.isBot && pl.clientId === clientId && pl.disconnected);
+      if (!p) continue;
+
+      clearTimeout(p.reconnectTimer);
+      p.reconnectTimer = null;
+      p.disconnected = false;
+      const oldSocketId = p.socketId;
+      p.socketId = socket.id;
+      p.id = socket.id;
+      if (game.revealPause && game.revealPause.pending.delete(oldSocketId)) game.revealPause.pending.add(socket.id);
+
+      socket.data.clientId = clientId;
+      currentRoomId = roomId;
+      socket.join(roomId);
+      game.log(`${p.name} voltou para a partida.`, p.team);
+      console.log(`${p.name} voltou para a sala ${roomId}`);
+
+      broadcastState(roomId);
+      runBotLogic(roomId);
+      return reply({ ok: true, roomId });
+    }
+    reply({ ok: false });
+  });
+
+  // Desconexão: o lugar fica guardado por RECONNECT_MS para o jogador voltar
   socket.on('disconnect', () => {
     console.log(`Cliente desconectado: ${socket.id}`);
-    if (currentRoomId && activeGames[currentRoomId]) {
-      const game = activeGames[currentRoomId];
-      // Quem abandona uma partida em andamento leva a derrota
-      const leaving = game.players.find(p => p.socketId === socket.id);
-      if (leaving && leaving.account && (game.state === 'playing' || game.state === 'hand_end')) {
-        accounts.recordResult(leaving.account, false);
-      }
-      game.removePlayer(socket.id);
+    const roomId = currentRoomId;
+    const game = roomId && activeGames[roomId];
+    if (!game) return;
+    const p = game.players.find(pl => pl.socketId === socket.id);
+    if (!p) return;
 
-      // Se a sala ficar vazia de humanos, exclui a sala
-      const humanCount = game.players.filter(p => !p.isBot).length;
-      if (humanCount === 0) {
-        delete activeGames[currentRoomId];
-        console.log(`Sala ${currentRoomId} vazia deletada.`);
-      } else {
-        broadcastState(currentRoomId);
-      }
-
-      io.emit('available_rooms', Object.keys(activeGames)
-        .filter(id => !activeGames[id].isPrivate)
-        .map(id => ({
-          id,
-          mode: activeGames[id].mode,
-          playersCount: activeGames[id].players.length,
-          maxPlayers: activeGames[id].maxPlayers
-        })));
+    if (!p.clientId) {
+      removeFromRoom(roomId, socket.id);
+      return;
     }
+
+    p.disconnected = true;
+    game.log(`${p.name} caiu. Esperando ${RECONNECT_MS / 1000}s para voltar...`, p.team);
+    p.reconnectTimer = setTimeout(() => {
+      p.reconnectTimer = null;
+      if (p.disconnected && activeGames[roomId]) removeFromRoom(roomId, p.socketId);
+    }, RECONNECT_MS);
+    broadcastState(roomId);
   });
 });
 

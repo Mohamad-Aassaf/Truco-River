@@ -73,6 +73,14 @@ Onde as contas ficam salvas depende de uma variável de ambiente:
 > Em hospedagens com disco temporário, como o plano grátis do Render, o arquivo `data/users.json`
 > é apagado a cada reinício. Nesses casos configure `DATABASE_URL` para não perder as contas.
 
+Para conferir onde as contas estão sendo salvas, abra `/api/status` no servidor
+(ex.: `https://truco-river.onrender.com/api/status`): `contasPersistentes: true` indica Postgres.
+
+### Painel admin
+
+A senha do painel admin vem da variável de ambiente `ADMIN_PASSWORD` (ela não fica no código,
+porque o repositório é público). Sem essa variável o painel fica desligado.
+
 ---
 
 ## 🧪 Rodando os Testes do Motor do Jogo

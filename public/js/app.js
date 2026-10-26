@@ -1,9 +1,46 @@
 // public/js/app.js
 // Controlador do Cliente para o Truco Gaúcho
 
-const socket = window.location.hostname.includes('vercel.app')
-  ? io('https://truco-river.onrender.com')
-  : io();
+// WebSocket direto (sem começar por long-polling): as jogadas chegam mais rápido.
+// Se a rede bloquear WebSocket, a próxima tentativa usa polling.
+const socket = io(window.location.hostname.includes('vercel.app') ? 'https://truco-river.onrender.com' : undefined, {
+  transports: ['websocket', 'polling']
+});
+socket.on('connect_error', () => {
+  socket.io.opts.transports = ['polling', 'websocket'];
+});
+
+// Identificador deste navegador: permite voltar para a mesma partida
+// se a aba fechar ou a conexão cair (o servidor guarda o lugar por 30s)
+const CLIENT_ID = (() => {
+  const KEY = 'truco_client_id';
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id || !/^[A-Za-z0-9-]{16,64}$/.test(id)) {
+      id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+        : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch (e) {
+    return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  }
+})();
+
+// Ao conectar (ou reconectar), tenta voltar para a partida em andamento
+socket.on('connect', () => {
+  socket.emit('rejoin', { clientId: CLIENT_ID }, res => {
+    if (res && res.ok) console.log('Voltou para a partida', res.roomId);
+  });
+});
+
+// Sair da sala de propósito: avisa o servidor (sem esperar os 30s) e recarrega
+function leaveRoomAndReload() {
+  let done = false;
+  const go = () => { if (!done) { done = true; window.location.reload(); } };
+  socket.emit('leave_room', {}, go);
+  setTimeout(go, 800);
+}
 
 // Elementos da Interface
 const screenLobby = document.getElementById('screen-lobby');
@@ -397,7 +434,8 @@ document.getElementById('create-room-btn').addEventListener('click', () => {
     mode: selectedRoomMode,
     playerName: name,
     maxPoints: selectedRoomPoints,
-    isPrivate: selectedRoomPrivacy
+    isPrivate: selectedRoomPrivacy,
+    clientId: CLIENT_ID
   });
 });
 
@@ -414,7 +452,8 @@ document.getElementById('join-room-btn').addEventListener('click', () => {
 
   socket.emit('join_room', {
     roomId: code,
-    playerName: name
+    playerName: name,
+    clientId: CLIENT_ID
   });
 });
 
@@ -430,9 +469,7 @@ document.getElementById('ready-btn').addEventListener('click', () => {
 });
 
 // Abandonar Sala
-document.getElementById('leave-room-btn').addEventListener('click', () => {
-  window.location.reload();
-});
+document.getElementById('leave-room-btn').addEventListener('click', leaveRoomAndReload);
 
 // Botão de volume / Mudo
 const audioBtn = document.getElementById('toggle-audio-btn');
@@ -509,7 +546,7 @@ socket.on('available_rooms', (rooms) => {
       initAudioContext();
       const name = usernameInput.value.trim() || 'Jogador Anônimo';
       const roomId = e.target.dataset.id;
-      socket.emit('join_room', { roomId, playerName: name });
+      socket.emit('join_room', { roomId, playerName: name, clientId: CLIENT_ID });
     });
 
     roomsList.appendChild(li);
@@ -683,12 +720,14 @@ function renderGameScreen(gameState) {
   // 1. Encontrar o meu index nos jogadores do servidor
   mySeatIndex = gameState.players.findIndex(p => p.id === myPlayerId);
 
-  // 2. Atualizar o Placar e Narrativa
-  scoreValTeam0.textContent = String(gameState.score[0]).padStart(2, '0');
-  scoreValTeam1.textContent = String(gameState.score[1]).padStart(2, '0');
+  // 2. Atualizar o Placar e Narrativa.
+  // "Nós" é sempre o time de quem está jogando (time 1 ou 2 no servidor).
+  const { us, them } = myTeams(gameState);
+  scoreValTeam0.textContent = String(gameState.score[us]).padStart(2, '0');
+  scoreValTeam1.textContent = String(gameState.score[them]).padStart(2, '0');
 
-  if (mobileScoreUs) mobileScoreUs.textContent = String(gameState.score[0]).padStart(2, '0');
-  if (mobileScoreThem) mobileScoreThem.textContent = String(gameState.score[1]).padStart(2, '0');
+  if (mobileScoreUs) mobileScoreUs.textContent = String(gameState.score[us]).padStart(2, '0');
+  if (mobileScoreThem) mobileScoreThem.textContent = String(gameState.score[them]).padStart(2, '0');
 
   // Atualizar limite de pontos
   const limit = gameState.maxPoints || 24;
@@ -701,18 +740,18 @@ function renderGameScreen(gameState) {
     mobileLimit.textContent = `(${limit} pts)`;
   }
 
-  // Barras de progresso até o limite de pontos
-  [0, 1].forEach(t => {
-    const bar = document.getElementById(`score-bar-team${t}`);
-    if (bar) bar.style.width = `${Math.min(100, (gameState.score[t] / limit) * 100)}%`;
+  // Barras de progresso até o limite de pontos (0 = nós, 1 = eles)
+  [us, them].forEach((team, slot) => {
+    const bar = document.getElementById(`score-bar-team${slot}`);
+    if (bar) bar.style.width = `${Math.min(100, (gameState.score[team] / limit) * 100)}%`;
   });
 
   // Desenhar os palitos gaúchos (pontos)
-  drawMatchsticks(sticksTeam0, gameState.score[0]);
-  drawMatchsticks(sticksTeam1, gameState.score[1]);
+  drawMatchsticks(sticksTeam0, gameState.score[us]);
+  drawMatchsticks(sticksTeam1, gameState.score[them]);
 
   // Narrativas/Logs
-  renderLogs(gameState.logs);
+  renderLogs(gameState.logs, us);
 
   // Fase do Jogo
   if (gameState.state === 'hand_end') {
@@ -829,7 +868,7 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
 
   // Remover marcações ativas anteriores
   document.querySelectorAll('.player-seat').forEach(seat => {
-    seat.classList.remove('active-seat', 'folded');
+    seat.classList.remove('active-seat', 'folded', 'offline');
     seat.querySelector('.seat-role').classList.remove('ready');
     seat.querySelector('.seat-role').textContent = '';
     const seatCardsEl = seat.querySelector('.seat-cards');
@@ -888,6 +927,13 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
     if (activeHand && (activeHand.foldedPlayers || []).includes(idx)) {
       seat.classList.add('folded');
       roleBadge.textContent = 'Mazo';
+      roleBadge.classList.remove('ready');
+    }
+
+    // Caiu a conexão: o lugar fica guardado por 30s esperando a volta
+    if (p.disconnected) {
+      seat.classList.add('offline');
+      roleBadge.textContent = 'Reconectando...';
       roleBadge.classList.remove('ready');
     }
 
@@ -951,15 +997,22 @@ function drawMatchsticks(container, score) {
   }
 }
 
-// Renderiza a Narrative/logs do jogo
-function renderLogs(logs) {
+// Meu time e o adversário no placar do servidor (time 0 ou 1)
+function myTeams(gameState) {
+  const me = gameState.players[mySeatIndex];
+  const us = me && me.team === 1 ? 1 : 0;
+  return { us, them: 1 - us };
+}
+
+// Renderiza a Narrative/logs do jogo (azul = nosso time, vermelho = adversário)
+function renderLogs(logs, myTeam = 0) {
   gameLogs.innerHTML = '';
   logs.forEach(log => {
     const div = document.createElement('div');
     div.className = 'log-entry';
-    if (log.team === 0) {
+    if (log.team === myTeam) {
       div.classList.add('team-0');
-    } else if (log.team === 1) {
+    } else if (log.team === 0 || log.team === 1) {
       div.classList.add('team-1');
     }
 
@@ -1094,6 +1147,9 @@ function getCardImgSrc(card) {
 // Último estado recebido para a mão (usado para atualizar ao fim da animação de jogada)
 let pendingHandRender = null;
 
+// Carta que eu joguei e ainda não foi confirmada pelo servidor
+let optimisticPlay = null; // { key, at }
+
 function renderMyHand(cards, isMyTurn) {
   pendingHandRender = [cards, isMyTurn];
   // GUARDA: não re-renderiza enquanto a animação de carta estiver rodando
@@ -1101,6 +1157,15 @@ function renderMyHand(cards, isMyTurn) {
   if (isAnimatingCardPlay) return;
 
   cards = cards || [];
+  if (optimisticPlay) {
+    const stillInHand = cards.some(c => `${c.value}-${c.suit}` === optimisticPlay.key);
+    if (!stillInHand || Date.now() - optimisticPlay.at > 3000) {
+      optimisticPlay = null; // confirmada (ou o servidor recusou: a carta volta)
+    } else {
+      cards = cards.filter(c => `${c.value}-${c.suit}` !== optimisticPlay.key);
+      isMyTurn = false;
+    }
+  }
   playerHand.classList.toggle('my-turn', !!isMyTurn);
 
   // Reaproveita as cartas que continuam na mão (evita piscar a cada atualização)
@@ -1170,25 +1235,92 @@ playerHand.addEventListener('click', (e) => {
   if (!wrapper || !playerHand.classList.contains('my-turn') || isAnimatingCardPlay) return;
 
   const idx = Number(wrapper.dataset.idx);
-  const cardEl = wrapper.querySelector('.card');
+  const hand = lastGameState && lastGameState.hand;
+  const card = hand && hand.hands[mySeatIndex] && hand.hands[mySeatIndex][idx];
+
+  // Manda a jogada na hora: a carta já vai para a mesa sem esperar o servidor
+  socket.emit('game_action', { action: 'play_card', value: idx });
   isAnimatingCardPlay = true;
-  cardEl.classList.add('playing');
-  // Bloqueia todos os wrappers imediatamente
-  playerHand.querySelectorAll('.card-lift-wrapper').forEach(w => {
-    w.style.pointerEvents = 'none';
-  });
-  // Emite ao servidor após animação ser visível (250ms)
+  playerHand.classList.remove('my-turn');
+
+  if (card) {
+    playCardOptimistically(card, hand.currentRound, wrapper);
+  } else {
+    wrapper.querySelector('.card').classList.add('playing');
+  }
+
+  // Libera o guarda e aplica o estado mais recente recebido do servidor
   setTimeout(() => {
-    socket.emit('game_action', { action: 'play_card', value: idx });
-    // Libera o guarda e aplica o estado mais recente recebido do servidor
-    setTimeout(() => {
-      isAnimatingCardPlay = false;
-      if (pendingHandRender) renderMyHand(...pendingHandRender);
-    }, 300);
-  }, 250);
+    isAnimatingCardPlay = false;
+    if (pendingHandRender) renderMyHand(...pendingHandRender);
+  }, 340);
+  // Se o servidor recusar a jogada, a carta volta para a mão
+  setTimeout(() => {
+    if (optimisticPlay && pendingHandRender) renderMyHand(...pendingHandRender);
+  }, 3100);
 });
 
+// Coloca a carta na mesa na hora do clique, deslizando da mão até o lugar dela
+function playCardOptimistically(card, round, wrapper) {
+  const key = `${mySeatIndex}-${round}-${card.value}-${card.suit}`;
+  optimisticPlay = { key: `${card.value}-${card.suit}`, at: Date.now() };
 
+  const slot = document.getElementById('arena-slot-bottom');
+  const handCard = wrapper.querySelector('.card');
+  const from = handCard.getBoundingClientRect();
+
+  if (slot && !slot.querySelector(`.played-card[data-key="${key}"]`)) {
+    const cardEl = buildPlayedCard(card, mySeatIndex, round, key);
+    cardEl.classList.add('optimistic');
+    cardEl.dataset.at = Date.now();
+    slot.appendChild(cardEl);
+
+    const to = cardEl.getBoundingClientRect();
+    const dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+    const dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+    const scale = to.width ? from.width / to.width : 1;
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      cardEl.animate(
+        [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: 'none' }],
+        { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+      );
+    }
+    window.soundManager.playCardPlaySound();
+    prevPlayedCardsCount += 1;
+  }
+
+  // Tira a carta da mão e desliza as outras para o lugar (FLIP)
+  const siblings = [...playerHand.querySelectorAll('.card-lift-wrapper')].filter(w => w !== wrapper);
+  const before = new Map(siblings.map(w => [w, w.getBoundingClientRect().left]));
+  wrapper.remove();
+  siblings.forEach(w => {
+    const dx = before.get(w) - w.getBoundingClientRect().left;
+    if (Math.abs(dx) < 1) return;
+    w.animate(
+      [{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }],
+      { duration: 260, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+    );
+  });
+}
+
+
+
+// Cria o elemento de uma carta jogada (posição pela rodada: o CSS usa --r para
+// colunas nas fileiras, leque ou pilha nas laterais; `translate`/`rotate` não
+// conflitam com o `transform` das animações)
+function buildPlayedCard(card, playerIdx, round, key) {
+  const cardEl = document.createElement('div');
+  cardEl.className = `played-card ${card.suit}`;
+  cardEl.dataset.key = key;
+  const tilt = [-2, 1.5, -1][round] || 0;
+  cardEl.style.setProperty('--r', round);
+  cardEl.style.rotate = `${tilt}deg`;
+  cardEl.style.zIndex = 10 + round;
+  cardEl.dataset.round = round;
+  cardEl.dataset.player = playerIdx;
+  cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
+  return cardEl;
+}
 
 // Desenha as cartas jogadas por rodada no centro da mesa (Estilo Blyts - Pilhas)
 function renderPlayedCards(playedCards, players, gameState) {
@@ -1235,23 +1367,15 @@ function renderPlayedCards(playedCards, players, gameState) {
       const key = `${play.proof ? 'p' : ''}${playerIdx}-${round}-${card.value}-${card.suit}`;
       wanted.add(key);
 
-      if (slot.querySelector(`.played-card[data-key="${key}"]:not(.leaving)`)) return; // já está na mesa
+      // Já está na mesa (inclusive a que eu joguei antes da confirmação do servidor)
+      const existingEl = slot.querySelector(`.played-card[data-key="${key}"]:not(.leaving)`);
+      if (existingEl) {
+        existingEl.classList.remove('optimistic');
+        return;
+      }
 
-      const cardEl = document.createElement('div');
-      cardEl.className = `played-card ${card.suit} entering`;
-      cardEl.dataset.key = key;
-
-      // Posição pela rodada: o CSS usa --r (colunas nas fileiras, leque ou
-      // pilha nas laterais). Usa `translate`/`rotate` para não conflitar com
-      // o `transform` da animação.
-      const tilt = [-2, 1.5, -1][round] || 0;
-      cardEl.style.setProperty('--r', round);
-      cardEl.style.rotate = `${tilt}deg`;
-      cardEl.style.zIndex = 10 + round;
-      cardEl.dataset.round = round;
-      cardEl.dataset.player = playerIdx;
-
-      cardEl.innerHTML = `<img src="${getCardImgSrc(card)}" class="card-img" alt="${card.value} de ${card.suit}">`;
+      const cardEl = buildPlayedCard(card, playerIdx, round, key);
+      cardEl.classList.add('entering');
 
       // Carta mostrada para provar o Envido/Flor
       if (play.proof) {
@@ -1265,9 +1389,12 @@ function renderPlayedCards(playedCards, players, gameState) {
     }
   });
 
-  // Remove (com fade) as cartas que não estão mais no estado
+  // Remove (com fade) as cartas que não estão mais no estado.
+  // A carta que acabei de jogar espera a confirmação do servidor (até 3s).
   document.querySelectorAll('.played-card:not(.leaving)').forEach(el => {
-    if (!wanted.has(el.dataset.key)) removePlayedCard(el);
+    if (wanted.has(el.dataset.key)) return;
+    if (el.classList.contains('optimistic') && Date.now() - Number(el.dataset.at || 0) < 3000) return;
+    removePlayedCard(el);
   });
 
   // Destaca quem venceu cada rodada: carta vencedora brilha, as outras escurecem
@@ -1790,8 +1917,9 @@ function renderGameEndScreen(gameState) {
     document.getElementById('victory-title').style.color = '#c0392b';
   }
 
-  document.getElementById('final-score-t0').textContent = gameState.score[0];
-  document.getElementById('final-score-t1').textContent = gameState.score[1];
+  const teams = myTeams(gameState);
+  document.getElementById('final-score-t0').textContent = gameState.score[teams.us];
+  document.getElementById('final-score-t1').textContent = gameState.score[teams.them];
 }
 
 // Botão Jogar Novamente
@@ -1829,7 +1957,7 @@ socket.on('receive_chat', ({ sender, senderId, msg }) => {
 // Sair da Partida
 gameLeaveBtn.addEventListener('click', () => {
   if (confirm("Tens certeza que queres abandonar a partida e voltar ao lobby, jogador?")) {
-    window.location.reload();
+    leaveRoomAndReload();
   }
 });
 

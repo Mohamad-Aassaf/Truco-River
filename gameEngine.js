@@ -1161,7 +1161,7 @@ class TrucoGame { // TRUCO GURIZINHO
         mode: this.mode,
         maxPoints: this.maxPoints || 24,
         maxPlayers: this.maxPlayers,
-        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, team: p.team, ready: p.ready })),
+        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, team: p.team, ready: p.ready, disconnected: !!p.disconnected })),
         score: this.score,
         state: this.state,
         winner: this.winner,
@@ -1198,6 +1198,7 @@ class TrucoGame { // TRUCO GURIZINHO
           name: p.name,
           isBot: p.isBot,
           team: p.team,
+          disconnected: !!p.disconnected,
           hasFlor: own ? p.hasFlor : undefined,
           envidoScore: own ? p.envidoScore : undefined
         };

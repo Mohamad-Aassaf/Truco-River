@@ -1510,3 +1510,18 @@ body[data-deck-style="frances"] .mini-card-badge.hidden-card {
   #game-alert-text > div:first-child { font-size: 1rem !important; }
   #game-alert-text > div + div { font-size: 0.68rem !important; margin-top: 2px !important; }
 }
+
+/* Jogador que caiu: o lugar fica esperando a volta (30s) */
+.player-seat.offline .avatar-card {
+  opacity: 0.6;
+  filter: grayscale(0.6);
+}
+
+.player-seat.offline .seat-role {
+  background: rgba(241, 196, 15, 0.18);
+  color: #f7dc6f;
+  border: 1px solid rgba(241, 196, 15, 0.45);
+  animation: statusPulse 1.4s ease-in-out infinite;
+}
+
+.lobby-player-card.offline { opacity: 0.6; }
