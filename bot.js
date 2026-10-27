@@ -1,372 +1,428 @@
 // bot.js
-// Inteligência Artificial do Truco Gaúcho com Dificuldade (Fácil, Médio, Difícil)
+// Inteligência dos bots do Truco Gaúcho (Fácil, Médio, Difícil).
+//
+// O coração é estimateWinChance: o bot sorteia muitas vezes as cartas que os
+// adversários podem ter (só as que ele não viu), joga o resto da mão de forma
+// simples e conta quantas vezes o time dele ganha. Com essa chance ele decide:
+// - qual carta jogar (a que dá mais chance de ganhar a mão);
+// - quando trucar, aceitar, correr ou aumentar;
+// e leva em conta o placar (não corre se correr entrega o jogo).
+//
+// Fácil erra de propósito, Médio pensa pouco e Difícil pensa bastante.
 
-// Avalia o peso médio das cartas na mão do bot
-function evaluateHandStrength(handCards) {
-  if (handCards.length === 0) return 0;
-  const ranks = handCards.map(c => c.trucoRank);
-  return ranks.reduce((sum, r) => sum + r, 0) / handCards.length;
+const { createDeck } = require('./gameEngine');
+
+const DECK = createDeck();
+const cardKey = c => `${c.value}-${c.suit}`;
+
+const LEVEL = {
+  easy: { samples: 40, noise: 0.35, bluff: 0.10 },
+  medium: { samples: 120, noise: 0.10, bluff: 0.06 },
+  hard: { samples: 260, noise: 0, bluff: 0.08 }
+};
+
+const levelOf = player => LEVEL[player.difficulty] || LEVEL.medium;
+const rand = () => Math.random();
+
+// ---------------------------------------------------------------------------
+// Simulação do resto da mão
+// ---------------------------------------------------------------------------
+
+// Mesmas regras do motor (checkHandWinner) para decidir quem leva a mão
+function handWinner(r, maoTeam) {
+  const t0 = r.filter(w => w === 0).length;
+  const t1 = r.filter(w => w === 1).length;
+  if (t0 === 2) return 0;
+  if (t1 === 2) return 1;
+  if (r[0] === -1) {
+    if (r[1] === 0 || r[1] === 1) return r[1];
+    if (r[1] === -1) {
+      if (r[2] === 0 || r[2] === 1) return r[2];
+      if (r[2] === -1) return maoTeam;
+    }
+  }
+  if (r[1] === -1 && r[0] !== -1 && r[0] !== undefined) return r[0];
+  if (r[2] === -1 && r[0] !== -1 && r[1] !== -1 && r[0] !== undefined) return r[0];
+  if (r.length === 3 && (r[2] === 0 || r[2] === 1)) return r[2];
+  return null;
 }
 
-// Retorna a melhor carta para jogar
-function selectCardToPlay(handCards, game, playerIdx, difficulty = 'medium') {
-  if (handCards.length === 1) return 0; // Só resta uma carta
+// Como cada jogador joga na simulação (regras simples de quem sabe jogar)
+function simPick(ranks, team, round, roundsWon, plays, teamOf) {
+  const sorted = ranks.slice().sort((a, b) => a - b);
+  const lowest = sorted[0];
+  const highest = sorted[sorted.length - 1];
+  const wonFirst = roundsWon[0] === team;
 
-  const maxPlayers = game.maxPlayers;
-  const players = game.players;
-  const playedCards = game.hand.playedCards;
-  const currentRound = game.hand.currentRound;
-
-  // Bot fácil tem 30% de chance de jogar uma carta totalmente aleatória
-  if (difficulty === 'easy' && Math.random() < 0.3) {
-    return Math.floor(Math.random() * handCards.length);
+  if (plays.length === 0) {
+    // Abrindo a rodada
+    if (round === 0) return sorted[Math.floor(sorted.length / 2)];
+    if (wonFirst) return lowest; // empatar já ganha a mão
+    return highest;
   }
 
-  const myTeam = players[playerIdx].team;
-  
-  // Filtrar jogadas da rodada atual
-  const roundPlays = playedCards.filter(p => p.round === currentRound);
-
-  // Inteligência de dupla: descobrir as cartas do parceiro
-  let partnerCards = [];
-  if (maxPlayers === 4) {
-    const partnerIdx = (playerIdx + 2) % 4;
-    partnerCards = game.hand.hands[partnerIdx] || [];
+  // Quem está ganhando a rodada até agora
+  let best = plays[0];
+  let tie = false;
+  for (let i = 1; i < plays.length; i++) {
+    if (plays[i].rank > best.rank) { best = plays[i]; tie = false; }
+    else if (plays[i].rank === best.rank && teamOf(plays[i].idx) !== teamOf(best.idx)) tie = true;
   }
-  const partnerMaxRank = partnerCards.length > 0 ? Math.max(...partnerCards.map(c => c.trucoRank)) : 0;
+  if (!tie && teamOf(best.idx) === team) return lowest; // parceiro já ganha
 
-  // Se ninguém jogou ainda nesta rodada
-  if (roundPlays.length === 0) {
-    if (currentRound === 0) {
-      // Primeira rodada:
-      // Se o parceiro tiver uma carta muito forte (Ex: rank >= 13), o bot poupa sua própria carta alta e descarta a mais baixa
-      if (partnerMaxRank >= 13) {
-        let minIdx = 0;
-        for (let i = 1; i < handCards.length; i++) {
-          if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
-        }
-        return minIdx;
-      }
-      
-      // Caso contrário, joga a carta intermediária (média) para testar o terreno
-      const sorted = [...handCards].map((c, i) => ({ c, i })).sort((a, b) => a.c.trucoRank - b.c.trucoRank);
-      return sorted[Math.floor(sorted.length / 2)].i;
-    } else if (currentRound === 1) {
-      // Segunda rodada:
-      const r0Plays = playedCards.filter(p => p.round === 0);
-      let r0WinnerTeam = -1;
-      if (r0Plays.length > 0) {
-        let maxPlay = r0Plays[0];
-        let tie = false;
-        for (let i = 1; i < r0Plays.length; i++) {
-          if (r0Plays[i].card.trucoRank > maxPlay.card.trucoRank) {
-            maxPlay = r0Plays[i];
-            tie = false;
-          } else if (r0Plays[i].card.trucoRank === maxPlay.card.trucoRank) {
-            tie = true;
-          }
-        }
-        r0WinnerTeam = tie ? -1 : players[maxPlay.playerIdx].team;
-      }
+  const beats = sorted.filter(r => r > best.rank);
+  if (beats.length) return beats[0];
+  // Empatar serve quando já ganhamos a primeira
+  if (wonFirst && sorted.includes(best.rank)) return best.rank;
+  return lowest;
+}
 
-      if (r0WinnerTeam === myTeam) {
-        // Ganhamos a primeira, descarta a mais baixa
-        let minIdx = 0;
-        for (let i = 1; i < handCards.length; i++) {
-          if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
-        }
-        return minIdx;
+// Joga o resto da mão a partir do estado atual. firstRank: carta que quem
+// está na vez vai jogar agora (ou null para ele decidir pela regra simples).
+function playout(game, ranksByPlayer, firstRank) {
+  const h = game.hand;
+  const n = game.maxPlayers;
+  const teamOf = i => game.players[i].team;
+  const folded = i => h.foldedPlayers.has(i);
+  const maoTeam = teamOf(h.mão);
+
+  const roundsWon = h.roundsWon.slice();
+  let round = h.currentRound;
+  let plays = h.playedCards
+    .filter(p => p.round === round && !folded(p.playerIdx))
+    .map(p => ({ idx: p.playerIdx, rank: p.card.trucoRank }));
+  let cur = h.currentPlayer;
+  let first = firstRank;
+
+  for (let guard = 0; guard < 20; guard++) {
+    const hand = ranksByPlayer[cur];
+    if (!folded(cur) && hand && hand.length && !plays.some(p => p.idx === cur)) {
+      let rank;
+      if (first !== null && first !== undefined) {
+        rank = first;
+        first = null;
       } else {
-        // Perdemos ou empatou a primeira, precisa salvar a rodada
-        // Se o parceiro tem uma carta forte garantida (rank >= 12), descarta a mais baixa e deixa para o parceiro
-        if (partnerMaxRank >= 12) {
-          let minIdx = 0;
-          for (let i = 1; i < handCards.length; i++) {
-            if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
-          }
-          return minIdx;
-        }
-        
-        // Senão, joga a maior para tentar salvar
-        let maxIdx = 0;
-        for (let i = 1; i < handCards.length; i++) {
-          if (handCards[i].trucoRank > handCards[maxIdx].trucoRank) maxIdx = i;
-        }
-        return maxIdx;
+        rank = simPick(hand, teamOf(cur), round, roundsWon, plays, teamOf);
       }
-    } else {
-      // Rodada 3: joga a maior
-      let maxIdx = 0;
-      for (let i = 1; i < handCards.length; i++) {
-        if (handCards[i].trucoRank > handCards[maxIdx].trucoRank) maxIdx = i;
-      }
-      return maxIdx;
+      hand.splice(hand.indexOf(rank), 1);
+      plays.push({ idx: cur, rank });
     }
-  }
 
-  // Se já há cartas jogadas na rodada
-  let bestPlay = roundPlays[0];
-  let isTie = false;
-  for (let i = 1; i < roundPlays.length; i++) {
-    if (roundPlays[i].card.trucoRank > bestPlay.card.trucoRank) {
-      bestPlay = roundPlays[i];
-      isTie = false;
-    } else if (roundPlays[i].card.trucoRank === bestPlay.card.trucoRank) {
-      if (players[roundPlays[i].playerIdx].team !== players[bestPlay.playerIdx].team) {
-        isTie = true;
-      }
+    // Próximo que ainda precisa jogar nesta rodada
+    let next = -1;
+    for (let step = 1; step <= n; step++) {
+      const i = (cur + step) % n;
+      if (!folded(i) && !plays.some(p => p.idx === i) && ranksByPlayer[i] && ranksByPlayer[i].length) { next = i; break; }
     }
-  }
+    if (next !== -1) { cur = next; continue; }
 
-  const bestTeam = isTie ? -1 : players[bestPlay.playerIdx].team;
-
-  // Se o parceiro está ganhando a vaza (no modo 2v2)
-  if (maxPlayers === 4 && bestTeam === myTeam && bestPlay.playerIdx !== playerIdx) {
-    // Parceiro já está ganhando. Descarta a carta mais baixa
-    let minIdx = 0;
-    for (let i = 1; i < handCards.length; i++) {
-      if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
+    // Fim da rodada
+    let best = plays[0];
+    let tie = false;
+    for (let i = 1; i < plays.length; i++) {
+      if (plays[i].rank > best.rank) { best = plays[i]; tie = false; }
+      else if (plays[i].rank === best.rank && teamOf(plays[i].idx) !== teamOf(best.idx)) tie = true;
     }
-    return minIdx;
-  }
+    roundsWon.push(tie ? -1 : teamOf(best.idx));
+    const winner = handWinner(roundsWon, maoTeam);
+    if (winner !== null) return winner;
+    if (roundsWon.length >= 3) return maoTeam;
 
-  // Senão, o adversário está ganhando ou está empatado. O bot precisa bater a carta dele se puder.
-  let chosenIdx = -1;
-  let minWinningRank = 99;
-
-  for (let i = 0; i < handCards.length; i++) {
-    const card = handCards[i];
-    if (card.trucoRank > bestPlay.card.trucoRank) {
-      if (card.trucoRank < minWinningRank) {
-        minWinningRank = card.trucoRank;
-        chosenIdx = i;
-      }
-    }
+    round++;
+    cur = tie ? h.mão : best.idx;
+    while (folded(cur)) cur = (cur + 1) % n;
+    plays = [];
   }
-
-  // Se tem uma carta que ganha, joga ela
-  if (chosenIdx !== -1) {
-    return chosenIdx;
-  }
-
-  // Se não tem nenhuma carta que ganhe da maior da mesa, descarta a mais baixa
-  let minIdx = 0;
-  for (let i = 1; i < handCards.length; i++) {
-    if (handCards[i].trucoRank < handCards[minIdx].trucoRank) minIdx = i;
-  }
-  return minIdx;
+  return maoTeam;
 }
 
-// Toma decisões do Bot e executa no jogo
+// Chance (0 a 1) de o time do bot ganhar a mão, jogando até o fim.
+// candidateCard: carta que o bot (que está na vez) jogaria agora.
+function estimateWinChance(game, botIdx, candidateCard = null, samples = 150) {
+  const h = game.hand;
+  const n = game.maxPlayers;
+  const myTeam = game.players[botIdx].team;
+  const partnerIdx = n === 4 ? (botIdx + 2) % 4 : -1;
+
+  // Cartas que o bot já conhece: as dele, as do parceiro e as que estão na mesa
+  const known = new Set();
+  (h.hands[botIdx] || []).forEach(c => known.add(cardKey(c)));
+  if (partnerIdx >= 0) (h.hands[partnerIdx] || []).forEach(c => known.add(cardKey(c)));
+  h.playedCards.forEach(p => known.add(cardKey(p.card)));
+  const unknown = DECK.filter(c => !known.has(cardKey(c))).map(c => c.trucoRank);
+
+  let wins = 0;
+  for (let s = 0; s < samples; s++) {
+    // Sorteia as mãos dos adversários entre as cartas não vistas
+    const pool = unknown.slice();
+    const ranksByPlayer = {};
+    for (let i = 0; i < n; i++) {
+      const cards = h.hands[i] || [];
+      if (i === botIdx || i === partnerIdx) {
+        ranksByPlayer[i] = cards.map(c => c.trucoRank);
+      } else {
+        ranksByPlayer[i] = [];
+        for (let k = 0; k < cards.length && pool.length; k++) {
+          const j = Math.floor(rand() * pool.length);
+          ranksByPlayer[i].push(pool[j]);
+          pool[j] = pool[pool.length - 1];
+          pool.pop();
+        }
+      }
+    }
+    const first = candidateCard ? candidateCard.trucoRank : null;
+    if (playout(game, ranksByPlayer, first) === myTeam) wins++;
+  }
+  return wins / samples;
+}
+
+// ---------------------------------------------------------------------------
+// Decisões
+// ---------------------------------------------------------------------------
+
+const limitOf = game => game.maxPoints || 24;
+
+// Escolhe a carta: Difícil e Médio simulam cada opção; Fácil usa uma regra simples
+function selectCardToPlay(game, idx) {
+  const player = game.players[idx];
+  const cards = game.hand.hands[idx];
+  if (cards.length === 1) return 0;
+  const lvl = levelOf(player);
+
+  if (player.difficulty === 'easy' && rand() < lvl.noise) {
+    return Math.floor(rand() * cards.length);
+  }
+
+  const scored = cards.map((c, i) => ({ i, rank: c.trucoRank, p: estimateWinChance(game, idx, c, Math.round(lvl.samples / 2)) }));
+  // Em empate de chance, guarda a carta mais forte (joga a menor)
+  scored.sort((a, b) => (b.p - a.p) || (a.rank - b.rank));
+
+  // Médio às vezes não acha a melhor
+  if (lvl.noise && scored.length > 1 && rand() < lvl.noise) return scored[1].i;
+  return scored[0].i;
+}
+
+// Pontos que a mão passa a valer se o truco atual for aceito
+function trucoStake(state) {
+  return state === 'truco' ? 2 : state === 'retruco' ? 3 : 4;
+}
+
+function respondTruco(game, idx) {
+  const h = game.hand;
+  const player = game.players[idx];
+  const lvl = levelOf(player);
+  const myTeam = player.team;
+  const oppTeam = 1 - myTeam;
+  const stake = trucoStake(h.trucoState);
+  const canRaise = h.trucoState === 'truco' || h.trucoState === 'retruco';
+  const raise = { action: 'truco_raise', value: h.trucoState === 'truco' ? 'retruco' : 'vale4' };
+  const quero = { action: 'truco_response', value: 'quero' };
+  const corre = { action: 'truco_response', value: 'nao_quero' };
+
+  // Correr entrega o jogo? Então aceita (não há o que perder)
+  if (game.score[oppTeam] + (stake - 1) >= limitOf(game)) return canRaise && rand() < 0.3 ? raise : quero;
+
+  // Quem trucou costuma ter jogo: desconta um pouco da chance
+  let p = estimateWinChance(game, idx, null, lvl.samples);
+  p *= player.difficulty === 'hard' ? 0.85 : 0.9;
+  if (player.difficulty === 'easy') p = p * 0.6 + rand() * 0.4;
+
+  // Perder a aposta aceita entrega o jogo: fica mais exigente
+  let acceptAt = player.difficulty === 'hard' ? 0.36 : player.difficulty === 'medium' ? 0.42 : 0.45;
+  if (game.score[oppTeam] + stake >= limitOf(game)) acceptAt += 0.1;
+  const raiseAt = player.difficulty === 'hard' ? 0.7 : 0.78;
+
+  if (canRaise && (p >= raiseAt || (p < 0.25 && rand() < lvl.bluff / 2))) return raise;
+  if (p >= acceptAt) return quero;
+  // Blefe raro: aceita mesmo fraco
+  if (stake === 2 && rand() < lvl.bluff / 2) return quero;
+  return corre;
+}
+
+function wantsToTruco(game, idx) {
+  const h = game.hand;
+  const player = game.players[idx];
+  const lvl = levelOf(player);
+  const myTeam = player.team;
+  if (h.trucoState === 'vale4' || h.trucoCallerTeam === myTeam) return false;
+
+  const stake = trucoStake(h.trucoState === 'none' ? 'truco' : h.trucoState === 'truco' ? 'retruco' : 'vale4');
+  // Não precisa de mais pontos do que faltam para ganhar o jogo
+  const missing = limitOf(game) - game.score[myTeam];
+
+  if (player.difficulty === 'easy') {
+    const p = estimateWinChance(game, idx, null, lvl.samples);
+    return p >= 0.6 ? rand() < 0.5 : rand() < 0.08;
+  }
+
+  const p = estimateWinChance(game, idx, null, lvl.samples);
+  const hard = player.difficulty === 'hard';
+
+  if (p >= (hard ? 0.72 : 0.75)) {
+    // Mão muito forte logo no começo: às vezes espera para o adversário não fugir
+    if (h.currentRound === 0 && p >= 0.88 && missing > 1 && rand() < (hard ? 0.45 : 0.25)) return false;
+    return rand() < (hard ? 0.9 : 0.7);
+  }
+  if (p >= 0.55) return rand() < (hard ? 0.3 : 0.2);
+  // Blefe: mais comum depois da primeira rodada, quando dá para "contar história"
+  if (p < 0.3 && stake <= 2) return rand() < (h.currentRound > 0 ? lvl.bluff : lvl.bluff / 3);
+  return false;
+}
+
+// O nosso time ganha empates no envido? (quem está mais perto do mão ganha)
+function winsEnvidoTies(game, idx) {
+  const n = game.maxPlayers;
+  const team = game.players[idx].team;
+  for (let k = 0; k < n; k++) {
+    const i = (game.hand.mão + k) % n;
+    if (game.hand.foldedPlayers.has(i) || game.players[i].hasFlor) continue;
+    return game.players[i].team === team;
+  }
+  return false;
+}
+
+// Melhor envido do time (o bot conhece o do parceiro)
+function teamEnvido(game, idx) {
+  let best = game.players[idx].envidoScore;
+  if (game.maxPlayers === 4) {
+    const partner = game.players[(idx + 2) % 4];
+    if (partner && !partner.hasFlor && !game.hand.foldedPlayers.has((idx + 2) % 4)) best = Math.max(best, partner.envidoScore);
+  }
+  return best;
+}
+
+function respondEnvido(game, idx) {
+  const h = game.hand;
+  const player = game.players[idx];
+  const myTeam = player.team;
+  const oppTeam = 1 - myTeam;
+  const call = h.envidoHistory[h.envidoHistory.length - 1];
+  const score = teamEnvido(game, idx) + (winsEnvidoTies(game, idx) ? 1 : 0);
+  const quero = { action: 'envido_response', value: 'quero' };
+  const corre = { action: 'envido_response', value: 'nao_quero' };
+
+  // Correr entrega o jogo: aceita
+  const refusePoints = h.envidoPointsBeforeLastRaise || 1;
+  if (game.score[oppTeam] + refusePoints >= limitOf(game)) return quero;
+  // Quem tem Flor não pode aumentar o Envido: só aceita ou corre
+  const mayRaise = !player.hasFlor;
+
+  if (player.difficulty === 'easy') {
+    return score >= 26 || rand() < 0.25 ? quero : corre;
+  }
+
+  const hard = player.difficulty === 'hard';
+  const history = h.envidoHistory;
+  if (call === 'envido') {
+    if (mayRaise && score >= (hard ? 31 : 32)) {
+      if (history.filter(c => c === 'envido').length < 2 && rand() < 0.3) return { action: 'envido_raise', value: 'envido' };
+      return { action: 'envido_raise', value: rand() < 0.6 ? 'real_envido' : 'falta_envido' };
+    }
+    return score >= (hard ? 27 : 26) ? quero : corre;
+  }
+  if (call === 'real_envido') {
+    if (mayRaise && score >= 32 && rand() < (hard ? 0.5 : 0.3)) return { action: 'envido_raise', value: 'falta_envido' };
+    return score >= (hard ? 28 : 28) ? quero : corre;
+  }
+  // Falta envido: perder pode custar o jogo, então só com muito ponto
+  const behind = game.score[oppTeam] - game.score[myTeam];
+  return score >= (behind >= 8 ? 28 : 30) ? quero : corre;
+}
+
+function wantsEnvido(game, idx) {
+  const player = game.players[idx];
+  const score = teamEnvido(game, idx);
+  const lvl = levelOf(player);
+  const ties = winsEnvidoTies(game, idx);
+
+  if (player.difficulty === 'easy') {
+    if (score >= 28 || rand() < 0.12) return rand() < 0.5 ? 'envido' : 'real_envido';
+    return null;
+  }
+
+  const hard = player.difficulty === 'hard';
+  if (score >= 31) return rand() < 0.5 ? 'real_envido' : 'envido';
+  if (score >= (ties ? 27 : 28)) return rand() < (hard ? 0.85 : 0.7) ? 'envido' : null;
+  if (score >= 25 && ties && hard) return rand() < 0.35 ? 'envido' : null;
+  // Envido de mentira com pouco ponto (o outro costuma correr)
+  if (score <= 21 && rand() < lvl.bluff / 2) return 'envido';
+  return null;
+}
+
+function respondFlor(game, idx) {
+  const h = game.hand;
+  const player = game.players[idx];
+  const call = h.florHistory[h.florHistory.length - 1];
+  const score = player.florScore;
+
+  if (player.difficulty === 'easy') {
+    return { action: 'flor_response', value: rand() < 0.7 ? 'quero' : 'nao_quero' };
+  }
+  const hard = player.difficulty === 'hard';
+  if (call === 'flor') {
+    if (score >= 32 && rand() < 0.4) return { action: 'flor_raise', value: 'contra_flor_resto' };
+    if (score >= (hard ? 28 : 29)) return { action: 'flor_raise', value: 'contra_flor' };
+    return { action: 'flor_response', value: 'quero' };
+  }
+  if (call === 'contra_flor') {
+    return { action: 'flor_response', value: score >= (hard ? 29 : 30) ? 'quero' : 'nao_quero' };
+  }
+  return { action: 'flor_response', value: score >= (hard ? 31 : 32) ? 'quero' : 'nao_quero' };
+}
+
+// Toma a decisão do bot (uma ação por vez)
 function handleBotAction(game, playerIdx) {
   if (!game.hand || game.state !== 'playing') return null;
-
+  const h = game.hand;
   const player = game.players[playerIdx];
-  const handCards = game.hand.hands[playerIdx];
-  const difficulty = player.difficulty || 'medium';
+  const handCards = h.hands[playerIdx] || [];
 
-  // 1. RESPONDER A ENVIDO PENDENTE (prioridade sobre o Truco)
-  if (game.hand.envidoResponsePending && game.hand.envidoPendingTeam === player.team) {
-    const envidoScore = player.envidoScore;
-    const history = game.hand.envidoHistory;
-    const currentCall = history[history.length - 1];
+  // Pode cantar Envido/Flor agora? (1ª rodada, antes de jogar a própria carta)
+  const canSingNow = h.currentRound === 0 && !game.hasPlayerPlayedCard(playerIdx) && h.canCallEnvido;
 
-    if (difficulty === 'easy') {
-      // Fácil: 50% de chance de aceitar ou recusar sem olhar pontuação
-      return { action: 'envido_response', value: Math.random() < 0.5 ? 'quero' : 'nao_quero' };
-    }
-
-    if (difficulty === 'hard') {
-      // Difícil: aceita apenas com pontuação ideal
-      if (currentCall === 'envido') {
-        if (envidoScore >= 27) {
-          if (envidoScore >= 31 && Math.random() < 0.5) return { action: 'envido_raise', value: 'real_envido' };
-          return { action: 'envido_response', value: 'quero' };
-        }
-        return { action: 'envido_response', value: 'nao_quero' };
-      } else if (currentCall === 'real_envido') {
-        if (envidoScore >= 29) {
-          if (envidoScore >= 32 && Math.random() < 0.4) return { action: 'envido_raise', value: 'falta_envido' };
-          return { action: 'envido_response', value: 'quero' };
-        }
-        return { action: 'envido_response', value: 'nao_quero' };
-      } else if (currentCall === 'falta_envido') {
-        return { action: 'envido_response', value: envidoScore >= 30 ? 'quero' : 'nao_quero' };
-      }
-    }
-
-    // Médio
-    if (currentCall === 'envido') {
-      if (envidoScore >= 26) {
-        if (envidoScore >= 30 && Math.random() < 0.4) return { action: 'envido_raise', value: 'real_envido' };
-        return { action: 'envido_response', value: 'quero' };
-      }
-      return { action: 'envido_response', value: 'nao_quero' };
-    } else if (currentCall === 'real_envido') {
-      if (envidoScore >= 28) {
-        if (envidoScore >= 31 && Math.random() < 0.3) return { action: 'envido_raise', value: 'falta_envido' };
-        return { action: 'envido_response', value: 'quero' };
-      }
-      return { action: 'envido_response', value: 'nao_quero' };
-    } else if (currentCall === 'falta_envido') {
-      return { action: 'envido_response', value: envidoScore >= 29 ? 'quero' : 'nao_quero' };
-    }
-    // Segurança: nunca sair daqui sem responder o Envido
-    return { action: 'envido_response', value: 'nao_quero' };
+  // 1. Responder Envido (vem antes do Truco)
+  if (h.envidoResponsePending && h.envidoPendingTeam === player.team) {
+    if (canSingNow && player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
+    return respondEnvido(game, playerIdx);
   }
 
-  // 2. RESPONDER A FLOR PENDENTE
-  if (game.hand.florResponsePending && game.hand.florPendingTeam === player.team) {
-    if (player.hasFlor) {
-      const florScore = player.florScore;
-      const history = game.hand.florHistory;
-      const currentCall = history[history.length - 1];
+  // 2. Responder Flor
+  if (h.florResponsePending && h.florPendingTeam === player.team) {
+    if (!player.hasFlor) return { action: 'flor_response', value: 'nao_quero' };
+    return respondFlor(game, playerIdx);
+  }
 
-      if (difficulty === 'easy') {
-        return { action: 'flor_response', value: Math.random() < 0.7 ? 'quero' : 'nao_quero' };
-      }
+  // 3. Responder Truco — "o envido está primeiro": canta Envido/Flor antes de responder
+  if (h.trucoResponsePending && h.trucoPendingTeam === player.team) {
+    if (canSingNow && player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
+    if (canSingNow && !player.hasFlor && h.envidoState === 'none') {
+      const call = wantsEnvido(game, playerIdx);
+      if (call) return { action: 'call_envido', value: call };
+    }
+    return respondTruco(game, playerIdx);
+  }
 
-      if (currentCall === 'flor') {
-        if (florScore >= 30 && Math.random() < 0.4) {
-          return { action: 'flor_raise', value: 'contra_flor_resto' };
-        } else if (florScore >= 27) {
-          return { action: 'flor_raise', value: 'contra_flor' };
-        }
-        return { action: 'flor_response', value: 'quero' };
-      } else if (currentCall === 'contra_flor') {
-        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 29 : 28) ? 'quero' : 'nao_quero' };
-      } else if (currentCall === 'contra_flor_resto') {
-        return { action: 'flor_response', value: florScore >= (difficulty === 'hard' ? 31 : 30) ? 'quero' : 'nao_quero' };
-      }
-    } else {
-      return { action: 'flor_response', value: 'nao_quero' };
+  // Enquanto houver aposta esperando resposta, o bot não inicia outra
+  if (h.envidoResponsePending || h.florResponsePending || h.trucoResponsePending) return null;
+  if (h.currentPlayer !== playerIdx || handCards.length === 0) return null;
+
+  // 4. Cantar Flor ou Envido
+  if (canSingNow) {
+    if (player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
+    if (!player.hasFlor && h.envidoState === 'none' && game.isPe(playerIdx)) {
+      const call = wantsEnvido(game, playerIdx);
+      if (call) return { action: 'call_envido', value: call };
     }
   }
 
-  // 3. RESPONDER A TRUCO PENDENTE (só depois de Envido/Flor resolvidos)
-  if (game.hand.trucoResponsePending && game.hand.trucoPendingTeam === player.team) {
-    const strength = evaluateHandStrength(handCards);
-    const maxRank = handCards.length > 0 ? Math.max(...handCards.map(c => c.trucoRank)) : 0;
+  // 5. Trucar
+  if (wantsToTruco(game, playerIdx)) return { action: 'call_truco' };
 
-    if (difficulty === 'easy') {
-      // Bot Fácil: age muito aleatoriamente
-      const rand = Math.random();
-      if (rand < 0.4) {
-        return { action: 'truco_response', value: 'quero' };
-      } else if (rand < 0.7) {
-        return { action: 'truco_response', value: 'nao_quero' };
-      } else {
-        // Tenta aumentar sem critério
-        const nextAction = game.hand.trucoState === 'truco' ? 'retruco' : 'vale4';
-        return { action: 'truco_raise', value: nextAction };
-      }
-    }
-
-    if (difficulty === 'hard') {
-      // Bot Difícil: joga muito calculado
-      if (maxRank >= 11 || strength >= 7) {
-        // Aceita e tem 50% de chance de aumentar se a mão for extremamente forte
-        if (Math.random() < 0.5 && (game.hand.trucoState === 'truco' || game.hand.trucoState === 'retruco') && maxRank >= 12) {
-          return { action: 'truco_raise', value: game.hand.trucoState === 'truco' ? 'retruco' : 'vale4' };
-        }
-        return { action: 'truco_response', value: 'quero' };
-      }
-      // Se não tem cartas boas, foge 95% das vezes (sem blefar no aceito)
-      if (Math.random() < 0.05 && game.hand.trucoState === 'truco') {
-        return { action: 'truco_response', value: 'quero' }; // Blefe raríssimo
-      }
-      return { action: 'truco_response', value: 'nao_quero' };
-    }
-
-    // Bot Médio (Padrão original)
-    if (maxRank >= 11) {
-      if (Math.random() < 0.3 && (game.hand.trucoState === 'truco' || game.hand.trucoState === 'retruco')) {
-        return { action: 'truco_raise', value: game.hand.trucoState === 'truco' ? 'retruco' : 'vale4' };
-      }
-      return { action: 'truco_response', value: 'quero' };
-    } else if (maxRank >= 9 || strength >= 6) {
-      return { action: 'truco_response', value: 'quero' };
-    } else {
-      if (Math.random() < 0.20 && game.hand.trucoState === 'truco') {
-        return { action: 'truco_response', value: 'quero' }; // Blefe
-      }
-      return { action: 'truco_response', value: 'nao_quero' };
-    }
-  }
-
-  // Enquanto houver qualquer aposta aguardando resposta, o bot não inicia outra
-  if (game.hand.envidoResponsePending || game.hand.florResponsePending || game.hand.trucoResponsePending) return null;
-
-  // SE NÃO FOR SUA VEZ DE JOGAR CARTA OU APOSTAR
-  if (game.hand.currentPlayer !== playerIdx) return null;
-
-  // 4. CHAMAR FLOR OU ENVIDO (No primeiro round, antes de jogar cartas)
-  if (game.hand.currentRound === 0 && !game.hasPlayerPlayedCard(playerIdx) && game.hand.canCallEnvido) {
-    if (player.hasFlor && game.hand.florState === 'none') {
-      return { action: 'call_flor' };
-    } else if (!player.hasFlor && game.hand.envidoState === 'none' && game.isPe(playerIdx)) {
-      const envidoScore = player.envidoScore;
-      
-      if (difficulty === 'easy') {
-        // Fácil canta envido aleatório com 25% de chance
-        if (Math.random() < 0.25) {
-          return { action: 'call_envido', value: Math.random() < 0.5 ? 'envido' : 'real_envido' };
-        }
-      } else if (difficulty === 'hard') {
-        // Difícil só canta com pontuações altíssimas
-        if (envidoScore >= 30 && Math.random() < 0.8) {
-          return { action: 'call_envido', value: 'real_envido' };
-        } else if (envidoScore >= 28 && Math.random() < 0.7) {
-          return { action: 'call_envido', value: 'envido' };
-        }
-      } else {
-        // Médio
-        if (envidoScore >= 29 && Math.random() < 0.7) {
-          return { action: 'call_envido', value: 'real_envido' };
-        } else if (envidoScore >= 27 && Math.random() < 0.6) {
-          return { action: 'call_envido', value: 'envido' };
-        }
-      }
-    }
-  }
-
-  // 5. CHAMAR TRUCO
-  if (game.hand.trucoState !== 'vale4' && game.hand.trucoCallerTeam !== player.team) {
-    const maxRank = Math.max(...handCards.map(c => c.trucoRank));
-    const strength = evaluateHandStrength(handCards);
-    let wantTruco = false;
-
-    if (difficulty === 'easy') {
-      // Fácil pede truco aleatório 15% das vezes
-      if (Math.random() < 0.15) wantTruco = true;
-    } else if (difficulty === 'hard') {
-      // Difícil é super agressivo com manilhas reais e super conservador sem elas
-      if (maxRank >= 13 && Math.random() < 0.95) wantTruco = true;
-      else if (maxRank >= 11 && Math.random() < 0.5) wantTruco = true;
-      else if (strength >= 8.5 && Math.random() < 0.4) wantTruco = true;
-    } else {
-      // Médio
-      if (maxRank >= 13 && Math.random() < 0.7) wantTruco = true;
-      else if (maxRank >= 10 && Math.random() < 0.4) wantTruco = true;
-      else if (strength >= 8 && Math.random() < 0.3) wantTruco = true;
-    }
-
-    if (wantTruco) {
-      return { action: 'call_truco' };
-    }
-  }
-
-  // 6. JOGAR CARTA
-  const cardIdx = selectCardToPlay(
-    handCards,
-    game,
-    playerIdx,
-    difficulty
-  );
-
-  return { action: 'play_card', value: cardIdx };
+  // 6. Jogar carta
+  return { action: 'play_card', value: selectCardToPlay(game, playerIdx) };
 }
 
 module.exports = {
-  handleBotAction
+  handleBotAction,
+  estimateWinChance
 };

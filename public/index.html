@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.5">
-  <link rel="stylesheet" href="/css/home.css?v=1.3">
+  <link rel="stylesheet" href="/css/home.css?v=1.4">
 </head>
 
 <body data-screen="home">
@@ -77,9 +77,15 @@
         <div class="hero-suits" aria-hidden="true"><span>♠</span><span>♣</span><span>♥</span><span>♦</span></div>
         <h1 class="rustic-title">Truco River</h1>
         <p class="lobby-tagline">Truco gaúcho online · 1v1 e em dupla</p>
-        <button type="button" id="open-rules-btn" class="rules-cta">
-          <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
-        </button>
+        <div class="hero-links">
+          <button type="button" id="open-rules-btn" class="rules-cta">
+            <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
+          </button>
+          <button type="button" id="open-news-btn" class="rules-cta news-cta">
+            <i class="fa-solid fa-bullhorn"></i> Novidades
+            <span class="news-dot hide" id="news-dot" aria-label="Há novidades"></span>
+          </button>
+        </div>
       </div>
 
       <!-- Conta: convidado ou logado (preenchido pelo social.js) -->
@@ -212,11 +218,6 @@
       </div>
 
       <div class="waiting-actions">
-        <select id="bot-difficulty-select" class="select-input">
-          <option value="easy">Bot Fácil</option>
-          <option value="medium" selected>Bot Médio</option>
-          <option value="hard">Bot Difícil</option>
-        </select>
         <button id="add-bot-btn" class="btn btn-info"><i class="fa-solid fa-robot"></i> Adicionar Bot</button>
         <button id="invite-friends-btn" class="btn btn-secondary hide"><i class="fa-solid fa-user-plus"></i> Convidar amigos</button>
         <button id="ready-btn" class="btn btn-success"><i class="fa-solid fa-check"></i> Pronto</button>
@@ -563,6 +564,11 @@
         </div>
 
         <!-- Botões de Ação de Configurações -->
+        <button id="settings-news-btn" class="btn btn-secondary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+          <i class="fa-solid fa-bullhorn"></i> Novidades
+        </button>
+
         <button id="mobile-admin-btn" class="btn btn-secondary"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
           <i class="fa-solid fa-screwdriver-wrench"></i> Painel Admin
@@ -571,40 +577,86 @@
     </div>
   </div>
 
-  <!-- MODAL DO PAINEL ADMIN (TESTES) -->
-  <div id="modal-admin-panel" class="modal-overlay hide">
-    <div class="modal-card" style="max-width: 450px;">
+  <!-- MODAL DO PAINEL ADMIN -->
+  <div id="modal-admin-panel" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+    <div class="modal-card admin-card">
       <div class="modal-header">
-        <h2><i class="fa-solid fa-wrench"></i> Painel Admin (Testes)</h2>
-        <button id="close-admin-panel" class="btn-close-modal">&times;</button>
+        <h2 id="admin-title"><i class="fa-solid fa-wrench"></i> Painel Admin</h2>
+        <button id="close-admin-panel" class="btn-close-modal" aria-label="Fechar">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-subtitle" style="margin-bottom: 20px;">Selecione as 3 cartas para substituir imediatamente as
-          cartas de sua mão:</p>
-
-        <div style="display: flex; flex-direction: column; gap: 15px;">
-          <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
-            <label for="select-admin-card1" style="font-weight: bold; color: #d97706;">Carta 1:</label>
-            <select id="select-admin-card1" class="voice-select"
-              style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); color: white; border: 1px solid rgba(255, 255, 255, 0.2);"></select>
-          </div>
-
-          <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
-            <label for="select-admin-card2" style="font-weight: bold; color: #d97706;">Carta 2:</label>
-            <select id="select-admin-card2" class="voice-select"
-              style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); color: white; border: 1px solid rgba(255, 255, 255, 0.2);"></select>
-          </div>
-
-          <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
-            <label for="select-admin-card3" style="font-weight: bold; color: #d97706;">Carta 3:</label>
-            <select id="select-admin-card3" class="voice-select"
-              style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); color: white; border: 1px solid rgba(255, 255, 255, 0.2);"></select>
-          </div>
+        <div class="admin-tabs lobby-option-group" role="tablist">
+          <button type="button" class="lobby-toggle-btn active" data-admin-tab="news" role="tab"><i class="fa-solid fa-bullhorn"></i> Novidades</button>
+          <button type="button" class="lobby-toggle-btn" data-admin-tab="cards" role="tab"><i class="fa-solid fa-wand-magic-sparkles"></i> Cartas (teste)</button>
         </div>
+
+        <!-- Novidades -->
+        <section class="admin-pane" data-admin-pane="news">
+          <form id="news-form" class="news-form" autocomplete="off">
+            <input type="hidden" id="news-id">
+            <div class="news-form-head">
+              <span id="news-form-title">Nova notícia</span>
+              <button type="button" id="news-cancel-edit" class="link-btn hide">Cancelar edição</button>
+            </div>
+            <input type="text" id="news-title" maxlength="90" placeholder="Título" aria-label="Título">
+            <div class="news-form-row">
+              <select id="news-tag" aria-label="Tipo">
+                <option value="novidade">Novidade</option>
+                <option value="melhoria">Melhoria</option>
+                <option value="correcao">Correção</option>
+                <option value="evento">Evento</option>
+                <option value="aviso">Aviso</option>
+              </select>
+              <label class="news-pin"><input type="checkbox" id="news-pinned"> Fixar no topo</label>
+            </div>
+            <textarea id="news-body" maxlength="2000" rows="5" placeholder="O que há de novo? (pode pular linhas)" aria-label="Texto"></textarea>
+            <p id="news-form-msg" class="form-msg" role="status"></p>
+            <button type="submit" id="news-submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> <span>Publicar para todos</span></button>
+          </form>
+
+          <h3 class="admin-subtitle">Publicadas</h3>
+          <ul id="admin-news-list" class="admin-news-list"></ul>
+        </section>
+
+        <!-- Cartas de teste -->
+        <section class="admin-pane hide" data-admin-pane="cards">
+          <p class="modal-subtitle" id="admin-cards-hint" style="margin-bottom: 16px;">Selecione as 3 cartas para substituir imediatamente as cartas da sua mão:</p>
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
+              <label for="select-admin-card1" style="font-weight: bold; color: #d97706;">Carta 1:</label>
+              <select id="select-admin-card1" class="voice-select"
+                style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); color: white; border: 1px solid rgba(255, 255, 255, 0.2);"></select>
+            </div>
+
+            <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
+              <label for="select-admin-card2" style="font-weight: bold; color: #d97706;">Carta 2:</label>
+              <select id="select-admin-card2" class="voice-select"
+                style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); color: white; border: 1px solid rgba(255, 255, 255, 0.2);"></select>
+            </div>
+
+            <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
+              <label for="select-admin-card3" style="font-weight: bold; color: #d97706;">Carta 3:</label>
+              <select id="select-admin-card3" class="voice-select"
+                style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.4); color: white; border: 1px solid rgba(255, 255, 255, 0.2);"></select>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 18px;">
+            <button id="apply-admin-cards" class="btn btn-success"><i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar Cartas</button>
+          </div>
+        </section>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-        <button id="apply-admin-cards" class="btn btn-success" style="padding: 10px 20px; font-weight: bold;"><i
-            class="fa-solid fa-wand-magic-sparkles"></i> Aplicar Cartas</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE NOVIDADES (para todos) -->
+  <div id="modal-news" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="news-title-h">
+    <div class="modal-card news-card">
+      <div class="modal-header">
+        <h2 id="news-title-h"><i class="fa-solid fa-bullhorn"></i> Novidades</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <ul id="news-list" class="news-list"></ul>
       </div>
     </div>
   </div>
@@ -1023,10 +1075,11 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=4"></script>
-  <script src="/js/app.js?v=4"></script>
+  <script src="/js/app.js?v=5"></script>
   <script src="/js/social.js?v=4"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
+  <script src="/js/news.js?v=1"></script>
 </body>
 
 </html>

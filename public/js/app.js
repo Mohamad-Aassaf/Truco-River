@@ -459,8 +459,7 @@ document.getElementById('join-room-btn').addEventListener('click', () => {
 
 // Adicionar Bot
 document.getElementById('add-bot-btn').addEventListener('click', () => {
-  const difficulty = document.getElementById('bot-difficulty-select').value;
-  socket.emit('add_bot', { difficulty });
+  socket.emit('add_bot', {});
 });
 
 // Pronto
@@ -637,11 +636,21 @@ function renderLobbyScreen(gameState) {
         ? `<button class="kick-player-btn btn btn-danger btn-sm" data-id="${p.id}" style="margin-left: 10px; padding: 2px 6px; font-size: 0.7rem; line-height: 1; border-radius: 4px;" title="Remover"><i class="fa-solid fa-user-xmark"></i> Remover</button>`
         : '';
 
-      div.className = `player-slot ${p.ready ? 'ready' : ''}`;
+      // Bot: o dono da sala escolhe a dificuldade ao lado do nome
+      const levels = { easy: 'Fácil', medium: 'Médio', hard: 'Difícil' };
+      const shownName = p.isBot && isHost ? escapeText(p.name.replace(/\s*\([^)]*\)\s*$/, '')) : escapeText(p.name);
+      const botLevelHtml = p.isBot && isHost
+        ? `<select class="bot-level-select" data-id="${p.id}" aria-label="Dificuldade do bot">
+            ${Object.keys(levels).map(k => `<option value="${k}" ${p.difficulty === k ? 'selected' : ''}>${levels[k]}</option>`).join('')}
+          </select>`
+        : '';
+
+      div.className = `player-slot ${p.ready ? 'ready' : ''} ${p.disconnected ? 'offline' : ''}`;
       div.innerHTML = `
         <span class="player-slot-name">
           ${p.isBot ? '<i class="fa-solid fa-robot"></i>' : '<i class="fa-solid fa-user"></i>'}
-          ${p.name} ${isMe ? '(Você)' : ''}
+          ${shownName} ${isMe ? '(Você)' : ''}
+          ${botLevelHtml}
           <span style="font-size: 0.75rem; opacity: 0.7; font-weight: 700; color: ${p.team === 0 ? '#60a5fa' : '#f87171'};">
             (Time ${p.team + 1})
           </span>
@@ -662,6 +671,13 @@ function renderLobbyScreen(gameState) {
             });
           }
         }, 0);
+      }
+
+      const levelSelect = div.querySelector('.bot-level-select');
+      if (levelSelect) {
+        levelSelect.addEventListener('change', () => {
+          socket.emit('set_bot_difficulty', { playerId: p.id, difficulty: levelSelect.value });
+        });
       }
 
       if (isHost && !isMe) {
@@ -995,6 +1011,13 @@ function drawMatchsticks(container, score) {
     box.innerHTML = html;
     container.appendChild(box);
   }
+}
+
+// Texto vindo de outros jogadores (nomes) entra na página sem virar HTML
+function escapeText(text) {
+  return String(text == null ? '' : text).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
 }
 
 // Meu time e o adversário no placar do servidor (time 0 ou 1)
@@ -2004,15 +2027,39 @@ function populateAdminCardSelects() {
 }
 
 // Abrir modal Admin
+// O painel abre em qualquer tela: Novidades sempre; Cartas só durante uma mão
+function inPlayableHand() {
+  return !!(lastGameState && lastGameState.state === 'playing' && lastGameState.hand);
+}
+
+function openAdminPanel() {
+  populateAdminCardSelects();
+  const playing = inPlayableHand();
+  const hint = document.getElementById('admin-cards-hint');
+  if (hint) {
+    hint.textContent = playing
+      ? 'Selecione as 3 cartas para substituir imediatamente as cartas da sua mão:'
+      : 'Entre numa partida para trocar as cartas da sua mão (modo de teste).';
+  }
+  if (btnApplyAdminCards) btnApplyAdminCards.disabled = !playing;
+  if (window.trucoNews) window.trucoNews.renderAdmin();
+  modalAdminPanel.classList.remove('hide');
+}
+
+// Abas do painel (Novidades / Cartas)
+document.querySelectorAll('[data-admin-tab]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-admin-tab]').forEach(t => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('[data-admin-pane]').forEach(pane => {
+      pane.classList.toggle('hide', pane.dataset.adminPane !== tab.dataset.adminTab);
+    });
+  });
+});
+
 if (btnAdminPanel) {
   btnAdminPanel.addEventListener('click', () => {
-    if (!lastGameState || lastGameState.state !== 'playing' || !lastGameState.hand) {
-      alert("Tens que estar jogando uma rodada para alterar as tuas cartas, jogador!");
-      return;
-    }
     if (isClientAdminAuthenticated) {
-      populateAdminCardSelects();
-      modalAdminPanel.classList.remove('hide');
+      openAdminPanel();
     } else {
       const password = prompt("Digite a senha de administrador para acessar o painel:");
       if (password) {
@@ -2025,8 +2072,12 @@ if (btnAdminPanel) {
 // Escutar retorno de autenticação do administrador
 socket.on('admin_validated', () => {
   isClientAdminAuthenticated = true;
-  populateAdminCardSelects();
-  modalAdminPanel.classList.remove('hide');
+  openAdminPanel();
+});
+
+// Reconectou: o servidor esquece o login de admin (precisa entrar de novo)
+socket.on('disconnect', () => {
+  isClientAdminAuthenticated = false;
 });
 
 // Fechar modal Admin
@@ -2039,6 +2090,10 @@ if (btnCloseAdminPanel) {
 // Aplicar as cartas escolhidas
 if (btnApplyAdminCards) {
   btnApplyAdminCards.addEventListener('click', () => {
+    if (!inPlayableHand()) {
+      alert('Entre numa partida para trocar as cartas da sua mão.');
+      return;
+    }
     const c1 = JSON.parse(selectAdminCard1.value);
     const c2 = JSON.parse(selectAdminCard2.value);
     const c3 = JSON.parse(selectAdminCard3.value);

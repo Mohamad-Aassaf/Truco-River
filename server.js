@@ -9,6 +9,7 @@ const { TrucoGame } = require('./gameEngine');
 const bot = require('./bot');
 const { createAccounts } = require('./accounts');
 const { createSocial } = require('./social');
+const { createNews } = require('./news');
 
 const app = express();
 const server = http.createServer(app);
@@ -33,6 +34,9 @@ const activeGames = {};
 
 // Contas e amigos
 const accounts = createAccounts();
+
+// Novidades (mesmo armazenamento das contas)
+const news = createNews(accounts.store);
 
 // Diagnóstico: onde as contas estão sendo salvas (sem dados pessoais)
 app.get('/api/status', (req, res) => {
@@ -77,6 +81,10 @@ function markAccount(game, socket) {
     p.clientId = socket.data.clientId || null;
   }
 }
+
+// Bots: nome mostra o nível
+const BOT_LEVELS = { easy: 'Fácil', medium: 'Médio', hard: 'Difícil' };
+const botName = (num, difficulty) => `Bot River ${num} (${BOT_LEVELS[difficulty] || 'Médio'})`;
 
 // Salas públicas para a lista do lobby
 function listRooms() {
@@ -343,6 +351,26 @@ io.on('connection', (socket) => {
 
   social.attach(socket);
 
+  // Novidades: manda a lista ao conectar
+  news.ready.then(() => socket.emit('news', news.list()));
+
+  // Admin cria/edita (com id) ou apaga notícias; muda na hora para todos
+  socket.on('news:save', (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    if (!socket.isAdmin) return reply({ error: 'Só o admin pode mexer nas novidades.' });
+    const res = news.save(data);
+    if (res.ok) io.emit('news', news.list());
+    reply(res);
+  });
+
+  socket.on('news:delete', (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    if (!socket.isAdmin) return reply({ error: 'Só o admin pode mexer nas novidades.' });
+    const res = news.remove(data && data.id);
+    if (res.ok) io.emit('news', news.list());
+    reply(res);
+  });
+
   // Validar senha de administrador
   socket.on('validate_admin', ({ password }) => {
     if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
@@ -416,20 +444,35 @@ io.on('connection', (socket) => {
   });
 
   // Adicionar Bot
+  // Adicionar bot: entra direto como Médio; a dificuldade muda ao lado do nome dele
   socket.on('add_bot', (data) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby') return;
 
-    const difficulty = (data && data.difficulty) ? data.difficulty : 'medium';
+    const difficulty = BOT_LEVELS[data && data.difficulty] ? data.difficulty : 'medium';
 
     if (game.players.length < game.maxPlayers) {
-      const botNum = game.players.filter(p => p.isBot).length + 1;
-      let diffSuffix = 'Médio';
-      if (difficulty === 'easy') diffSuffix = 'Fácil';
-      if (difficulty === 'hard') diffSuffix = 'Difícil';
-      game.addPlayer(`bot_${Date.now()}`, `Bot River ${botNum} (${diffSuffix})`, null, true, difficulty);
+      // Número livre (Bot River 1, 2, 3...) mesmo depois de remover algum
+      const used = new Set(game.players.filter(p => p.isBot).map(p => p.botNumber));
+      let botNum = 1;
+      while (used.has(botNum)) botNum++;
+      game.addPlayer(`bot_${Date.now()}_${botNum}`, botName(botNum, difficulty), null, true, difficulty);
+      game.players[game.players.length - 1].botNumber = botNum;
       broadcastState(currentRoomId);
     }
+  });
+
+  // Mudar a dificuldade de um bot (só o dono da sala, antes de começar)
+  socket.on('set_bot_difficulty', (data) => {
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'lobby' || !data || !BOT_LEVELS[data.difficulty]) return;
+    const isHost = game.players[0] && game.players[0].socketId === socket.id;
+    if (!isHost) return;
+    const bot = game.players.find(p => p.isBot && p.id === data.playerId);
+    if (!bot) return;
+    bot.difficulty = data.difficulty;
+    bot.name = botName(bot.botNumber || 1, data.difficulty);
+    broadcastState(currentRoomId);
   });
 
   // Alterar status Pronto
