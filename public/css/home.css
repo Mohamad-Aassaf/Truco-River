@@ -1970,3 +1970,180 @@ body[data-deck-style="frances"] .mini-card-badge.hidden-card {
 @media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
   body[data-screen="game"] .toast-stack { top: 62px; }
 }
+
+/* --- Bug ou sugestão --- */
+.report-cta {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #ffc2b8;
+  background: rgba(231, 76, 60, 0.08);
+}
+
+.report-cta:hover { background: rgba(231, 76, 60, 0.16); box-shadow: 0 6px 18px rgba(231, 76, 60, 0.18); }
+
+.report-card { max-width: 500px; }
+.report-form { text-align: left; }
+.report-kind { margin-bottom: 16px; }
+.report-form .input-group { margin-bottom: 14px; }
+.report-form .input-group label small { color: var(--text-dim); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.report-form input[type="text"],
+.report-form textarea {
+  width: 100%;
+  background: var(--inset-bg);
+  border: 1px solid rgba(223, 177, 91, 0.3);
+  border-radius: 10px;
+  padding: 11px 13px;
+  color: var(--text-light);
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.report-form textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
+
+.report-form input:focus,
+.report-form textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(223, 177, 91, 0.18);
+}
+
+.report-drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 2px dashed rgba(223, 177, 91, 0.35);
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.report-drop:hover,
+.report-drop:focus-visible,
+.report-drop.dragging { border-color: var(--gold); background: rgba(223, 177, 91, 0.08); }
+
+.report-drop-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+}
+
+.report-drop-empty i { font-size: 1.6rem; color: var(--gold); margin-bottom: 2px; }
+.report-drop-empty b { color: var(--cream); font-size: 0.88rem; }
+.report-drop-empty small { font-size: 0.75rem; }
+
+.report-drop .report-drop-preview { display: none; }
+.report-drop.has-image .report-drop-empty { display: none; }
+.report-drop.has-image .report-drop-preview { display: block; position: relative; }
+.report-drop-preview img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; box-shadow: var(--shadow-1); }
+.report-drop-preview .icon-btn { position: absolute; top: -10px; right: -10px; background: var(--wood-dark); }
+
+.report-submit { width: 100%; }
+
+.report-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 8px;
+  text-align: center;
+  animation: fadeUp 0.35s ease;
+}
+
+.report-done > i { font-size: 2.6rem; color: #2ecc71; }
+.report-done h3 { font-family: var(--font-title); color: var(--gold); }
+.report-done p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 6px; }
+
+/* Painel admin: relatos */
+.reports-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.reports-filters .lobby-option-group { flex: 1 1 220px; }
+.reports-filters .lobby-toggle-btn { font-size: 0.74rem; padding: 7px 6px; }
+
+.admin-reports-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.report-item {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid #e74c3c;
+}
+
+.report-item.kind-sugestao { border-left-color: #f1c40f; }
+.report-item.resolved { opacity: 0.6; border-left-color: #2ecc71; }
+.report-item h4 { color: var(--cream); font-size: 0.98rem; margin: 2px 0 4px; }
+
+.report-desc {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: #ddd3bd;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 8px;
+}
+
+.report-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.report-info i { color: var(--gold-dark); margin-right: 3px; }
+
+.report-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.report-actions .icon-btn { margin-left: auto; }
+
+.report-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(231, 76, 60, 0.18);
+  color: #ff9a8b;
+}
+
+.report-chip.kind-sugestao { background: rgba(241, 196, 15, 0.16); color: #f7dc6f; }
+.report-chip.done { background: rgba(46, 204, 113, 0.16); color: #7ee2a8; }
+
+/* Imagem ampliada */
+.image-viewer { z-index: 2100; padding: 20px; cursor: zoom-out; }
+.image-viewer img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: var(--shadow-2); }
+.image-viewer .btn-close-modal { position: absolute; top: 14px; right: 14px; color: #fff; }
+
+/* Admin com 3 abas no celular */
+@media (max-width: 420px) {
+  .admin-tabs .lobby-toggle-btn { font-size: 0.7rem; padding: 8px 4px; }
+}
+
+/* Celular: os três botões do topo cabem em duas linhas */
+@media (max-width: 420px) {
+  .hero-links { gap: 6px; }
+  .hero-links .rules-cta { font-size: 0.72rem; padding: 6px 10px; gap: 6px; }
+}

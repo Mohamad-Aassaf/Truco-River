@@ -2106,6 +2106,7 @@ function openAdminPanel() {
   }
   if (btnApplyAdminCards) btnApplyAdminCards.disabled = !playing;
   if (window.trucoNews) window.trucoNews.renderAdmin();
+  if (window.trucoReports) window.trucoReports.load();
   modalAdminPanel.classList.remove('hide');
 }
 

@@ -10,6 +10,7 @@ const bot = require('./bot');
 const { createAccounts } = require('./accounts');
 const { createSocial } = require('./social');
 const { createNews } = require('./news');
+const { createReports } = require('./reports');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,7 +18,9 @@ const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
-  }
+  },
+  // Relatos podem trazer um print (já comprimido no navegador)
+  maxHttpBufferSize: 2e6
 });
 
 const PORT = process.env.PORT || 3000;
@@ -37,6 +40,14 @@ const accounts = createAccounts();
 
 // Novidades (mesmo armazenamento das contas)
 const news = createNews(accounts.store);
+
+// Relatos de bugs e sugestões (só o admin vê)
+const reports = createReports(accounts.store);
+const reportAttempts = new Map(); // IP -> horários dos últimos envios
+
+function adminSockets() {
+  return [...io.sockets.sockets.values()].filter(s => s.isAdmin);
+}
 
 // Diagnóstico: onde as contas estão sendo salvas (sem dados pessoais)
 app.get('/api/status', (req, res) => {
@@ -370,6 +381,42 @@ io.on('connection', (socket) => {
     if (res.ok) io.emit('news', news.list());
     reply(res);
   });
+
+  // Jogador envia um bug ou sugestão (com print opcional)
+  socket.on('report:send', async (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    const fwd = socket.handshake.headers['x-forwarded-for'];
+    const ip = (fwd ? String(fwd).split(',')[0] : socket.handshake.address || '').trim();
+    const now = Date.now();
+    const recent = (reportAttempts.get(ip) || []).filter(t => now - t < 10 * 60 * 1000);
+    if (recent.length >= 5) return reply({ error: 'Você já enviou vários relatos agora. Tente de novo em alguns minutos.' });
+
+    await reports.ready;
+    const acc = socket.data.account;
+    const typedName = data && typeof data.name === 'string' ? data.name.trim().slice(0, 18) : '';
+    const author = {
+      name: acc ? accounts.displayName(acc) : (typedName || 'Convidado'),
+      account: acc ? accounts.displayName(acc) : null
+    };
+    const res = reports.add(data, author);
+    if (res.error) return reply(res);
+
+    recent.push(now);
+    reportAttempts.set(ip, recent);
+    adminSockets().forEach(s => s.emit('reports:new', { item: res.item, open: reports.openCount() }));
+    reply({ ok: true });
+  });
+
+  // Admin: ver, abrir imagem, marcar resolvido e apagar relatos
+  const adminOnly = handler => (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    if (!socket.isAdmin) return reply({ error: 'Só o admin pode ver os relatos.' });
+    reports.ready.then(() => reply(handler(data || {})));
+  };
+  socket.on('reports:list', adminOnly(() => ({ ok: true, items: reports.list(), open: reports.openCount() })));
+  socket.on('reports:image', adminOnly(d => reports.image(d.id)));
+  socket.on('reports:status', adminOnly(d => reports.setStatus(d.id, d.status)));
+  socket.on('reports:delete', adminOnly(d => reports.remove(d.id)));
 
   // Validar senha de administrador
   socket.on('validate_admin', ({ password }) => {

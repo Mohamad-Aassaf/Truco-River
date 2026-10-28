@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.5">
-  <link rel="stylesheet" href="/css/home.css?v=1.5">
+  <link rel="stylesheet" href="/css/home.css?v=1.6">
 </head>
 
 <body data-screen="home">
@@ -78,6 +78,9 @@
         <h1 class="rustic-title">Truco River</h1>
         <p class="lobby-tagline">Truco gaúcho online · 1v1 e em dupla</p>
         <div class="hero-links">
+          <button type="button" id="open-report-btn" class="rules-cta report-cta">
+            <i class="fa-solid fa-bug"></i> Bug ou sugestão
+          </button>
           <button type="button" id="open-rules-btn" class="rules-cta">
             <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
           </button>
@@ -565,6 +568,11 @@
         </div>
 
         <!-- Botões de Ação de Configurações -->
+        <button id="settings-report-btn" class="btn btn-secondary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+          <i class="fa-solid fa-bug"></i> Relatar bug ou sugestão
+        </button>
+
         <button id="open-voices-btn" class="btn btn-secondary"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
           <i class="fa-solid fa-microphone-lines"></i> Vozes dos cantos
@@ -594,8 +602,26 @@
       <div class="modal-body">
         <div class="admin-tabs lobby-option-group" role="tablist">
           <button type="button" class="lobby-toggle-btn active" data-admin-tab="news" role="tab"><i class="fa-solid fa-bullhorn"></i> Novidades</button>
+          <button type="button" class="lobby-toggle-btn" data-admin-tab="reports" role="tab"><i class="fa-solid fa-bug"></i> Relatos <span class="news-count inline hide" id="admin-reports-count"></span></button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="cards" role="tab"><i class="fa-solid fa-wand-magic-sparkles"></i> Cartas (teste)</button>
         </div>
+
+        <!-- Relatos de bugs e sugestões -->
+        <section class="admin-pane hide" data-admin-pane="reports">
+          <div class="reports-filters">
+            <div class="lobby-option-group" id="reports-kind-filter">
+              <button type="button" class="lobby-toggle-btn active" data-kind="all">Todos</button>
+              <button type="button" class="lobby-toggle-btn" data-kind="bug"><i class="fa-solid fa-bug"></i> Bugs</button>
+              <button type="button" class="lobby-toggle-btn" data-kind="sugestao"><i class="fa-solid fa-lightbulb"></i> Sugestões</button>
+            </div>
+            <div class="lobby-option-group" id="reports-status-filter">
+              <button type="button" class="lobby-toggle-btn active" data-status="aberto">Abertos</button>
+              <button type="button" class="lobby-toggle-btn" data-status="resolvido">Resolvidos</button>
+              <button type="button" class="lobby-toggle-btn" data-status="all">Todos</button>
+            </div>
+          </div>
+          <ul id="admin-reports-list" class="admin-reports-list"></ul>
+        </section>
 
         <!-- Novidades -->
         <section class="admin-pane" data-admin-pane="news">
@@ -1073,6 +1099,67 @@
     </div>
   </div>
 
+  <!-- MODAL DE RELATO (BUG OU SUGESTÃO) -->
+  <div id="modal-report" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="report-title-h">
+    <div class="modal-card report-card">
+      <div class="modal-header">
+        <h2 id="report-title-h"><i class="fa-solid fa-bug"></i> Bug ou sugestão</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="report-form" class="report-form" novalidate>
+          <div class="lobby-option-group report-kind" role="radiogroup" aria-label="Tipo">
+            <button type="button" class="lobby-toggle-btn active" data-report-kind="bug" role="radio" aria-checked="true"><i class="fa-solid fa-bug"></i> Encontrei um bug</button>
+            <button type="button" class="lobby-toggle-btn" data-report-kind="sugestao" role="radio" aria-checked="false"><i class="fa-solid fa-lightbulb"></i> Tenho uma sugestão</button>
+          </div>
+
+          <div class="input-group">
+            <label for="report-title">Título</label>
+            <input type="text" id="report-title" maxlength="100" placeholder="Ex: As cartas somem depois do Truco">
+          </div>
+
+          <div class="input-group">
+            <label for="report-desc">Descrição</label>
+            <textarea id="report-desc" maxlength="3000" rows="5"
+              placeholder="O que aconteceu? O que você estava fazendo? Acontece sempre?"></textarea>
+          </div>
+
+          <div class="input-group">
+            <label>Imagem ou print <small>(opcional)</small></label>
+            <label class="report-drop" id="report-drop" tabindex="0">
+              <input type="file" id="report-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              <span class="report-drop-empty">
+                <i class="fa-solid fa-image"></i>
+                <b>Toque para escolher uma imagem</b>
+                <small>ou arraste / cole (Ctrl+V) um print aqui</small>
+              </span>
+              <span class="report-drop-preview">
+                <img id="report-preview" alt="Prévia da imagem">
+                <button type="button" class="icon-btn small danger" id="report-remove-img" aria-label="Remover imagem"><i class="fa-solid fa-xmark"></i></button>
+              </span>
+            </label>
+          </div>
+
+          <p id="report-msg" class="form-msg" role="status"></p>
+          <button type="submit" id="report-submit" class="btn btn-primary report-submit"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+        </form>
+
+        <div class="report-done hide" id="report-done">
+          <i class="fa-solid fa-circle-check"></i>
+          <h3>Valeu, tchê!</h3>
+          <p>Recebemos o seu relato. Ele vai direto para a equipe do Truco River.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="report-again">Enviar outro</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMAGEM AMPLIADA (relatos no painel admin) -->
+  <div id="image-viewer" class="modal-overlay image-viewer hide" role="dialog" aria-modal="true" aria-label="Imagem do relato">
+    <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+    <img id="image-viewer-img" alt="Imagem do relato">
+  </div>
+
   <!-- MODAL DE VOZES DOS CANTOS -->
   <div id="modal-voices" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="voices-title">
     <div class="modal-card voices-card">
@@ -1106,12 +1193,13 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=6"></script>
+  <script src="/js/app.js?v=7"></script>
   <script src="/js/social.js?v=5"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
   <script src="/js/news.js?v=2"></script>
   <script src="/js/voices.js?v=1"></script>
+  <script src="/js/reports.js?v=1"></script>
 </body>
 
 </html>
