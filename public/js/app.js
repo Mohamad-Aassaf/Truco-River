@@ -583,13 +583,13 @@ socket.on('game_state', (gameState) => {
     document.body.setAttribute('data-screen', 'lobby');
     renderLobbyScreen(gameState);
     if (window.soundManager) {
-      window.soundManager.changeMusic('/js/musica.mp3');
+      window.soundManager.changeMusic(window.TRUCO_MUSIC.home); // mesma música do início, sem recomeçar
     }
   } else if (gameState.state === 'playing' || gameState.state === 'hand_end') {
     document.body.setAttribute('data-screen', 'game');
     renderGameScreen(gameState);
     if (window.soundManager) {
-      window.soundManager.changeMusic('/js/musicaJogo.mp3');
+      window.soundManager.changeMusic(window.TRUCO_MUSIC.game);
     }
   } else if (gameState.state === 'game_end') {
     document.body.setAttribute('data-screen', 'game_end');
@@ -1474,6 +1474,11 @@ function renderVoiceBubbles(voiceBubbles, players) {
         void bubble.offsetWidth; // reinicia a animação
         bubble.classList.add('show');
       }
+
+      // Canto novo: toca a voz escolhida em Ajustes > Vozes (se houver gravação)
+      if (prevVoiceBubbles[playerIdx] !== text && window.soundManager) {
+        window.soundManager.playVoiceChant(text);
+      }
     }
   });
 
@@ -1963,18 +1968,76 @@ chatForm.addEventListener('submit', (e) => {
 });
 
 // Receber mensagens de chat
+// --- AVISO DE MENSAGEM NOVA NO CHAT ---
+// No celular o chat fica escondido no menu (botão ☰ no topo): mostra um contador
+// nesse botão e um aviso com a mensagem. No computador o chat pisca.
+let chatUnread = 0;
+const chatUnreadBadge = document.getElementById('chat-unread-badge');
+const chatBox = document.querySelector(".chat-container");
+const MOBILE_LAYOUT = '(max-width: 850px), (max-height: 500px) and (orientation: landscape)';
+
+function setChatUnread(n) {
+  chatUnread = n;
+  if (!chatUnreadBadge) return;
+  chatUnreadBadge.textContent = n > 9 ? '9+' : String(n);
+  chatUnreadBadge.classList.toggle('hide', n === 0);
+  if (n > 0) {
+    chatUnreadBadge.classList.remove('bump');
+    void chatUnreadBadge.offsetWidth;
+    chatUnreadBadge.classList.add('bump');
+  }
+}
+
+function openChatDrawer() {
+  if (!infoSidebar) return;
+  infoSidebar.classList.add('open');
+  if (sidebarOverlay) sidebarOverlay.classList.remove('hide');
+  setChatUnread(0);
+  setTimeout(() => {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    if (chatBox) chatBox.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, 250);
+}
+
+function notifyChatMessage(sender, msg) {
+  if (!screenGame.classList.contains('active')) return;
+  const mobile = window.matchMedia(MOBILE_LAYOUT).matches;
+  const chatVisible = mobile ? infoSidebar.classList.contains('open') : document.visibilityState === 'visible';
+  if (window.soundManager) window.soundManager.playChatPing();
+
+  if (!mobile && chatBox) {
+    chatBox.classList.remove('chat-flash');
+    void chatBox.offsetWidth;
+    chatBox.classList.add('chat-flash');
+  }
+  if (chatVisible) return;
+
+  setChatUnread(chatUnread + 1);
+  if (window.trucoSocial) {
+    const short = msg.length > 70 ? msg.slice(0, 70) + '…' : msg;
+    window.trucoSocial.toast(`<i class="fa-solid fa-comment-dots"></i> <b>${escapeText(sender)}:</b> ${escapeText(short)}`, {
+      key: 'chat-msg',
+      kind: 'chat',
+      timeout: 5000,
+      actions: mobile ? [{ label: 'Abrir chat', primary: true, onClick: openChatDrawer }] : []
+    });
+  }
+}
+
 socket.on('receive_chat', ({ sender, senderId, msg }) => {
   const isSelf = senderId === socket.id;
   const div = document.createElement('div');
   div.className = `chat-bubble ${isSelf ? 'self' : ''}`;
   div.innerHTML = `
-    <span class="chat-sender">${sender}</span>
-    <span class="chat-text">${msg}</span>
+    <span class="chat-sender">${escapeText(sender)}</span>
+    <span class="chat-text">${escapeText(msg)}</span>
   `;
   chatMessages.appendChild(div);
 
   // Rolar para o final do chat
   chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  if (!isSelf) notifyChatMessage(String(sender || ''), String(msg || ''));
 });
 
 // Sair da Partida
@@ -2118,6 +2181,12 @@ if (sidebarToggleBtn && infoSidebar) {
     infoSidebar.classList.add('open');
     if (sidebarOverlay) {
       sidebarOverlay.classList.remove('hide');
+    }
+    // Abriu o menu: as mensagens novas do chat foram vistas
+    if (chatUnread) {
+      setChatUnread(0);
+      if (window.trucoSocial) window.trucoSocial.dismissToast('chat-msg');
+      setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 250);
     }
   });
 }

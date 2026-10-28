@@ -1,6 +1,46 @@
 // public/js/sound.js
 // Gerenciador de Áudio com Web Audio API e reprodutor de música de fundo
 
+// Músicas: a do início continua tocando na sala de espera; a da partida só na mesa
+const MUSIC = {
+  home: '/audio/music/inicio.mp3',
+  game: '/audio/music/partida.mp3'
+};
+
+// Vozes dos cantos. Cada canto pode ter vários áudios para o jogador escolher.
+// Ainda não há gravações: quando houver, basta listar aqui, por exemplo
+//   truco: [{ id: 'gaucho', label: 'Truco Gaúcho', path: '/audio/vozes/truco-gaucho.mp3' }]
+const VOICE_CHANTS = [
+  { key: 'truco', label: 'Truco' },
+  { key: 'retruco', label: 'Retruco' },
+  { key: 'vale4', label: 'Vale Quatro' },
+  { key: 'envido', label: 'Envido' },
+  { key: 'real_envido', label: 'Real Envido' },
+  { key: 'falta_envido', label: 'Falta Envido' },
+  { key: 'flor', label: 'Flor' },
+  { key: 'contra_flor', label: 'Contra-Flor' },
+  { key: 'contra_flor_resto', label: 'Contra-Flor e o Resto' },
+  { key: 'quero', label: 'Quero' },
+  { key: 'nao_quero', label: 'Não Quero' },
+  { key: 'achique', label: 'Achique' },
+  { key: 'mazo', label: 'Mazo' }
+];
+const VOICE_LIBRARY = {};
+VOICE_CHANTS.forEach(c => { VOICE_LIBRARY[c.key] = []; });
+
+// Texto do balão de fala -> canto
+function voiceKeyFromText(text) {
+  const t = String(text || '').replace(/¡|!/g, '').toLowerCase().trim();
+  if (t === 'flor_sobre_envido') return 'flor';
+  if (t === 'vale quatro' || t === 'vale 4') return 'vale4';
+  if (t.includes('contra-flor e o resto') || t.includes('contra flor e o resto')) return 'contra_flor_resto';
+  if (t.includes('contra-flor') || t.includes('contra flor')) return 'contra_flor';
+  if (t === 'não quero' || t === 'nao quero') return 'nao_quero';
+  if (t.includes('mazo')) return 'mazo';
+  const map = { truco: 'truco', retruco: 'retruco', envido: 'envido', 'real envido': 'real_envido', 'falta envido': 'falta_envido', flor: 'flor', quero: 'quero', achique: 'achique' };
+  return map[t] || null;
+}
+
 class SoundManager {
   constructor() {
     this.audioCtx = null;
@@ -9,8 +49,69 @@ class SoundManager {
     this.sfxVolume = 0.5;
     this.muted = false;
 
-    // Música de fundo opcional (o usuário escolherá o arquivo depois)
-    this.bgMusicPath = '/js/musga.mp3';
+    this.bgMusicPath = MUSIC.home;
+    this.voicePrefs = this.loadVoicePrefs();
+  }
+
+  // --- VOZES DOS CANTOS ---
+
+  loadVoicePrefs() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('truco_voice_prefs') || '{}');
+      return { enabled: saved.enabled !== false, chants: saved.chants || {} };
+    } catch (e) {
+      return { enabled: true, chants: {} };
+    }
+  }
+
+  saveVoicePrefs(prefs) {
+    this.voicePrefs = prefs;
+    try { localStorage.setItem('truco_voice_prefs', JSON.stringify(prefs)); } catch (e) { /* sem armazenamento */ }
+  }
+
+  // Áudio escolhido para um canto (ou o primeiro disponível)
+  voiceFor(key) {
+    const options = VOICE_LIBRARY[key] || [];
+    if (!options.length) return null;
+    const pref = this.voicePrefs.chants[key] || {};
+    const chosen = options.find(o => o.id === pref.voice) || options[0];
+    return { path: chosen.path, pitch: Number(pref.pitch) || 1 };
+  }
+
+  playVoiceFile(voice) {
+    if (!voice || this.muted) return;
+    const audio = new Audio(voice.path);
+    audio.volume = this.sfxVolume;
+    audio.playbackRate = voice.pitch;
+    audio.preservesPitch = false;
+    audio.play().catch(() => { /* arquivo não encontrado ou autoplay bloqueado */ });
+  }
+
+  // Toca a voz do canto mostrado no balão (sem gravações, não faz nada)
+  playVoiceChant(text) {
+    if (!this.voicePrefs.enabled) return;
+    const key = voiceKeyFromText(text);
+    if (key) this.playVoiceFile(this.voiceFor(key));
+  }
+
+  // Aviso curto de mensagem nova no chat
+  playChatPing() {
+    this.initAudio();
+    if (this.muted || !this.audioCtx) return;
+    const now = this.audioCtx.currentTime;
+    [880, 1320].forEach((freq, i) => {
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.09);
+      gain.gain.setValueAtTime(0, now + i * 0.09);
+      gain.gain.linearRampToValueAtTime(this.sfxVolume * 0.18, now + i * 0.09 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.25);
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      osc.start(now + i * 0.09);
+      osc.stop(now + i * 0.09 + 0.3);
+    });
   }
 
   initAudio() {
@@ -192,3 +293,5 @@ class SoundManager {
 
 // Inicializar globalmente
 window.soundManager = new SoundManager();
+window.TRUCO_MUSIC = MUSIC;
+window.TRUCO_VOICES = { chants: VOICE_CHANTS, library: VOICE_LIBRARY };

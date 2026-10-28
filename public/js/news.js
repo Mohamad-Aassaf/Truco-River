@@ -36,9 +36,66 @@
   const latest = () => items.reduce((m, it) => Math.max(m, it.date || 0), 0);
   const seenUntil = () => Number(storage.get(SEEN_KEY) || 0);
 
+  const unseenCount = () => items.filter(it => (it.date || 0) > seenUntil()).length;
+
+  // Contador no botão Novidades, no item de Ajustes e uma bolinha nas engrenagens
   function updateDot() {
-    const unseen = latest() > seenUntil();
-    if (dot) dot.classList.toggle('hide', !unseen);
+    const count = unseenCount();
+    const label = count > 9 ? '9+' : String(count);
+    if (dot) {
+      dot.textContent = label;
+      dot.classList.toggle('hide', count === 0);
+    }
+    const newsBtn = $('open-news-btn');
+    if (newsBtn) {
+      newsBtn.classList.toggle('has-new', count > 0);
+      newsBtn.title = count ? `${count} ${count === 1 ? 'novidade nova' : 'novidades novas'}` : 'Novidades';
+    }
+    const settingsCount = $('settings-news-count');
+    if (settingsCount) {
+      settingsCount.textContent = label;
+      settingsCount.classList.toggle('hide', count === 0);
+    }
+    ['mobile-settings-toggle-btn', 'mobile-settings-toggle-btn-desktop'].forEach(id => {
+      const gear = $(id);
+      if (!gear) return;
+      let pip = gear.querySelector('.gear-pip');
+      if (!pip) {
+        pip = document.createElement('span');
+        pip.className = 'gear-pip';
+        gear.appendChild(pip);
+      }
+      pip.classList.toggle('hide', count === 0);
+    });
+  }
+
+  // Ao abrir o site com novidades não lidas: um aviso (depois da janela de conta)
+  let welcomeShown = false;
+  function showWelcomeToast() {
+    const count = unseenCount();
+    if (welcomeShown || !count || !window.trucoSocial) return;
+    const lobby = document.getElementById('screen-lobby');
+    const auth = document.getElementById('modal-auth');
+    if (!lobby || !lobby.classList.contains('active')) return;
+    if (auth && !auth.classList.contains('hide')) {
+      // Espera a pessoa fechar a janela de conta
+      const obs = new MutationObserver(() => {
+        if (auth.classList.contains('hide')) { obs.disconnect(); setTimeout(showWelcomeToast, 500); }
+      });
+      obs.observe(auth, { attributes: true, attributeFilter: ['class'] });
+      return;
+    }
+    welcomeShown = true;
+    const newest = items.filter(it => (it.date || 0) > seenUntil()).sort((a, b) => b.date - a.date)[0];
+    const text = count === 1
+      ? `<b>Novidade:</b> ${escapeHtml(newest.title)}`
+      : `<b>${count} novidades</b> para ler — a mais nova: ${escapeHtml(newest.title)}`;
+    window.trucoSocial.toast(`<i class="fa-solid fa-bullhorn"></i> ${text}`, {
+      timeout: 10000,
+      kind: 'invite',
+      key: 'news-welcome',
+      actions: [{ label: 'Ler agora', primary: true, onClick: openNews }, { label: 'Depois' }]
+    });
   }
 
   function tagChip(tag) {
@@ -67,6 +124,7 @@
   }
 
   function openNews() {
+    if (window.trucoSocial && window.trucoSocial.dismissToast) window.trucoSocial.dismissToast('news-welcome');
     renderList();
     modal.classList.remove('hide');
     // Marca como lidas depois de abrir (o "Nova" fica visível nesta abertura)
@@ -204,6 +262,7 @@
         actions: [{ label: 'Ver', primary: true, onClick: openNews }]
       });
     }
+    if (firstLoad) setTimeout(showWelcomeToast, 1200);
     firstLoad = false;
   });
 

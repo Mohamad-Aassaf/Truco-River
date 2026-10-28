@@ -495,5 +495,5 @@
   renderAccount();
 
   // Usado por outros scripts (ex.: atualizar a lista ao trocar de tela)
-  window.trucoSocial = { openAuth, openFriends, toast };
+  window.trucoSocial = { openAuth, openFriends, toast, dismissToast };
 })();

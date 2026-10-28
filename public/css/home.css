@@ -1775,3 +1775,198 @@ body[data-deck-style="frances"] .mini-card-badge.hidden-card {
 @media (prefers-reduced-motion: reduce) {
   .news-item, .news-dot { animation: none; }
 }
+
+/* --- Novidades: contador e destaque --- */
+.news-count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: #e74c3c;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--wood-900), 0 2px 8px rgba(231, 76, 60, 0.6);
+  animation: badgePulse 1.8s ease-in-out infinite;
+}
+
+.news-count.inline { position: static; margin-left: 6px; box-shadow: none; }
+
+.news-cta.has-new {
+  border-color: #f0c96e;
+  color: #fff3d0;
+  background: rgba(240, 201, 110, 0.16);
+  animation: newsGlow 2.2s ease-in-out infinite;
+}
+
+.news-cta.has-new i { animation: bullhornWiggle 2.2s ease-in-out infinite; transform-origin: 30% 60%; }
+
+@keyframes newsGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(240, 201, 110, 0); }
+  50%      { box-shadow: 0 0 0 5px rgba(240, 201, 110, 0.18), 0 0 18px rgba(240, 201, 110, 0.35); }
+}
+
+@keyframes bullhornWiggle {
+  0%, 70%, 100% { transform: rotate(0); }
+  76% { transform: rotate(-14deg); }
+  82% { transform: rotate(12deg); }
+  88% { transform: rotate(-8deg); }
+  94% { transform: rotate(4deg); }
+}
+
+/* Bolinha na engrenagem de Ajustes quando há novidade */
+#mobile-settings-toggle-btn,
+#mobile-settings-toggle-btn-desktop { position: relative; }
+
+.gear-pip {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e74c3c;
+  box-shadow: 0 0 0 2px var(--wood-900);
+}
+
+/* --- Chat: contador no botão do menu (celular) e destaque (computador) --- */
+.sidebar-toggle-btn { position: relative; }
+
+.chat-badge {
+  top: -6px;
+  right: -6px;
+}
+
+.chat-badge.bump { animation: chatBump 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.6), badgePulse 1.8s ease-in-out 0.45s infinite; }
+
+@keyframes chatBump {
+  from { transform: scale(0.4); }
+  to   { transform: scale(1); }
+}
+
+.chat-container.chat-flash { animation: chatFlash 1.2s ease; }
+
+@keyframes chatFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+  25%  { box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.5), 0 0 22px rgba(96, 165, 250, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+}
+
+.toast.chat { border-color: rgba(96, 165, 250, 0.55); }
+.toast.chat .toast-text i { color: #60a5fa; }
+
+/* --- Vozes dos cantos --- */
+.voices-card { max-width: 640px; }
+
+.voices-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--inset-bg);
+  border: 1px solid var(--hairline);
+  font-weight: 700;
+  color: var(--cream);
+  cursor: pointer;
+}
+
+.voices-toggle input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+.voices-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(223, 177, 91, 0.4);
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.voices-note i { color: var(--gold); margin-top: 2px; }
+
+.voices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  transition: opacity 0.2s;
+}
+
+.voices-off .voices-grid { opacity: 0.45; pointer-events: none; }
+
+.voice-chant {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--hairline);
+  animation: fadeUp 0.3s ease both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+.voice-chant-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.voice-chant-name { font-family: var(--font-title); color: var(--gold-bright); font-size: 0.9rem; }
+
+.voice-pick {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(223, 177, 91, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-light);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+}
+
+.voice-pick:disabled { color: var(--text-dim); cursor: not-allowed; }
+.voice-pick option { background: var(--wood-dark); }
+
+.voice-pitch {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.voice-pitch-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.voice-pitch-btn.active { background: var(--gold); color: var(--wood-dark); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .news-cta.has-new, .news-cta.has-new i, .news-count, .chat-badge.bump, .chat-container.chat-flash, .voice-chant { animation: none; }
+}
+
+/* Contador dentro do botão (o botão corta o que sai dele por causa do brilho) */
+.news-cta .news-count {
+  position: static;
+  margin-left: 2px;
+  box-shadow: none;
+}
+
+/* Na partida pelo celular, o aviso fica abaixo do cabeçalho (onde está o ☰ com o contador) */
+@media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
+  body[data-screen="game"] .toast-stack { top: 62px; }
+}

@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.5">
-  <link rel="stylesheet" href="/css/home.css?v=1.4">
+  <link rel="stylesheet" href="/css/home.css?v=1.5">
 </head>
 
 <body data-screen="home">
@@ -83,7 +83,7 @@
           </button>
           <button type="button" id="open-news-btn" class="rules-cta news-cta">
             <i class="fa-solid fa-bullhorn"></i> Novidades
-            <span class="news-dot hide" id="news-dot" aria-label="Há novidades"></span>
+            <span class="news-count hide" id="news-dot" aria-live="polite"></span>
           </button>
         </div>
       </div>
@@ -341,6 +341,7 @@
           <div class="mobile-header-left">
             <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Ver Placar e Chat">
               <i class="fa-solid fa-bars"></i>
+              <span class="notif-badge chat-badge hide" id="chat-unread-badge" aria-label="Mensagens novas no chat">0</span>
             </button>
             <button id="mobile-settings-toggle-btn" class="sidebar-toggle-btn" title="Ajustes do Jogo">
               <i class="fa-solid fa-gear"></i>
@@ -564,9 +565,15 @@
         </div>
 
         <!-- Botões de Ação de Configurações -->
-        <button id="settings-news-btn" class="btn btn-secondary"
+        <button id="open-voices-btn" class="btn btn-secondary"
           style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
+          <i class="fa-solid fa-microphone-lines"></i> Vozes dos cantos
+        </button>
+
+        <button id="settings-news-btn" class="btn btn-secondary"
+          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px; position: relative;">
           <i class="fa-solid fa-bullhorn"></i> Novidades
+          <span class="news-count inline hide" id="settings-news-count"></span>
         </button>
 
         <button id="mobile-admin-btn" class="btn btn-secondary"
@@ -1066,6 +1073,30 @@
     </div>
   </div>
 
+  <!-- MODAL DE VOZES DOS CANTOS -->
+  <div id="modal-voices" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="voices-title">
+    <div class="modal-card voices-card">
+      <div class="modal-header">
+        <h2 id="voices-title"><i class="fa-solid fa-microphone-lines"></i> Vozes dos cantos</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="voices-toggle">
+          <input type="checkbox" id="voices-enabled" checked>
+          <span>Tocar as vozes quando alguém cantar</span>
+        </label>
+        <p class="voices-note" id="voices-note">
+          <i class="fa-solid fa-hourglass-half"></i> As vozes ainda estão sendo gravadas. Quando chegarem, você escolhe
+          aqui o áudio e o tom de cada canto.
+        </p>
+        <div class="voices-grid" id="voices-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary btn-sm" id="voices-save"><i class="fa-solid fa-check"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- AVISOS FLUTUANTES (convites, mensagens) -->
   <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
 
@@ -1074,12 +1105,13 @@
 
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/sound.js?v=4"></script>
-  <script src="/js/app.js?v=5"></script>
-  <script src="/js/social.js?v=4"></script>
+  <script src="/js/sound.js?v=5"></script>
+  <script src="/js/app.js?v=6"></script>
+  <script src="/js/social.js?v=5"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
-  <script src="/js/news.js?v=1"></script>
+  <script src="/js/news.js?v=2"></script>
+  <script src="/js/voices.js?v=1"></script>
 </body>
 
 </html>
