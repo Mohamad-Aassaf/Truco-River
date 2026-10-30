@@ -1790,13 +1790,12 @@ body[data-screen="lobby"] #screen-waiting {
 
 /*
   Arena das cartas jogadas (escala com a mesa via unidades cq*):
-  - 1v1: uma fileira por jogador (cima/baixo) com 3 colunas, uma por rodada;
-    as colunas dos dois ficam alinhadas e as bolinhas de rodada no meio.
-  - 2v2: as 4 cartas de cada vaza ficam juntas, numa cruz: cada carta no lado
-    de quem jogou (cima, baixo, esquerda, direita). As 3 vazas ficam lado a
-    lado (ou 2 em cima e 1 embaixo em mesa alta), cada uma num quadro "1ª, 2ª,
-    3ª" que fica azul, vermelho ou amarelo conforme quem ganhou.
-  O app.js só informa a rodada de cada carta (--r / data-round).
+  - cima/baixo: uma fileira com 3 colunas (uma por rodada). As colunas dos
+    dois jogadores ficam alinhadas, e as bolinhas de rodada ficam no meio.
+  - laterais (2v2): na altura das bolinhas, coladas nas fileiras. Em mesa
+    larga as cartas abrem em leque para o lado (50% da largura por rodada);
+    em mesa alta (celular em pé) empilham para baixo (34% da altura).
+  O app.js só informa a rodada de cada carta (--r); a posição vem daqui.
 */
 .played-cards-arena {
   position: absolute;
@@ -1810,6 +1809,12 @@ body[data-screen="lobby"] #screen-waiting {
   --dot: 12px;
 }
 
+/* 2v2 em mesa larga: fileiras (3,24 cartas) + dois leques laterais
+   (2 cartas cada) + folgas cabem na largura: ~7,9 larguras de carta */
+.truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena {
+  --slot-h: min(var(--slot-max), 45cqh, 18.5cqw);
+}
+
 .played-card-slot-container {
   position: absolute;
   height: var(--slot-h);
@@ -1819,6 +1824,12 @@ body[data-screen="lobby"] #screen-waiting {
   left: 50%;
   width: calc(var(--slot-w) * 3.24);
   transform: translateX(-50%);
+}
+
+.slot-col {
+  top: 50%;
+  width: var(--slot-w);
+  transform: translateY(-50%);
 }
 
 /* Contornos das posições vazias */
@@ -1839,121 +1850,69 @@ body[data-screen="lobby"] #screen-waiting {
 /* Posição de cada carta pela rodada (--r): colunas nas fileiras */
 .slot-row .played-card { translate: calc(var(--r, 0) * 112%) 0; }
 
-/* ---------------- 2v2: uma cruz de cartas por vaza ---------------- */
-/* Largura de uma vaza = 1,6 carta; altura = 2,4 cartas; 3 vazas + folgas = 5,6 cartas */
-.truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena {
-  --slot-h: min(var(--slot-max), calc((100cqh - 56px) / 2.4), 26.5cqw);
-  --cw: calc(var(--slot-w) * 1.6);
-  --ch: calc(var(--slot-h) * 2.4);
+/* Laterais do 2v2: leque na altura das bolinhas, colado nas fileiras */
+.slot-col {
+  --side-gap: calc(var(--slot-w) * 0.3);
+  width: calc(var(--slot-w) * 2);
 }
 
-/* Os quatro "lugares" ocupam a arena toda: a posição vem da vaza + do lado */
-.truco-table:has(#seat-left:not(.hidden-seat)) .played-card-slot-container {
-  inset: 0;
-  width: auto;
-  height: auto;
-  transform: none;
-}
+#arena-slot-left { left: auto; right: calc(50% + var(--slot-w) * 1.62 + var(--side-gap)); }
+#arena-slot-right { right: auto; left: calc(50% + var(--slot-w) * 1.62 + var(--side-gap)); }
 
-/* Canto da vaza (3 lado a lado) */
-.truco-table:has(#seat-left:not(.hidden-seat)) .played-card,
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph {
-  --x0: calc(50% - var(--slot-w) * 2.8 + var(--r, 0) * var(--slot-w) * 2);
-  --y0: calc(50% - var(--ch) / 2);
-}
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(1) { --r: 0; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(2) { --r: 1; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(3) { --r: 2; }
+.slot-col .played-card { translate: calc(var(--r, 0) * 50%) 0; }
+.slot-col .slot-ph { width: 100%; height: 100%; }
 
-/* Cada carta no lado de quem jogou; quem está embaixo fica por cima,
-   e o canto com o número de cada carta continua à vista */
-.truco-table:has(#seat-left:not(.hidden-seat)) .played-card {
-  left: calc(var(--x0) + var(--sx, 0px));
-  top: calc(var(--y0) + var(--sy, 0px));
-  translate: none;
-}
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .played-card { --sx: calc(var(--slot-w) * 0.3); --sy: 0px; z-index: calc(10 + var(--r, 0) * 4) !important; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left .played-card { --sx: 0px; --sy: calc(var(--slot-h) * 0.7); z-index: calc(11 + var(--r, 0) * 4) !important; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right .played-card { --sx: calc(var(--slot-w) * 0.6); --sy: calc(var(--slot-h) * 0.7); z-index: calc(12 + var(--r, 0) * 4) !important; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-bottom .played-card { --sx: calc(var(--slot-w) * 0.3); --sy: calc(var(--slot-h) * 1.4); z-index: calc(13 + var(--r, 0) * 4) !important; }
-
-/* Quadro de cada vaza (usa os 3 contornos de cima; os outros somem) */
-.truco-table:has(#seat-left:not(.hidden-seat)) .slot-ph { display: none; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph {
-  display: block;
-  left: calc(var(--x0) - 6px);
-  top: calc(var(--y0) - 6px);
-  width: calc(var(--cw) + 12px);
-  height: calc(var(--ch) + 12px);
-  translate: none;
-  border-radius: 14px;
-  border-color: rgba(223, 177, 91, 0.2);
-  background: rgba(0, 0, 0, 0.12);
-  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
-}
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph::after {
-  position: absolute;
-  top: -9px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 1px 8px;
-  border-radius: 99px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  background: var(--felt-dark);
-  border: 1px solid rgba(223, 177, 91, 0.25);
-  white-space: nowrap;
-}
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(1)::after { content: '1ª VAZA'; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(2)::after { content: '2ª VAZA'; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(3)::after { content: '3ª VAZA'; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.current { border-color: rgba(240, 201, 110, 0.6); box-shadow: 0 0 14px rgba(240, 201, 110, 0.18); }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.current::after { color: var(--wood-dark); background: var(--gold); }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.win-us { border-color: rgba(96, 165, 250, 0.7); background: rgba(96, 165, 250, 0.08); }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.win-us::after { color: #fff; background: #2f80c0; border-color: transparent; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.win-them { border-color: rgba(248, 113, 113, 0.7); background: rgba(248, 113, 113, 0.08); }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.win-them::after { color: #fff; background: #b03a2e; border-color: transparent; }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.tie { border-color: rgba(241, 196, 15, 0.7); }
-.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph.tie::after { color: #3a2a00; background: #f1c40f; border-color: transparent; }
-
-/* As bolinhas de rodada viram os quadros acima */
-.truco-table:has(#seat-left:not(.hidden-seat)) .round-indicators { display: none; }
-
-/* Mesa alta (celular/tablet em pé): 2 vazas em cima e 1 embaixo */
+/* Mesa alta (celular em pé): as laterais ficam entre as fileiras, uma de
+   cada lado das bolinhas, empilhando para baixo. Altura: fileira + pilha
+   (1,68 carta) + fileira = 3,68 cartas. */
 @container (aspect-ratio < 1) {
+  /* --row-h: cartas das fileiras; --side-h: cartas laterais, um pouco
+     menores para não encostar nos assentos das laterais */
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > * {
-    --slot-h: min(var(--slot-max), calc((100cqh - 56px) / 5.1), calc(41.6cqw - 33px));
+    --row-h: min(var(--slot-max), 27cqh, calc(32cqw - 20px));
+    --side-h: min(var(--row-h), calc(75cqw - var(--col) * 1.5 - 75px), calc(50cqh - var(--row-h) - 6px));
+    --slot-h: var(--row-h);
     --slot-w: calc(var(--slot-h) * 2 / 3);
-    --cw: calc(var(--slot-w) * 1.6);
-    --ch: calc(var(--slot-h) * 2.4);
+    --col: calc(var(--row-h) * 2 / 3 * 1.12);
   }
 
-  /* 1ª e 2ª vaza em cima, 3ª embaixo no meio */
-  .truco-table:has(#seat-left:not(.hidden-seat)) .played-card[data-round="0"],
-  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(1) { --x0: calc(50% - var(--slot-w) * 1.8); --y0: calc(50% - var(--slot-h) * 2.55); }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .played-card[data-round="1"],
-  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(2) { --x0: calc(50% + var(--slot-w) * 0.2); --y0: calc(50% - var(--slot-h) * 2.55); }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .played-card[data-round="2"],
-  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(3) { --x0: calc(50% - var(--slot-w) * 0.8); --y0: calc(50% + var(--slot-h) * 0.15); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: var(--side-h);
+    width: var(--slot-w);
+    /* a 1ª carta fica na altura das bolinhas; as outras descem por cima */
+    height: var(--slot-h);
+  }
+
+  #arena-slot-left { right: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+  #arena-slot-right { left: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+
+  .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
 }
 
+/* Celular/tablet em pé: mesma arrumação em pilha, mesmo se a arena
+   ficar mais larga que alta (os assentos laterais ocupam as bordas) */
 @media (max-width: 850px) and (orientation: portrait) {
+  /* --row-h: cartas das fileiras; --side-h: cartas laterais, um pouco
+     menores para não encostar nos assentos das laterais */
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > * {
-    --slot-h: min(var(--slot-max), calc((100cqh - 56px) / 5.1), calc(41.6cqw - 33px));
+    --row-h: min(var(--slot-max), 27cqh, calc(32cqw - 20px));
+    --side-h: min(var(--row-h), calc(75cqw - var(--col) * 1.5 - 75px), calc(50cqh - var(--row-h) - 6px));
+    --slot-h: var(--row-h);
     --slot-w: calc(var(--slot-h) * 2 / 3);
-    --cw: calc(var(--slot-w) * 1.6);
-    --ch: calc(var(--slot-h) * 2.4);
+    --col: calc(var(--row-h) * 2 / 3 * 1.12);
   }
 
-  /* 1ª e 2ª vaza em cima, 3ª embaixo no meio */
-  .truco-table:has(#seat-left:not(.hidden-seat)) .played-card[data-round="0"],
-  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(1) { --x0: calc(50% - var(--slot-w) * 1.8); --y0: calc(50% - var(--slot-h) * 2.55); }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .played-card[data-round="1"],
-  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(2) { --x0: calc(50% + var(--slot-w) * 0.2); --y0: calc(50% - var(--slot-h) * 2.55); }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .played-card[data-round="2"],
-  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top .slot-ph:nth-child(3) { --x0: calc(50% - var(--slot-w) * 0.8); --y0: calc(50% + var(--slot-h) * 0.15); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: var(--side-h);
+    width: var(--slot-w);
+    /* a 1ª carta fica na altura das bolinhas; as outras descem por cima */
+    height: var(--slot-h);
+  }
+
+  #arena-slot-left { right: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+  #arena-slot-right { left: calc(50% + var(--col) + var(--dot) / 2 + 4px); }
+
+  .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
 }
 
 /* 1v1: ninguém senta nas laterais */

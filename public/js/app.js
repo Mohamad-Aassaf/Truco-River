@@ -1519,24 +1519,6 @@ function renderPlayedCards(playedCards, players, gameState) {
     });
   }
 
-  // Duplas: o quadro de cada vaza mostra quem ganhou (azul/vermelho/amarelo)
-  // e a vaza que está sendo jogada fica destacada. No fim da mão fica como estava.
-  if (gameState && gameState.hand) {
-    const frames = document.querySelectorAll('#arena-slot-top .slot-ph');
-    const winners = gameState.hand.roundWinners || [];
-    const myTeamNow = gameState.players[mySeatIndex] ? gameState.players[mySeatIndex].team : 0;
-    frames.forEach((frame, r) => {
-      let cls = 'slot-ph';
-      if (r < winners.length) {
-        const w = winners[r];
-        cls += w === -1 ? ' tie' : (gameState.players[w] && gameState.players[w].team === myTeamNow ? ' win-us' : ' win-them');
-      } else if (r === gameState.hand.currentRound) {
-        cls += ' current';
-      }
-      frame.className = cls;
-    });
-  }
-
   playedCards.forEach(play => {
     // Determinar em qual assento o jogador está sentado
     const playerIdx = play.playerIdx;
