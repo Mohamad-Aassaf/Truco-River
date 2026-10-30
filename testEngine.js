@@ -128,7 +128,7 @@ assert(gameEnvidoTest.callEnvido(1, "envido") === true, "Jogador Mão pode chama
 gameEnvidoTest.hand.envidoResponsePending = false;
 
 // Jogador 2 (Pé - index 0) chama Falta Envido direto em resposta (Agora é permitido)
-assert(gameEnvidoTest.callEnvido(0, "falta_envido") === true, "Deve ser permitido chamar Falta Envido diretamente em resposta a Envido.");
+assert(gameEnvidoTest.callEnvido(0, "falta_envido", true) === true, "Deve ser permitido chamar Falta Envido diretamente em resposta a Envido.");
 
 // Resetar o estado de envido pendente para continuar outros testes
 gameEnvidoTest.hand.envidoHistory = ['envido'];
@@ -136,7 +136,7 @@ gameEnvidoTest.hand.envidoState = 'envido';
 gameEnvidoTest.hand.envidoResponsePending = false;
 
 // Jogador 2 (Pé - index 0) chama Real Envido em resposta (Ok)
-assert(gameEnvidoTest.callEnvido(0, "real_envido") === true, "Pode aumentar de Envido para Real Envido.");
+assert(gameEnvidoTest.callEnvido(0, "real_envido", true) === true, "Pode aumentar de Envido para Real Envido.");
 
 // 7. Novos testes para correção de regras de Envido e Retruco
 console.log("\n=== Rodando Novos Testes de Regras (Envido e Retruco) ===");

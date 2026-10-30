@@ -315,6 +315,30 @@ function updateBodyDeckStyle() {
   document.body.setAttribute('data-deck-style', currentDeckStyle);
 }
 
+// Baixa as 40 cartas do baralho escolhido com o navegador ocioso (no lobby),
+// para a primeira distribuição já sair com as imagens prontas
+const preloadedDecks = new Set();
+const preloadKeep = [];
+function preloadDeck(deck) {
+  if (preloadedDecks.has(deck)) return;
+  preloadedDecks.add(deck);
+  const run = () => {
+    const prev = currentDeckStyle;
+    currentDeckStyle = deck;
+    ['espadas', 'paus', 'copas', 'ouros'].forEach(suit => {
+      [1, 2, 3, 4, 5, 6, 7, 10, 11, 12].forEach(value => {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = getCardImgSrc({ suit, value });
+        preloadKeep.push(img);
+      });
+    });
+    currentDeckStyle = prev;
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 1500);
+}
+
 // Inicializar botões e estado no lobby
 deckOptions.forEach(btn => {
   if (btn.dataset.deck === currentDeckStyle) {
@@ -330,6 +354,7 @@ deckOptions.forEach(btn => {
     localStorage.setItem('truco_deck_style', currentDeckStyle);
     updateDeckPreview(true);
     updateBodyDeckStyle();
+    preloadDeck(currentDeckStyle);
   });
 });
 
@@ -373,6 +398,7 @@ if (btnScoreDigital && btnScoreSticks) {
 updateScoreViewMode();
 updateDeckPreview();
 updateBodyDeckStyle();
+preloadDeck(currentDeckStyle);
 
 // Seletor de Modo (1v1 ou 2v2)
 document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -516,6 +542,18 @@ window.addEventListener('click', startAutoplay);
 window.addEventListener('keydown', startAutoplay);
 window.addEventListener('mousedown', startAutoplay);
 window.addEventListener('touchstart', startAutoplay);
+
+// Contador do lobby: jogadores online e partidas em andamento
+socket.on('online_stats', ({ online, playing }) => {
+  const box = document.getElementById('online-stats');
+  if (!box) return;
+  const players = document.getElementById('online-players');
+  const games = document.getElementById('online-games');
+  players.textContent = `${online} ${online === 1 ? 'jogador online' : 'jogadores online'}`;
+  games.textContent = playing === 0 ? 'nenhuma partida em andamento'
+    : `${playing} ${playing === 1 ? 'partida em andamento' : 'partidas em andamento'}`;
+  box.classList.remove('hide');
+});
 
 // Receber salas ativas
 socket.on('available_rooms', (rooms) => {
@@ -767,7 +805,7 @@ function renderGameScreen(gameState) {
   drawMatchsticks(sticksTeam1, gameState.score[them]);
 
   // Narrativas/Logs
-  renderLogs(gameState.logs, us);
+  renderLogs(gameState.logs || [], us, gameState.logsReset !== false);
 
   // Fase do Jogo
   if (gameState.state === 'hand_end') {
@@ -782,6 +820,8 @@ function renderGameScreen(gameState) {
 
   // 4. Se a mão estiver ativa
   if (gameState.hand) {
+    hideHandSummary();
+    document.body.classList.remove('hand-ended');
     // Renderizar cartas jogadas na mesa
     renderPlayedCards(gameState.hand.playedCards, gameState.players, gameState);
 
@@ -789,7 +829,7 @@ function renderGameScreen(gameState) {
     renderMyHand(gameState.hand.hands[mySeatIndex], gameState.hand.currentPlayer === mySeatIndex && !gameState.hand.trucoResponsePending && !gameState.hand.envidoResponsePending && !gameState.hand.florResponsePending);
 
     // Exibir balões de voz
-    renderVoiceBubbles(gameState.hand.voiceBubble, gameState.players);
+    renderVoiceBubbles(gameState.hand.voiceBubble, gameState.players, gameState.hand.voiceStamp, gameState.hand.number);
 
     // Atualizar banner de alerta
     updateAlertBanner(gameState);
@@ -815,25 +855,29 @@ function renderGameScreen(gameState) {
 
     // Exibir balões de voz finais da última ação (ex: "Não Quero", "Mazo"), se houver
     if (gameState.lastHandSummary.voiceBubble) {
-      renderVoiceBubbles(gameState.lastHandSummary.voiceBubble, gameState.players);
+      const sm = gameState.lastHandSummary;
+      renderVoiceBubbles(sm.voiceBubble, gameState.players, sm.voiceStamp, sm.handNumber);
     }
 
-    // Exibir balão de resultado na barra superior
+    // Resumo da mão (pontos de cada coisa) e contagem para a próxima
+    renderHandSummary(gameState);
+    document.body.classList.add('hand-ended');
+    const statusMsg = document.getElementById('action-panel-status');
+    if (statusMsg) statusMsg.classList.add('hide');
+
+    // Resultado na barra superior
     const summary = gameState.lastHandSummary;
     const myTeam = gameState.players[mySeatIndex].team;
-    const lastLog = gameState.logs && gameState.logs.length > 0 ? gameState.logs[gameState.logs.length - 1].msg : '';
 
     if (gameState.state === 'game_end') {
       const isGameWinner = gameState.winner === myTeam;
       if (isGameWinner) {
         gameAlertText.innerHTML = `
           <div style="color: #dfb15b; font-weight: 800; text-shadow: 0 0 10px rgba(223, 177, 91, 0.6); font-size: 1.4rem;">¡VENCEMOS A PELEIA! 🏆</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
         `;
       } else {
         gameAlertText.innerHTML = `
           <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.6); font-size: 1.4rem;">¡FOMOS DERROTADOS! 😢</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
         `;
       }
     } else {
@@ -842,21 +886,20 @@ function renderGameScreen(gameState) {
       if (isWinner) {
         gameAlertText.innerHTML = `
           <div style="color: #2ecc71; font-weight: 800; text-shadow: 0 0 10px rgba(46, 204, 113, 0.4); font-size: 1.4rem;">¡VENCEMOS A MÃO! (+${ptsText})</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
         `;
       } else {
         gameAlertText.innerHTML = `
           <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.4); font-size: 1.4rem;">¡ELES VENCERAM A MÃO! (+${ptsText})</div>
-          <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px; font-weight: normal; color: #fff;">${lastLog}</div>
         `;
       }
     }
 
     gameAlertBanner.classList.remove('hide');
-    disableAllActionButtons();
+    disableAllActionButtons(gameState);
     prevPlayedCardsCount = 0;
   } else {
     // Estado de transição limpa
+    hideHandSummary();
     playerHand.innerHTML = '';
     pendingHandRender = null; // evita redesenhar a mão antiga ao fim de uma animação
     clearPlayedCardSlots();
@@ -1020,6 +1063,92 @@ function escapeText(text) {
   }[c]));
 }
 
+// --- RESUMO DO FIM DA MÃO ---
+// Mostra de onde vieram os pontos (menos o Envido, que já aparece na hora) e
+// conta o tempo até a próxima mão: "Distribuindo cartas...".
+const handSummaryEl = document.getElementById('hand-summary');
+let summaryKey = null;
+let summaryEndAt = 0;
+let summaryTick = null;
+
+const TRUCO_NAMES = { truco: 'Truco', retruco: 'Retruco', vale4: 'Vale Quatro' };
+
+function hideHandSummary() {
+  if (!handSummaryEl) return;
+  handSummaryEl.classList.add('hide');
+  clearInterval(summaryTick);
+  summaryTick = null;
+  summaryKey = null;
+}
+
+function renderHandSummary(gameState) {
+  const s = gameState.lastHandSummary;
+  if (!handSummaryEl || !s) return;
+  const { us, them } = myTeams(gameState);
+  const gameOver = gameState.state === 'game_end';
+  const key = `${gameState.id}:${s.handNumber}:${gameState.state}`;
+  if (key === summaryKey) return; // já está na tela (só a contagem anda)
+  summaryKey = key;
+
+  const won = s.winnerTeam === us;
+  const reason = s.reason || {};
+  let why = '';
+  if (reason.type === 'refused') why = `${escapeText(reason.by)} correu do ${TRUCO_NAMES[reason.level] || 'Truco'}`;
+  else if (reason.type === 'mazo') why = `${escapeText(reason.by)} foi ao mazo`;
+  else if (reason.level && TRUCO_NAMES[reason.level]) why = `${TRUCO_NAMES[reason.level]} aceito`;
+
+  const rounds = (s.roundsWon || []).map(t => {
+    const cls = t === -1 ? 'tie' : t === us ? 'us' : 'them';
+    const label = t === -1 ? 'Parda' : t === us ? 'Nós' : 'Eles';
+    return `<span class="hs-round ${cls}" title="${label}"></span>`;
+  }).join('');
+
+  // Pontos da mão (sem o Envido), do nosso time primeiro
+  const awards = (s.awards || []).filter(a => a.kind !== 'envido')
+    .sort((a, b) => (b.team === us) - (a.team === us));
+  const chips = awards.map(a => `
+    <span class="hs-chip ${a.team === us ? 'us' : 'them'}">${escapeText(a.label)} <b>+${a.points}</b></span>`).join('');
+
+  const score = s.scoreAfter || gameState.score;
+  handSummaryEl.innerHTML = `
+    <div class="hs-head ${won ? 'win' : 'lose'}">
+      <span class="hs-title">${gameOver ? (gameState.winner === us ? 'Vencemos a partida!' : 'Perdemos a partida') : (won ? 'Mão nossa!' : 'Mão deles')}</span>
+      <span class="hs-score"><span class="us">Nós ${score[us]}</span> × <span class="them">${score[them]} Eles</span></span>
+    </div>
+    <div class="hs-body">
+      ${rounds ? `<span class="hs-rounds">${rounds}</span>` : ''}
+      ${why ? `<span class="hs-why">${why}</span>` : ''}
+      ${chips}
+    </div>
+    <div class="hs-next">
+      <div class="hs-bar"><span id="hs-bar-fill"></span></div>
+      <span class="hs-next-text" id="hs-next-text">${gameOver ? 'Fim de jogo!' : 'Distribuindo cartas...'}</span>
+    </div>`;
+  handSummaryEl.classList.remove('hide');
+
+  clearInterval(summaryTick);
+  const fill = document.getElementById('hs-bar-fill');
+  const text = document.getElementById('hs-next-text');
+  if (gameOver || gameState.nextHandIn == null) {
+    if (fill) fill.style.width = gameOver ? '0%' : '100%';
+    return;
+  }
+  const total = gameState.nextHandIn;
+  summaryEndAt = Date.now() + total;
+  // A barra esvazia até a próxima mão (animação do CSS)
+  fill.style.transition = 'none';
+  fill.style.width = '100%';
+  void fill.offsetWidth;
+  fill.style.transition = `width ${total}ms linear`;
+  fill.style.width = '0%';
+  const update = () => {
+    const left = summaryEndAt - Date.now();
+    text.textContent = left > 1200 ? `Próxima mão em ${Math.ceil(left / 1000)}s` : 'Distribuindo cartas...';
+  };
+  update();
+  summaryTick = setInterval(update, 250);
+}
+
 // Meu time e o adversário no placar do servidor (time 0 ou 1)
 function myTeams(gameState) {
   const me = gameState.players[mySeatIndex];
@@ -1028,9 +1157,18 @@ function myTeams(gameState) {
 }
 
 // Renderiza a Narrative/logs do jogo (azul = nosso time, vermelho = adversário)
-function renderLogs(logs, myTeam = 0) {
-  gameLogs.innerHTML = '';
+let lastLogSeqShown = 0;
+
+function renderLogs(logs, myTeam = 0, reset = true) {
+  if (reset) {
+    gameLogs.innerHTML = '';
+    lastLogSeqShown = 0;
+  }
+  let added = 0;
   logs.forEach(log => {
+    if (log.seq && log.seq <= lastLogSeqShown) return; // já está na tela
+    if (log.seq) lastLogSeqShown = log.seq;
+    added++;
     const div = document.createElement('div');
     div.className = 'log-entry';
     if (log.team === myTeam) {
@@ -1040,13 +1178,16 @@ function renderLogs(logs, myTeam = 0) {
     }
 
     const timeStr = new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    div.innerHTML = `<span class="log-time">[${timeStr}]</span> ${log.msg}`;
+    div.innerHTML = `<span class="log-time">[${timeStr}]</span> ${escapeText(log.msg)}`;
 
     gameLogs.appendChild(div);
   });
 
-  // Rolar para o final
-  gameLogs.scrollTop = gameLogs.scrollHeight;
+  // Guarda só as 50 últimas, como o servidor
+  while (gameLogs.children.length > 50) gameLogs.firstElementChild.remove();
+
+  // Rolar para o final (só quando chegou linha nova)
+  if (added) gameLogs.scrollTop = gameLogs.scrollHeight;
 }
 
 // Ilustrações das figuras do baralho espanhol (Sota, Cavalo, Rei)
@@ -1444,52 +1585,48 @@ function clearPlayedCardSlots() {
 }
 
 // Exibe balões de diálogo
-function renderVoiceBubbles(voiceBubbles, players) {
-  // Balões que devem continuar visíveis nesta atualização
-  const visibleSeats = new Set();
+// Cada fala aparece uma vez e some sozinha depois de alguns segundos
+// (o servidor guarda a última fala de cada um; o carimbo diz se é nova)
+const BUBBLE_MS = 2800;
+const bubbleShownKeys = {};
+const bubbleTimers = {};
 
-  if (!voiceBubbles) {
-    hideVoiceBubbles();
-    return;
-  }
+function renderVoiceBubbles(voiceBubbles, players, stamps, handNumber) {
+  const present = new Set();
 
-  Object.keys(voiceBubbles).forEach(key => {
+  Object.keys(voiceBubbles || {}).forEach(key => {
     const playerIdx = parseInt(key);
     const text = voiceBubbles[playerIdx];
-
     const seat = seatOf(playerIdx);
-
     const bubble = document.getElementById(`bubble-${seat}`);
-    if (bubble) {
-      // Se for o áudio especial de flor sobre envido, mostra apenas "FLOR" no balão visual
-      let displayText = text;
-      if (text === '¡FLOR_SOBRE_ENVIDO!') {
-        displayText = '¡FLOR!';
-      }
-      visibleSeats.add(bubble.id);
-      // Só reinicia a animação se o texto mudou (senão o balão "pula" a cada atualização)
-      if (bubble.textContent !== displayText || !bubble.classList.contains('show')) {
-        bubble.classList.remove('show');
-        bubble.textContent = displayText;
-        void bubble.offsetWidth; // reinicia a animação
-        bubble.classList.add('show');
-      }
+    if (!bubble || !text) return;
+    present.add(seat);
 
-      // Canto novo: toca a voz escolhida em Ajustes > Vozes (se houver gravação)
-      if (prevVoiceBubbles[playerIdx] !== text && window.soundManager) {
-        window.soundManager.playVoiceChant(text);
-      }
-    }
+    const showKey = `${handNumber}:${playerIdx}:${(stamps || {})[playerIdx] || 0}:${text}`;
+    if (bubbleShownKeys[seat] === showKey) return; // essa fala já apareceu
+    bubbleShownKeys[seat] = showKey;
+
+    // "Flor por cima do Envido" aparece só como FLOR no balão
+    bubble.classList.remove('show');
+    bubble.textContent = text === '¡FLOR_SOBRE_ENVIDO!' ? '¡FLOR!' : text;
+    void bubble.offsetWidth; // reinicia a animação
+    bubble.classList.add('show');
+
+    clearTimeout(bubbleTimers[seat]);
+    bubbleTimers[seat] = setTimeout(() => bubble.classList.remove('show'), BUBBLE_MS);
+
+    // Canto novo: toca a voz escolhida em Ajustes > Vozes (se houver gravação)
+    if (window.soundManager) window.soundManager.playVoiceChant(text);
   });
 
-  document.querySelectorAll('.voice-bubble').forEach(b => {
-    if (!visibleSeats.has(b.id)) {
-      b.classList.remove('show');
-      b.textContent = '';
-    }
+  // Quem não tem fala no estado: balão escondido
+  ['top', 'bottom', 'left', 'right'].forEach(seat => {
+    if (present.has(seat)) return;
+    const bubble = document.getElementById(`bubble-${seat}`);
+    if (bubble) bubble.classList.remove('show');
   });
 
-  prevVoiceBubbles = { ...voiceBubbles };
+  prevVoiceBubbles = { ...(voiceBubbles || {}) };
 }
 
 function hideVoiceBubbles() {
@@ -1604,11 +1741,11 @@ function setupActionButtons(gameState) {
       showAndEnableButton(btnVale4);
     }
 
-    // Os adversários do Truco podem chamar Envido/Flor antes de aceitar o Truco
+    // Quem responde um Truco simples pode cantar Envido/Flor antes (cancela o Truco)
     // Só na primeira rodada e se o jogador não jogou ainda
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && hand.trucoState === 'truco') {
       if (!myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
@@ -1687,7 +1824,8 @@ function setupActionButtons(gameState) {
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
 
-    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido) {
+    // Envido e Flor: só na primeira vaza, na minha vez (não pode "atravessado")
+    if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isMyTurn) {
       // 2. Botão de Envido / Real / Falta (só o pé da dupla)
       if (isPe && !myPlayer.hasFlor && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
@@ -1697,7 +1835,7 @@ function setupActionButtons(gameState) {
       }
 
       // 3. Botão de Flor (qualquer jogador que tenha flor)
-      if (myPlayer.hasFlor && hand.florState === 'none') {
+      if (myPlayer.hasFlor && hand.florState === 'none' && hand.envidoState === 'none') {
         groupFlor.classList.remove('hide');
         showAndEnableButton(btnFlor);
       }
@@ -1800,7 +1938,8 @@ function disableAllActionButtons(gameState) {
     statusEl.classList.remove('hide');
     if (gameState) {
       if (gameState.state === 'hand_end') {
-        statusEl.textContent = 'Mão finalizada. Aguardando...';
+        // O resumo da mão (com a contagem) já diz o que está acontecendo
+        statusEl.classList.add('hide');
       } else if (gameState.state === 'game_end') {
         statusEl.textContent = 'Partida terminada!';
       } else {

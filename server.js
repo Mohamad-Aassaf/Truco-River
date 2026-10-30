@@ -20,7 +20,9 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   },
   // Relatos podem trazer um print (já comprimido no navegador)
-  maxHttpBufferSize: 2e6
+  maxHttpBufferSize: 2e6,
+  // Comprime mensagens maiores que 1 KB (o estado da mesa encolhe bastante)
+  perMessageDeflate: { threshold: 1024 }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -48,6 +50,9 @@ const reportAttempts = new Map(); // IP -> horários dos últimos envios
 function adminSockets() {
   return [...io.sockets.sockets.values()].filter(s => s.isAdmin);
 }
+
+// Para o UptimeRobot: resposta mínima, só para manter o servidor acordado
+app.get('/healthz', (req, res) => res.type('text').send('ok'));
 
 // Diagnóstico: onde as contas estão sendo salvas (sem dados pessoais)
 app.get('/api/status', (req, res) => {
@@ -98,9 +103,17 @@ const BOT_LEVELS = { easy: 'Fácil', medium: 'Médio', hard: 'Difícil' };
 const botName = (num, difficulty) => `Bot River ${num} (${BOT_LEVELS[difficulty] || 'Médio'})`;
 
 // Salas públicas para a lista do lobby
+// Tem alguém de verdade (humano conectado) na sala?
+function hasLiveHuman(game) {
+  return game.players.some(p => !p.isBot && p.socketId && !p.disconnected && io.sockets.sockets.has(p.socketId));
+}
+
 function listRooms() {
   return Object.keys(activeGames)
-    .filter(id => !activeGames[id].isPrivate)
+    .filter(id => {
+      const g = activeGames[id];
+      return !g.isPrivate && g.state === 'lobby' && g.players.length < g.maxPlayers && hasLiveHuman(g);
+    })
     .map(id => ({
       id,
       roomName: activeGames[id].roomName || id,
@@ -109,6 +122,54 @@ function listRooms() {
       maxPlayers: activeGames[id].maxPlayers
     }));
 }
+
+// Faxina a cada 20s: sala sem humanos (só bots ou vazia) é apagada; humano cuja
+// conexão sumiu sem aviso sai da sala (o lugar ainda espera os 30s da reconexão)
+function sweepRooms() {
+  let changed = false;
+  Object.keys(activeGames).forEach(roomId => {
+    const game = activeGames[roomId];
+    game.players
+      .filter(p => !p.isBot && !p.disconnected && (!p.socketId || !io.sockets.sockets.has(p.socketId)))
+      .forEach(p => {
+        if (p.socketId) removeFromRoom(roomId, p.socketId);
+        changed = true;
+      });
+    const g = activeGames[roomId];
+    if (g && !g.players.some(p => !p.isBot)) {
+      deleteRoom(roomId);
+      changed = true;
+    }
+  });
+  if (changed) io.to('lobby').emit('available_rooms', listRooms());
+}
+
+function deleteRoom(roomId) {
+  const game = activeGames[roomId];
+  if (!game) return;
+  game.players.forEach(p => { if (p.reconnectTimer) clearTimeout(p.reconnectTimer); });
+  if (botTimers[roomId]) { clearTimeout(botTimers[roomId]); delete botTimers[roomId]; }
+  if (nextHandTimers[roomId]) { clearTimeout(nextHandTimers[roomId]); delete nextHandTimers[roomId]; }
+  delete activeGames[roomId];
+  console.log(`Sala ${roomId} sem jogadores de verdade apagada.`);
+}
+
+setInterval(sweepRooms, 20000).unref();
+
+// Contador do lobby: jogadores online e partidas em andamento.
+// Vai para quem está no lobby a cada 5s, só quando o número muda.
+function onlineStats() {
+  const playing = Object.values(activeGames).filter(g => (g.state === 'playing' || g.state === 'hand_end') && hasLiveHuman(g)).length;
+  return { online: io.engine.clientsCount, playing };
+}
+let lastStatsKey = '';
+setInterval(() => {
+  const stats = onlineStats();
+  const key = `${stats.online}:${stats.playing}`;
+  if (key === lastStatsKey) return;
+  lastStatsKey = key;
+  io.to('lobby').emit('online_stats', stats);
+}, 5000).unref();
 
 // Identificador do navegador (guardado no localStorage do jogador) para voltar à partida
 function cleanClientId(id) {
@@ -132,16 +193,15 @@ function removeFromRoom(roomId, socketId) {
   }
   game.removePlayer(socketId);
 
-  // Se a sala ficar vazia de humanos, exclui a sala
+  // Se a sala ficar sem humanos (vazia ou só bots), exclui a sala
   const humanCount = game.players.filter(p => !p.isBot).length;
   if (humanCount === 0) {
-    delete activeGames[roomId];
-    console.log(`Sala ${roomId} vazia deletada.`);
+    deleteRoom(roomId);
   } else {
     broadcastState(roomId);
     runBotLogic(roomId);
   }
-  io.emit('available_rooms', listRooms());
+  io.to('lobby').emit('available_rooms', listRooms());
 }
 
 function generateUniqueRoomId() {
@@ -174,6 +234,8 @@ function broadcastState(roomId) {
   if (game.presenceKey !== presenceKey) {
     game.presenceKey = presenceKey;
     touchRoomPresence(game);
+    // Lista de salas do lobby também muda (entrou/saiu gente, começou a partida)
+    if (!game.isPrivate) io.to('lobby').emit('available_rooms', listRooms());
   }
 
   // Envido/Flor aceito: os bots esperam todos lerem os pontos (botão OK)
@@ -185,9 +247,21 @@ function broadcastState(roomId) {
     scheduleNextHand(roomId);
   }
 
+  const nextHandIn = game.state === 'hand_end' && game.nextHandAt ? Math.max(0, game.nextHandAt - Date.now()) : null;
   game.players.forEach((player, idx) => {
     if (!player.isBot && player.socketId) {
       const stateForPlayer = game.getGameStateForPlayer(idx);
+      // Narrativa: só as linhas que esse jogador ainda não recebeu
+      const since = player.logSentSeq || 0;
+      const lastSeq = game.gameLogs.length ? game.gameLogs[game.gameLogs.length - 1].seq : 0;
+      // Recomeça a lista se for a primeira vez ou se faltarem linhas no meio (a narrativa guarda só 50)
+      const resetLogs = since === 0 || since > lastSeq || (game.gameLogs.length > 0 && game.gameLogs[0].seq > since + 1);
+      stateForPlayer.logs = resetLogs ? game.gameLogs : game.gameLogs.filter(l => l.seq > since);
+      stateForPlayer.logsReset = resetLogs;
+      player.logSentSeq = lastSeq;
+      // O resumo da mão anterior só serve no fim da mão/partida
+      if (game.state === 'playing' || game.state === 'lobby') stateForPlayer.lastHandSummary = null;
+      stateForPlayer.nextHandIn = nextHandIn;
       io.to(player.socketId).emit('game_state', stateForPlayer);
     }
   });
@@ -222,17 +296,45 @@ function scheduleNextHand(roomId) {
   const ended = activeGames[roomId];
   // Com cartas para provar o envido/flor, a mesa fica um pouco mais
   const proofs = ended && ended.lastHandSummary && ended.lastHandSummary.proofCards;
-  const delay = proofs && proofs.length ? 8000 : 5000;
+  // Tempo para ler o resumo da mão (e ver as cartas do envido/flor, se houver)
+  const delay = proofs && proofs.length ? 8500 : 6500;
+  if (ended) ended.nextHandAt = Date.now() + delay;
 
   nextHandTimers[roomId] = setTimeout(() => {
     delete nextHandTimers[roomId];
     const game = activeGames[roomId];
     if (game && game.state === 'hand_end') {
+      game.nextHandAt = null;
       game.startNewHand();
       broadcastState(roomId);
       runBotLogic(roomId);
     }
   }, delay);
+}
+
+// Retrato do jogo para saber se uma ação mudou alguma coisa
+function gameSignature(g) {
+  const h = g.hand;
+  return JSON.stringify([g.state, g.score, h && [h.playedCards.length, h.trucoState, h.trucoResponsePending,
+    h.envidoHistory.length, h.envidoResponsePending, h.envidoState, h.florHistory.length, h.florResponsePending,
+    h.foldedPlayers.size, h.currentPlayer]]);
+}
+
+// A decisão do bot não valeu (regra mudou ou estado inesperado): faz o mais simples
+function botFallback(g, idx) {
+  const h = g.hand;
+  if (!h) return;
+  console.warn(`Bot ${g.players[idx].name} tentou uma ação inválida; usando o plano B.`);
+  const tries = [];
+  if (h.florResponsePending) tries.push({ action: 'flor_response', value: 'quero' }, { action: 'flor_response', value: 'nao_quero' });
+  if (h.envidoResponsePending) tries.push({ action: 'envido_response', value: 'quero' });
+  if (h.trucoResponsePending) tries.push({ action: 'truco_response', value: 'quero' });
+  if (h.currentPlayer === idx) tries.push({ action: 'play_card', value: 0 });
+  for (const t of tries) {
+    const before = gameSignature(g);
+    executeGameAction(g, idx, t);
+    if (gameSignature(g) !== before) return;
+  }
 }
 
 // Executa ações dos jogadores (humanos ou bots)
@@ -345,7 +447,9 @@ function runBotLogic(roomId) {
 
       const decision = bot.handleBotAction(g, activeBotIdx);
       if (decision) {
+        const before = gameSignature(g);
         executeGameAction(g, activeBotIdx, decision);
+        if (gameSignature(g) === before) botFallback(g, activeBotIdx);
         broadcastState(roomId);
         // Chama recursivamente para tratar outras ações em sequência (ex: outro bot jogar)
         runBotLogic(roomId);
@@ -359,6 +463,7 @@ io.on('connection', (socket) => {
   console.log(`Cliente conectado: ${socket.id}`);
 
   let currentRoomId = null;
+  socket.join('lobby');
 
   social.attach(socket);
 
@@ -430,6 +535,7 @@ io.on('connection', (socket) => {
 
   // Envia salas disponíveis ao conectar
   socket.emit('available_rooms', listRooms());
+  socket.emit('online_stats', onlineStats());
 
   // Criar Sala
   socket.on('create_room', ({ roomName, mode, playerName, maxPoints, isPrivate, clientId }) => {
@@ -453,9 +559,10 @@ io.on('connection', (socket) => {
 
     currentRoomId = roomId;
     socket.join(roomId);
+    socket.leave('lobby');
 
     broadcastState(roomId);
-    io.emit('available_rooms', listRooms());
+    io.to('lobby').emit('available_rooms', listRooms());
   });
 
   // Entrar na Sala
@@ -485,9 +592,10 @@ io.on('connection', (socket) => {
     markAccount(game, socket);
     currentRoomId = cleanRoomId;
     socket.join(cleanRoomId);
+    socket.leave('lobby');
 
     broadcastState(cleanRoomId);
-    io.emit('available_rooms', listRooms());
+    io.to('lobby').emit('available_rooms', listRooms());
   });
 
   // Adicionar Bot
@@ -603,6 +711,8 @@ io.on('connection', (socket) => {
       if (targetSocket) {
         targetSocket.emit('kicked');
         targetSocket.leave(currentRoomId);
+        targetSocket.join('lobby');
+        targetSocket.emit('available_rooms', listRooms());
       }
       game.players.splice(targetIdx, 1);
       game.log(`${targetPlayer.name} foi expulso da sala.`);
@@ -610,7 +720,7 @@ io.on('connection', (socket) => {
     }
 
     broadcastState(currentRoomId);
-    io.emit('available_rooms', listRooms());
+    io.to('lobby').emit('available_rooms', listRooms());
   });
 
   // Ações de jogo enviadas do cliente
@@ -707,11 +817,13 @@ io.on('connection', (socket) => {
       const oldSocketId = p.socketId;
       p.socketId = socket.id;
       p.id = socket.id;
+      p.logSentSeq = 0;
       if (game.revealPause && game.revealPause.pending.delete(oldSocketId)) game.revealPause.pending.add(socket.id);
 
       socket.data.clientId = clientId;
       currentRoomId = roomId;
       socket.join(roomId);
+    socket.leave('lobby');
       game.log(`${p.name} voltou para a partida.`, p.team);
       console.log(`${p.name} voltou para a sala ${roomId}`);
 
@@ -737,6 +849,7 @@ io.on('connection', (socket) => {
     }
 
     p.disconnected = true;
+    if (!game.isPrivate) io.to('lobby').emit('available_rooms', listRooms());
     game.log(`${p.name} caiu. Esperando ${RECONNECT_MS / 1000}s para voltar...`, p.team);
     p.reconnectTimer = setTimeout(() => {
       p.reconnectTimer = null;

@@ -393,9 +393,11 @@ function handleBotAction(game, playerIdx) {
   }
 
   // 3. Responder Truco — "o envido está primeiro": canta Envido/Flor antes de responder
+  // (só contra um Truco simples; cantar cancela o Truco)
   if (h.trucoResponsePending && h.trucoPendingTeam === player.team) {
-    if (canSingNow && player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
-    if (canSingNow && !player.hasFlor && h.envidoState === 'none') {
+    const canSingOverTruco = canSingNow && h.trucoState === 'truco' && h.envidoState === 'none';
+    if (canSingOverTruco && player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
+    if (canSingOverTruco && !player.hasFlor) {
       const call = wantsEnvido(game, playerIdx);
       if (call) return { action: 'call_envido', value: call };
     }
@@ -408,7 +410,7 @@ function handleBotAction(game, playerIdx) {
 
   // 4. Cantar Flor ou Envido
   if (canSingNow) {
-    if (player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
+    if (player.hasFlor && h.florState === 'none' && h.envidoState === 'none') return { action: 'call_flor' };
     if (!player.hasFlor && h.envidoState === 'none' && game.isPe(playerIdx)) {
       const call = wantsEnvido(game, playerIdx);
       if (call) return { action: 'call_envido', value: call };

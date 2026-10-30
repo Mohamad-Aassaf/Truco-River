@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #dfb15b; --gold-b: #f0c96e; --cream: #f4edd2; --muted: #b9a88a; --dim: #8a7c68;
+    --wood: #1f140b; --panel: rgba(44, 26, 14, 0.9); --line: rgba(223, 177, 91, 0.3);
+    --blue: #60a5fa; --green: #2ecc71; --red: #f87171; --purple: #c39bd3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1600px; overflow: hidden;
+    font-family: 'Outfit', sans-serif; color: var(--cream);
+    background: radial-gradient(ellipse at 50% -10%, rgba(223,177,91,.14), transparent 55%),
+                radial-gradient(circle at center, #3a2414 0%, #120b05 100%);
+    padding: 34px 44px; position: relative;
+  }
+  h1 { font-family: 'Cinzel Decorative', serif; color: var(--gold); font-size: 40px; letter-spacing: .03em; }
+  .sub { color: var(--muted); font-size: 18px; margin-top: 4px; letter-spacing: .04em; }
+  .cols { display: grid; grid-template-columns: 430px 1fr 300px; gap: 120px; margin-top: 30px; position: relative; }
+  .tier { background: var(--panel); border: 1.5px solid var(--line); border-radius: 18px; padding: 18px 20px; position: relative; box-shadow: 0 14px 36px rgba(0,0,0,.5); }
+  .tier h2 { font-size: 21px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+  .tier .host { font-size: 13px; color: var(--muted); margin: 2px 0 14px; letter-spacing: .05em; text-transform: uppercase; }
+  .tag { font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 99px; letter-spacing: .06em; text-transform: uppercase; }
+  .t-blue { background: rgba(96,165,250,.18); color: var(--blue); }
+  .t-green { background: rgba(46,204,113,.18); color: #7ee2a8; }
+  .t-purple { background: rgba(195,155,211,.2); color: var(--purple); }
+  .box { border-radius: 12px; padding: 10px 13px; margin-bottom: 9px; background: rgba(0,0,0,.28); border: 1px solid rgba(223,177,91,.14); }
+  .box b { color: var(--gold-b); font-size: 15px; }
+  .box span { display: block; color: #d8ceb6; font-size: 13.5px; line-height: 1.35; margin-top: 2px; }
+  .box.core { border-color: rgba(223,177,91,.55); background: linear-gradient(90deg, rgba(223,177,91,.16), rgba(0,0,0,.28)); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .grid2 .box { margin-bottom: 0; }
+  .mem { margin-top: 10px; border: 1.5px dashed rgba(96,165,250,.5); border-radius: 12px; padding: 9px 13px; font-size: 13.5px; color: #cfe2ff; }
+  .mem b { color: var(--blue); }
+  .db .table { font-family: Consolas, monospace; font-size: 15px; color: var(--cream); padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.3); border: 1px solid rgba(195,155,211,.3); margin-bottom: 9px; }
+  .db .table small { display: block; font-family: 'Outfit'; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .db .fallback { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.4; border-top: 1px solid var(--line); padding-top: 10px; }
+  /* setas */
+  .arrow { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; text-align: center; }
+  .arrow .ln { position: relative; height: 3px; width: 100%; border-radius: 3px; }
+  .arrow .ln::after { content: ''; position: absolute; top: 50%; border: 8px solid transparent; transform: translateY(-50%); }
+  .right .ln::after { right: -8px; border-left: 11px solid currentColor; border-right: 0; }
+  .left .ln::after { left: -8px; border-right: 11px solid currentColor; border-left: 0; }
+  .ws1 { left: 434px; top: 200px; width: 112px; color: var(--gold-b); }
+  .ws2 { left: 434px; top: 290px; width: 112px; color: var(--blue); }
+  .db1 { right: 306px; top: 230px; width: 112px; color: var(--purple); }
+  .db2 { right: 306px; top: 320px; width: 112px; color: var(--purple); }
+  .arrow .ln { background: currentColor; }
+  .proto { position: absolute; left: 448px; top: 368px; width: 86px; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.3; }
+  .proto b { color: var(--cream); display: block; font-size: 13px; }
+  /* porquês */
+  .why { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; }
+  .why div { background: rgba(0,0,0,.3); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; padding: 12px 14px; }
+  .why b { color: var(--gold-b); font-size: 15px; display: block; margin-bottom: 3px; }
+  .why span { font-size: 13.5px; color: #d8ceb6; line-height: 1.4; }
+  .suits { position: absolute; right: 44px; top: 36px; font-size: 28px; color: var(--gold); opacity: .55; letter-spacing: 10px; }
+</style>
+</head>
+<body>
+  <div class="suits">♠♣♥♦</div>
+  <h1>Truco River · Arquitetura</h1>
+  <p class="sub">Jogo em tempo real com servidor no comando: o navegador mostra, o servidor decide</p>
+
+  <div class="cols">
+    <!-- NAVEGADOR -->
+    <div class="tier">
+      <h2>🖥️ Navegador <span class="tag t-blue">Vercel</span></h2>
+      <p class="host">HTML + CSS + JavaScript puro · sem compilação</p>
+      <div class="box core"><b>app.js</b><span>Mesa, mão, botões de aposta, placar, chat, reconexão</span></div>
+      <div class="grid2">
+        <div class="box"><b>social.js</b><span>Conta, amigos, convites</span></div>
+        <div class="box"><b>reveal.js</b><span>Pontos do Envido</span></div>
+        <div class="box"><b>news.js</b><span>Novidades</span></div>
+        <div class="box"><b>reports.js</b><span>Bugs e sugestões</span></div>
+        <div class="box"><b>rules.js</b><span>Regras e calculadora</span></div>
+        <div class="box"><b>sound / voices</b><span>Músicas e vozes</span></div>
+      </div>
+      <div class="box" style="margin-top:9px"><b>style.css · home.css</b><span>Visual do jogo e das janelas (celular e computador)</span></div>
+    </div>
+
+    <!-- SERVIDOR -->
+    <div class="tier">
+      <h2>⚙️ Servidor Node.js <span class="tag t-green">Render</span></h2>
+      <p class="host">Express + Socket.io · um processo sempre ligado</p>
+      <div class="box core"><b>server.js — o maestro</b><span>Recebe ações, valida, chama o motor, manda o estado filtrado a cada jogador, aciona os bots, guarda o lugar por 30s na reconexão</span></div>
+      <div class="grid2">
+        <div class="box core"><b>gameEngine.js</b><span>Regras puras: cartas, rodadas, Truco, Envido, Flor, mazo, pontos. Testável sozinho</span></div>
+        <div class="box core"><b>bot.js</b><span>Simula centenas de mãos possíveis e decide pela chance de ganhar (Fácil / Médio / Difícil)</span></div>
+        <div class="box"><b>accounts.js · social.js</b><span>Contas (senha criptografada), sessões, amigos, quem está online</span></div>
+        <div class="box"><b>news.js · reports.js</b><span>Novidades do admin e relatos com imagem</span></div>
+      </div>
+      <div class="mem"><b>Na memória:</b> salas e partidas em andamento (mudam várias vezes por segundo; não vão para o banco)</div>
+    </div>
+
+    <!-- BANCO -->
+    <div class="tier db">
+      <h2>🗄️ Postgres <span class="tag t-purple">Neon</span></h2>
+      <p class="host">Só o que precisa durar</p>
+      <div class="table">truco_users<small>contas, amigos, vitórias</small></div>
+      <div class="table">truco_news<small>novidades</small></div>
+      <div class="table">truco_reports<small>bugs e sugestões</small></div>
+      <p class="fallback">Sem <b>DATABASE_URL</b>: salva em arquivos JSON em <b>data/</b> (bom para rodar no computador; no Render some ao reiniciar).</p>
+    </div>
+
+    <!-- SETAS -->
+    <div class="arrow right ws1"><span>ações do jogador</span><div class="ln"></div></div>
+    <div class="arrow left ws2"><div class="ln"></div><span>estado filtrado<br>(só as suas cartas)</span></div>
+    <div class="proto"><b>WebSocket</b>Socket.io<br>tempo real</div>
+    <div class="arrow right db1"><span>grava</span><div class="ln"></div></div>
+    <div class="arrow left db2"><div class="ln"></div><span>carrega ao ligar</span></div>
+  </div>
+
+  <div class="why">
+    <div><b>Servidor decide tudo</b><span>Ninguém vê as cartas dos outros nem consegue trapacear pelo navegador.</span></div>
+    <div><b>Regras separadas da rede</b><span>O motor roda sozinho: testes e simulações de milhares de mãos sem abrir o site.</span></div>
+    <div><b>WebSocket</b><span>O servidor empurra jogadas, cantos e chat na hora, sem o navegador ficar perguntando.</span></div>
+    <div><b>Banco só para o que dura</b><span>Partidas ficam na memória (rápido); contas, novidades e relatos vão para o Postgres.</span></div>
+  </div>
+</body>
+</html>
