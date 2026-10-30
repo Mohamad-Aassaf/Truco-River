@@ -296,8 +296,8 @@ function scheduleNextHand(roomId) {
   const ended = activeGames[roomId];
   // Com cartas para provar o envido/flor, a mesa fica um pouco mais
   const proofs = ended && ended.lastHandSummary && ended.lastHandSummary.proofCards;
-  // Tempo para ler o resumo da mão (e ver as cartas do envido/flor, se houver)
-  const delay = proofs && proofs.length ? 8500 : 6500;
+  // Intervalo entre as mãos: 3s (um pouco mais quando há cartas do envido/flor para ver)
+  const delay = proofs && proofs.length ? 4500 : 3000;
   if (ended) ended.nextHandAt = Date.now() + delay;
 
   nextHandTimers[roomId] = setTimeout(() => {

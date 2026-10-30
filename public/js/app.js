@@ -1585,11 +1585,10 @@ function clearPlayedCardSlots() {
 }
 
 // Exibe balões de diálogo
-// Cada fala aparece uma vez e some sozinha depois de alguns segundos
-// (o servidor guarda a última fala de cada um; o carimbo diz se é nova)
-const BUBBLE_MS = 2800;
+// Cada fala fica no balão até a próxima fala da pessoa (ou até a mão acabar).
+// O carimbo do servidor diz se a fala é nova, para a animação e a voz tocarem
+// só uma vez, mesmo quando o texto se repete.
 const bubbleShownKeys = {};
-const bubbleTimers = {};
 
 function renderVoiceBubbles(voiceBubbles, players, stamps, handNumber) {
   const present = new Set();
@@ -1603,7 +1602,10 @@ function renderVoiceBubbles(voiceBubbles, players, stamps, handNumber) {
     present.add(seat);
 
     const showKey = `${handNumber}:${playerIdx}:${(stamps || {})[playerIdx] || 0}:${text}`;
-    if (bubbleShownKeys[seat] === showKey) return; // essa fala já apareceu
+    if (bubbleShownKeys[seat] === showKey) {
+      bubble.classList.add('show'); // continua na tela
+      return;
+    }
     bubbleShownKeys[seat] = showKey;
 
     // "Flor por cima do Envido" aparece só como FLOR no balão
@@ -1611,9 +1613,6 @@ function renderVoiceBubbles(voiceBubbles, players, stamps, handNumber) {
     bubble.textContent = text === '¡FLOR_SOBRE_ENVIDO!' ? '¡FLOR!' : text;
     void bubble.offsetWidth; // reinicia a animação
     bubble.classList.add('show');
-
-    clearTimeout(bubbleTimers[seat]);
-    bubbleTimers[seat] = setTimeout(() => bubble.classList.remove('show'), BUBBLE_MS);
 
     // Canto novo: toca a voz escolhida em Ajustes > Vozes (se houver gravação)
     if (window.soundManager) window.soundManager.playVoiceChant(text);
