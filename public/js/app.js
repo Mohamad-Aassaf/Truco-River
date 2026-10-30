@@ -1519,6 +1519,24 @@ function renderPlayedCards(playedCards, players, gameState) {
     });
   }
 
+  // Duplas: o quadro de cada vaza mostra quem ganhou (azul/vermelho/amarelo)
+  // e a vaza que está sendo jogada fica destacada. No fim da mão fica como estava.
+  if (gameState && gameState.hand) {
+    const frames = document.querySelectorAll('#arena-slot-top .slot-ph');
+    const winners = gameState.hand.roundWinners || [];
+    const myTeamNow = gameState.players[mySeatIndex] ? gameState.players[mySeatIndex].team : 0;
+    frames.forEach((frame, r) => {
+      let cls = 'slot-ph';
+      if (r < winners.length) {
+        const w = winners[r];
+        cls += w === -1 ? ' tie' : (gameState.players[w] && gameState.players[w].team === myTeamNow ? ' win-us' : ' win-them');
+      } else if (r === gameState.hand.currentRound) {
+        cls += ' current';
+      }
+      frame.className = cls;
+    });
+  }
+
   playedCards.forEach(play => {
     // Determinar em qual assento o jogador está sentado
     const playerIdx = play.playerIdx;
@@ -1709,6 +1727,29 @@ function setupActionButtons(gameState) {
   }
 
   // --- SE HOUVER APOSTA PENDENTE PARA O MEU TIME RESPONDER ---
+
+  // Envido pendente para o meu time e alguém do time tem Flor sem cantar:
+  // a Flor vem antes da resposta ("Flor sobre Envido")
+  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && hand.florState === 'none' && hand.currentRound === 0) {
+    const holder = gameState.players.findIndex((p, i) => p.team === myTeam && p.hasFlor
+      && !(hand.foldedPlayers || []).includes(i) && (hand.hands[i] || []).length === 3);
+    if (holder === mySeatIndex) {
+      if (statusEl) {
+        statusEl.textContent = 'Você tem Flor! Cante antes de responder o Envido.';
+        statusEl.classList.remove('hide');
+      }
+      groupFlor.classList.remove('hide');
+      showAndEnableButton(btnFlor);
+      return;
+    }
+    if (holder !== -1) {
+      if (statusEl) {
+        statusEl.textContent = `${gameState.players[holder].name} tem Flor e vai cantar...`;
+        statusEl.classList.remove('hide');
+      }
+      return;
+    }
+  }
 
   // Só responde quem é o próximo depois de quem cantou; o parceiro espera
   const waitingPartner = (pending, team, responder) => pending && team === myTeam && responder !== mySeatIndex;

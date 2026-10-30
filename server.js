@@ -421,8 +421,9 @@ function runBotLogic(roomId) {
     const pendingTeam = game.hand.florPendingTeam;
     activeBotIdx = game.players.findIndex((p, idx) => p.isBot && p.team === pendingTeam && p.hasFlor && !game.hand.foldedPlayers.has(idx));
   } else if (game.hand.envidoResponsePending) {
-    // Só responde o próximo depois de quem cantou
-    const r = game.hand.envidoResponderIdx;
+    // Quem tem Flor no time canta antes da resposta; senão responde o próximo de quem cantou
+    const florSinger = game.pendingFlorSinger(game.hand.envidoPendingTeam);
+    const r = florSinger !== -1 ? florSinger : game.hand.envidoResponderIdx;
     if (game.players[r] && game.players[r].isBot) activeBotIdx = r;
   } else if (game.hand.trucoResponsePending) {
     const r = game.hand.trucoResponderIdx;

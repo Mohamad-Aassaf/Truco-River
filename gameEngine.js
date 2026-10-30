@@ -633,9 +633,19 @@ class TrucoGame { // TRUCO GURIZINHO
     return false;
   }
 
+  // Quem do time ainda pode (e deve) cantar Flor agora: tem Flor, não cantou,
+  // não jogou carta e está na 1ª vaza. -1 se ninguém.
+  pendingFlorSinger(team) {
+    const h = this.hand;
+    if (!h || h.florState !== 'none' || h.currentRound !== 0) return -1;
+    return this.players.findIndex((p, i) => p.team === team && p.hasFlor && !this.isFolded(i) && !this.hasPlayerPlayedCard(i));
+  }
+
   respondEnvido(playerIdx, response) {
     if (!this.hand || !this.hand.envidoResponsePending) return false;
     if (this.isFolded(playerIdx)) return false;
+    // Alguém do time tem Flor: a Flor vem antes ("Flor sobre Envido")
+    if (this.pendingFlorSinger(this.players[playerIdx].team) !== -1) return false;
 
     const player = this.players[playerIdx];
     const team = player.team;
