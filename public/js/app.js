@@ -808,7 +808,10 @@ function renderGameScreen(gameState) {
   renderLogs(gameState.logs || [], us, gameState.logsReset !== false);
 
   // Fase do Jogo
-  if (gameState.state === 'hand_end') {
+  if (gameState.state === 'game_end') {
+    phaseBadge.textContent = 'Fim de Jogo';
+    phaseBadge.style.background = '#8e44ad';
+  } else if (gameState.state === 'hand_end' || !gameState.hand) {
     phaseBadge.textContent = 'Fim da Mão';
     phaseBadge.style.background = '#8e44ad';
   } else {
@@ -871,15 +874,10 @@ function renderGameScreen(gameState) {
 
     if (gameState.state === 'game_end') {
       const isGameWinner = gameState.winner === myTeam;
-      if (isGameWinner) {
-        gameAlertText.innerHTML = `
-          <div style="color: #dfb15b; font-weight: 800; text-shadow: 0 0 10px rgba(223, 177, 91, 0.6); font-size: 1.4rem;">¡VENCEMOS A PELEIA! 🏆</div>
-        `;
-      } else {
-        gameAlertText.innerHTML = `
-          <div style="color: #e74c3c; font-weight: 800; text-shadow: 0 0 10px rgba(231, 76, 60, 0.6); font-size: 1.4rem;">¡FOMOS DERROTADOS! 😢</div>
-        `;
-      }
+      const head = endHeadline(gameState);
+      gameAlertText.innerHTML = isGameWinner
+        ? `<div class="end-banner win">¡Vencemos a peleia! <i class="fa-solid fa-trophy"></i></div><div class="end-banner-sub">${escapeText(head.text)}</div>`
+        : `<div class="end-banner lose">Perdemos a peleia</div><div class="end-banner-sub">${escapeText(head.text)}</div>`;
     } else {
       const isWinner = summary.winnerTeam === myTeam;
       const ptsText = summary.pointsWon === 1 ? '1 ponto' : `${summary.pointsWon} pontos`;
@@ -2087,29 +2085,69 @@ if (btnEnvidoSubFlor) {
 
 // --- RENDERIZAÇÃO DA TELA DE VITÓRIA ---
 
+// Frases do fim de jogo (sorteadas)
+const WIN_LINES = [
+  'Ganharam no peito e na raça, tchê!',
+  'Truco bem jogado é isso aí!',
+  'A peleia foi de vocês!',
+  'Mão firme e cara de pau: campeões!'
+];
+const LOSE_LINES = [
+  'Hoje não deu, mas a revanche tá aí.',
+  'Faz parte do truco, tchê. Bora de novo?',
+  'Eles levaram essa. A próxima é nossa!',
+  'Até o melhor gaúcho perde uma peleia.'
+];
+const pick = list => list[Math.floor(Math.random() * list.length)];
+
+// Resumo curto do fim de jogo: "Vencemos 24 a 15" + como fechou
+function endHeadline(gameState) {
+  const { us, them } = myTeams(gameState);
+  const won = gameState.winner === us;
+  const a = gameState.score[us];
+  const b = gameState.score[them];
+  const info = gameState.gameInfo || {};
+  const blow = info.finalBlow ? ` · último ponto: ${info.finalBlow}` : '';
+  return { won, text: `${won ? 'Vencemos' : 'Perdemos'} de ${Math.max(a, b)} a ${Math.min(a, b)}${blow}` };
+}
+
 function renderGameEndScreen(gameState) {
   screenLobby.classList.remove('active');
   screenWaiting.classList.remove('active');
   screenGame.classList.remove('active');
   screenGameEnd.classList.add('active');
 
-  const winner = gameState.winner;
-  const myTeam = (mySeatIndex !== -1 && gameState.players[mySeatIndex]) ? gameState.players[mySeatIndex].team : 0;
-  const isMyTeamWinner = myTeam === winner;
+  const { us, them } = myTeams(gameState);
+  const won = gameState.winner === us;
+  const info = gameState.gameInfo || {};
+  const card = document.getElementById('game-end-card');
+  card.classList.toggle('won', won);
+  card.classList.toggle('lost', !won);
 
-  if (isMyTeamWinner) {
-    document.getElementById('victory-title').textContent = 'Vitória Campeira!';
-    document.getElementById('victory-title').style.color = 'var(--gold)';
-    window.soundManager.playVictorySound();
-  } else {
-    document.getElementById('victory-title').textContent = 'Fomos Derrotados!';
-    document.getElementById('victory-title').style.color = '#c0392b';
-  }
+  document.getElementById('end-icon').className = won
+    ? 'fa-solid fa-trophy trophy-icon animate-bounce'
+    : 'fa-solid fa-heart-crack trophy-icon';
+  document.getElementById('victory-title').textContent = won ? '¡Vitória Campeira!' : 'Não foi dessa vez';
+  document.getElementById('victory-title').style.color = '';
+  document.getElementById('victory-subtitle').textContent = won ? pick(WIN_LINES) : pick(LOSE_LINES);
+  if (won) window.soundManager.playVictorySound();
 
-  const teams = myTeams(gameState);
-  document.getElementById('final-score-t0').textContent = gameState.score[teams.us];
-  document.getElementById('final-score-t1').textContent = gameState.score[teams.them];
+  document.getElementById('final-score-t0').textContent = gameState.score[us];
+  document.getElementById('final-score-t1').textContent = gameState.score[them];
+  const names = team => gameState.players.filter(p => p.team === team).map(p => p.name).join(' & ');
+  document.getElementById('final-names-us').textContent = names(us);
+  document.getElementById('final-names-them').textContent = names(them);
+
+  const facts = [];
+  if (info.finalBlow) facts.push(['fa-bolt', `Último ponto: <b>${escapeText(info.finalBlow)}</b>`]);
+  if (info.hands) facts.push(['fa-layer-group', `<b>${info.hands}</b> ${info.hands === 1 ? 'mão jogada' : 'mãos jogadas'}`]);
+  if (info.minutes) facts.push(['fa-clock', `<b>${info.minutes}</b> min de partida`]);
+  if (info.limit) facts.push(['fa-flag-checkered', `Partida até <b>${info.limit}</b>`]);
+  document.getElementById('end-facts').innerHTML = facts
+    .map(([icon, html]) => `<li><i class="fa-solid ${icon}"></i> ${html}</li>`).join('');
 }
+
+document.getElementById('end-lobby-btn').addEventListener('click', leaveRoomAndReload);
 
 // Botão Jogar Novamente
 document.getElementById('restart-game-btn').addEventListener('click', () => {

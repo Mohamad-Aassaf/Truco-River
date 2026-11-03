@@ -2280,3 +2280,86 @@ body.hand-ended .action-panel { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .online-dot { animation: none; }
 }
+
+/* --- Fim de jogo --- */
+.final-score-box { grid-template-columns: 1fr auto 1fr; align-items: center; }
+.final-vs { font-family: var(--font-title); color: var(--text-dim); font-size: 1.3rem; }
+.final-score.us span { color: var(--team-us); }
+.final-score.them span { color: var(--team-them); }
+.final-score small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.game-end-card { position: relative; overflow: hidden; }
+.game-end-card.won .final-score.us { border-color: rgba(96, 165, 250, 0.6); box-shadow: 0 0 18px rgba(96, 165, 250, 0.2); }
+.game-end-card.lost .final-score.them { border-color: rgba(248, 113, 113, 0.6); box-shadow: 0 0 18px rgba(248, 113, 113, 0.18); }
+.game-end-card.lost { border-color: rgba(248, 113, 113, 0.45); box-shadow: var(--shadow-2), 0 0 50px rgba(231, 76, 60, 0.12); }
+.game-end-card.lost .trophy-icon { color: #ff8a7a; text-shadow: 0 0 20px rgba(231, 76, 60, 0.45); }
+.game-end-card.lost .victory-title { color: #ff9a8b; }
+
+.end-facts {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: -12px 0 24px;
+  text-align: left;
+}
+
+.end-facts li {
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--hairline);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.end-facts li i { color: var(--gold); width: 16px; text-align: center; margin-right: 4px; }
+.end-facts b { color: var(--cream); }
+
+.end-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.end-actions .btn-large { width: 100%; }
+.end-actions .btn-secondary { width: 100%; }
+
+/* Confete dourado na vitória */
+.game-end-card.won .end-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, var(--gold-bright) 2px, transparent 2.5px),
+    radial-gradient(circle, #60a5fa 2px, transparent 2.5px),
+    radial-gradient(circle, #f4edd2 1.5px, transparent 2px);
+  background-size: 90px 110px, 130px 90px, 70px 80px;
+  background-position: 10px 0, 50px 30px, 30px 60px;
+  opacity: 0.35;
+  animation: confettiFall 6s linear infinite;
+}
+
+@keyframes confettiFall {
+  from { background-position: 10px -110px, 50px -60px, 30px -80px; }
+  to   { background-position: 10px 330px, 50px 300px, 30px 320px; }
+}
+
+/* Faixa da mesa no fim da partida */
+.end-banner { font-family: var(--font-title); font-weight: 800; font-size: 1.35rem; }
+.end-banner.win { color: var(--gold-bright); text-shadow: 0 0 12px rgba(223, 177, 91, 0.6); }
+.end-banner.lose { color: #ff8a7a; text-shadow: 0 0 12px rgba(231, 76, 60, 0.45); }
+.end-banner-sub { font-size: 0.85rem; color: var(--cream); margin-top: 2px; text-transform: none; letter-spacing: 0.02em; }
+
+@media (max-width: 420px) {
+  .end-facts { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-end-card.won .end-confetti { animation: none; }
+}

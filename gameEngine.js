@@ -182,9 +182,21 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   // Soma tentos e guarda o motivo para o resumo do fim da mão
+  // O placar nunca passa do limite da partida: soma só o que falta para fechar
   award(team, points, kind, label) {
-    this.score[team] += points;
-    if (this.hand) this.hand.awards.push({ team, points, kind, label });
+    const room = Math.max(0, this.limit() - this.score[team]);
+    const given = Math.min(points, room);
+    this.score[team] += given;
+    if (this.hand && given > 0) this.hand.awards.push({ team, points: given, kind, label });
+  }
+
+  limit() {
+    return this.maxPoints || 24;
+  }
+
+  // Falta Envido / Contra-Flor e o Resto: vale o que falta para quem está na frente ganhar
+  faltaPoints() {
+    return Math.max(1, this.limit() - Math.max(this.score[0], this.score[1]));
   }
 
   // "O envido está primeiro": quem ia responder o Truco cantou Envido/Flor.
@@ -270,7 +282,22 @@ class TrucoGame { // TRUCO GURIZINHO
     return p;
   }
 
+  // Dados do fim de jogo para a tela final
+  gameInfo() {
+    if (this.state !== 'game_end') return null;
+    return {
+      hands: this.handNumber || 0,
+      minutes: this.gameStartedAt ? Math.max(1, Math.round(((this.gameEndedAt || Date.now()) - this.gameStartedAt) / 60000)) : null,
+      finalBlow: this.finalBlow || null,
+      limit: this.limit()
+    };
+  }
+
   startNewHand() {
+    if (!this.gameStartedAt || this.state === 'lobby') {
+      this.gameStartedAt = Date.now();
+      this.handNumber = 0;
+    }
     // Reordenar jogadores com base nos times escolhidos no lobby para coincidir com a perspectiva do motor
     if (this.mode === '2v2') {
       const team0 = this.players.filter(p => p.team === 0);
@@ -667,17 +694,10 @@ class TrucoGame { // TRUCO GURIZINHO
       this.hand.envidoState = 'resolved';
 
       // Calcular pontos do Falta Envido se for o caso
-      if (this.hand.envidoState === 'falta_envido' || this.hand.envidoHistory.includes('falta_envido')) {
-        const leadingScore = Math.max(this.score[0], this.score[1]);
-        if (leadingScore < 12) {
-          // Nas Malas: Falta Envido vale a diferença para chegar a 12
-          this.hand.envidoPointsAtStake = 12 - leadingScore;
-        } else {
-          // Nas Boas: Falta Envido vale a diferença para chegar a 24
-          this.hand.envidoPointsAtStake = 24 - leadingScore;
-        }
-        // Garante que vale pelo menos 1 ponto
-        if (this.hand.envidoPointsAtStake <= 0) this.hand.envidoPointsAtStake = 1;
+      // Falta Envido: vale o que falta para quem está na frente ganhar a partida
+      if (this.hand.envidoHistory.includes('falta_envido')) {
+        this.hand.envidoPointsAtStake = this.faltaPoints();
+        this.hand.isFalta = true;
       }
 
       this.log(`Envido aceito pelo Time ${team}. Pontos em jogo: ${this.hand.envidoPointsAtStake}`);
@@ -727,7 +747,7 @@ class TrucoGame { // TRUCO GURIZINHO
       this.addProof(bestPlayerIdx, 'envido', bestScore, envidoProofCards(this.hand.originalHands[bestPlayerIdx]));
 
       this.log(`Disputa de Envido vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
-      this.award(winner.team, points, 'envido', 'Envido');
+      this.award(winner.team, points, 'envido', this.hand.isFalta ? 'Falta Envido' : 'Envido');
 
       // Registrar no estado da mão para mostrar no chat
       this.hand.envidoWinnerInfo = {
@@ -868,9 +888,8 @@ class TrucoGame { // TRUCO GURIZINHO
       this.hand.florState = 'contra_flor_resto';
       this.hand.florHistory.push('contra_flor_resto');
 
-      const leadingScore = Math.max(this.score[0], this.score[1]);
-      this.hand.florPointsAtStake = 24 - leadingScore;
-      if (this.hand.florPointsAtStake <= 0) this.hand.florPointsAtStake = 1;
+      // Vale o que falta para quem está na frente ganhar a partida
+      this.hand.florPointsAtStake = this.faltaPoints();
 
       this.hand.florResponsePending = true;
       this.hand.florPendingTeam = opponentTeam;
@@ -1208,25 +1227,53 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   checkGameWinner() {
-    const limit = this.maxPoints || 24;
-    if (this.score[0] >= limit) {
-      this.state = 'game_end';
-      this.winner = 0;
-      this.log(`FIM DE JOGO! TIME 1 VENCEU A PARTIDA!`);
-      return true;
+    const limit = this.limit();
+    const winner = this.score[0] >= limit ? 0 : this.score[1] >= limit ? 1 : null;
+    if (winner === null) return false;
+    if (this.state === 'game_end') return true;
+
+    this.state = 'game_end';
+    this.winner = winner;
+    this.gameEndedAt = Date.now();
+    // Acabou no meio da mão (Envido/Flor fechou a partida): guarda o resumo dessa mão
+    if (this.hand && (!this.lastHandSummary || this.lastHandSummary.handNumber !== this.hand.number)) {
+      this.lastHandSummary = {
+        handNumber: this.hand.number,
+        originalHands: this.hand.originalHands,
+        playedCards: this.hand.playedCards,
+        roundsWon: this.hand.roundsWon,
+        roundWinners: this.hand.roundWinners,
+        winnerTeam: winner,
+        pointsWon: 0,
+        voiceBubble: { ...this.hand.voiceBubble },
+        voiceStamp: { ...this.hand.voiceStamp },
+        reason: { type: 'points' },
+        awards: this.hand.awards.slice(),
+        scoreAfter: { 0: this.score[0], 1: this.score[1] },
+        reveal: this.hand.reveal || null,
+        proofCards: this.buildProofCards()
+      };
     }
-    if (this.score[1] >= limit) {
-      this.state = 'game_end';
-      this.winner = 1;
-      this.log(`FIM DE JOGO! TIME 2 VENCEU A PARTIDA!`);
-      return true;
+    // O que fechou a partida (último ponto do time vencedor)
+    const awards = this.hand ? this.hand.awards.filter(a => a.team === winner) : [];
+    const last = awards.length ? awards[awards.length - 1] : null;
+    if (last && last.kind === 'mao') {
+      const r = (this.lastHandSummary && this.lastHandSummary.reason) || {};
+      const names = { truco: 'Truco', retruco: 'Retruco', vale4: 'Vale Quatro' };
+      this.finalBlow = r.type === 'refused' ? `${r.by || 'Eles'} correu do ${names[r.level] || 'Truco'}`
+        : r.type === 'mazo' ? `${r.by || 'Alguém'} foi ao mazo`
+        : names[r.level] ? `${names[r.level]} aceito` : 'Mão vencida';
+    } else {
+      this.finalBlow = last ? last.label : null;
     }
-    return false;
+    this.log(`FIM DE JOGO! TIME ${winner + 1} VENCEU A PARTIDA!`);
+    return true;
   }
 
   // Gera dados do jogo sanitizados para enviar para um cliente específico
   getGameStateForPlayer(playerIdx) {
-    if (!this.hand) {
+    // Partida acabou (mesmo no meio de uma mão): mostra só o resultado
+    if (!this.hand || this.state === 'game_end') {
       return {
         id: this.id,
         roomName: this.roomName || this.id,
@@ -1239,7 +1286,8 @@ class TrucoGame { // TRUCO GURIZINHO
         winner: this.winner,
         logs: this.gameLogs,
         dealerIndex: this.dealerIndex,
-        lastHandSummary: this.lastHandSummary
+        lastHandSummary: this.lastHandSummary,
+        gameInfo: this.gameInfo()
       };
     }
 

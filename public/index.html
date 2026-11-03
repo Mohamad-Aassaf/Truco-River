@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=1.8">
+  <link rel="stylesheet" href="/css/home.css?v=1.9">
 </head>
 
 <body data-screen="home">
@@ -531,23 +531,32 @@
 
   <!-- TELA 4: OVERLAY DE FIM DE JOGO -->
   <div id="screen-game-end" class="screen">
-    <div class="game-end-card glassmorphism">
-      <i class="fa-solid fa-trophy trophy-icon animate-bounce"></i>
+    <div class="game-end-card glassmorphism" id="game-end-card">
+      <div class="end-confetti" aria-hidden="true"></div>
+      <i class="fa-solid fa-trophy trophy-icon animate-bounce" id="end-icon"></i>
       <h2 id="victory-title" class="victory-title">FIM DE JOGO!</h2>
-      <p class="victory-subtitle">Parabéns aos novos campeões do truco!</p>
+      <p class="victory-subtitle" id="victory-subtitle">Parabéns aos novos campeões do truco!</p>
 
       <div class="final-score-box">
-        <div class="final-score">
+        <div class="final-score us">
           <span>Nós</span>
           <strong id="final-score-t0">24</strong>
+          <small id="final-names-us"></small>
         </div>
-        <div class="final-score">
+        <div class="final-vs">×</div>
+        <div class="final-score them">
           <span>Eles</span>
           <strong id="final-score-t1">15</strong>
+          <small id="final-names-them"></small>
         </div>
       </div>
 
-      <button id="restart-game-btn" class="btn btn-primary btn-large">Jogar Novamente</button>
+      <ul class="end-facts" id="end-facts"></ul>
+
+      <div class="end-actions">
+        <button id="restart-game-btn" class="btn btn-primary btn-large"><i class="fa-solid fa-rotate-right"></i> Jogar Novamente</button>
+        <button id="end-lobby-btn" class="btn btn-secondary"><i class="fa-solid fa-house"></i> Voltar ao início</button>
+      </div>
     </div>
   </div>
 
@@ -1027,8 +1036,8 @@
             </table>
 
             <ul class="rules-bullets">
-              <li><b>Falta Envido:</b> vale os tentos que faltam para quem está na frente fechar as malas (12) ou,
-                se já estiver nas boas, para fechar o jogo (24).</li>
+              <li><b>Falta Envido:</b> vale os tentos que faltam para quem está na frente ganhar a partida.
+                Ex.: placar 18 a 10 numa partida de 24 → quem ganhar o Falta Envido leva 6.</li>
               <li><b>Empate no envido:</b> ganha quem é mão (ou o mais perto do mão).</li>
               <li><b>Quem tem Flor não canta Envido</b>: canta a Flor, que passa por cima do Envido.</li>
             </ul>
@@ -1051,7 +1060,7 @@
                 <tr><td>Você e seu parceiro têm Flor</td><td>4</td></tr>
                 <tr><td>Os dois lados têm: disputa (Quero)</td><td>3 para a maior</td></tr>
                 <tr><td>Contra-Flor</td><td>6 para a maior</td></tr>
-                <tr><td>Contra-Flor e o Resto</td><td>o que falta para fechar o jogo</td></tr>
+                <tr><td>Contra-Flor e o Resto</td><td>o que falta para quem está na frente ganhar</td></tr>
                 <tr><td>Achique (corre da Contra-Flor)</td><td>o outro lado leva o que estava valendo</td></tr>
               </tbody>
             </table>
@@ -1201,7 +1210,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=12"></script>
+  <script src="/js/app.js?v=13"></script>
   <script src="/js/social.js?v=5"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
