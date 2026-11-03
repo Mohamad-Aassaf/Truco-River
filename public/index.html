@@ -843,7 +843,7 @@
               <div class="rules-fact"><i class="fa-solid fa-clone"></i><strong>40 cartas</strong><span>baralho espanhol, sem 8, 9 e coringas</span></div>
               <div class="rules-fact"><i class="fa-solid fa-user-group"></i><strong>1v1 ou duplas</strong><span>na dupla, o parceiro senta à sua frente</span></div>
               <div class="rules-fact"><i class="fa-solid fa-hand"></i><strong>3 cartas</strong><span>para cada jogador, em toda mão</span></div>
-              <div class="rules-fact"><i class="fa-solid fa-flag-checkered"></i><strong>24 tentos</strong><span>vence quem chegar primeiro (12 "malas" + 12 "boas")</span></div>
+              <div class="rules-fact"><i class="fa-solid fa-flag-checkered"></i><strong>24 tentos</strong><span>vence quem chegar primeiro (dá para combinar 15 ou outro limite)</span></div>
             </div>
 
             <h4>Como funciona uma mão</h4>
@@ -863,8 +863,9 @@
             <div class="rules-callout">
               <i class="fa-solid fa-chess-king"></i>
               <p><strong>Mão e pé.</strong> O <em>mão</em> é o primeiro a jogar (à direita de quem deu as cartas) e
-                ganha os empates. O <em>pé</em> é o último a jogar de cada lado. Nas duplas, é o pé quem canta e
-                responde o Envido pela dupla.</p>
+                ganha os empates. O <em>pé</em> é o último a jogar de cada lado. Nas duplas, é o pé quem canta o
+                Envido pela dupla. Já as respostas (ao Truco ou ao Envido) são dadas pelo <em>próximo</em> jogador
+                depois de quem cantou.</p>
             </div>
           </section>
 
@@ -978,7 +979,12 @@
               <li><b>Quem aceitou pode aumentar depois.</b> Se você disse "Quero" ao Truco, mais tarde, na sua vez,
                 pode gritar Retruco.</li>
               <li><b>O Envido vem primeiro.</b> Se trucarem você na 1ª rodada, ainda dá para cantar Envido ou Flor
-                antes de responder ao truco.</li>
+                antes de responder. Isso <strong>cancela o Truco</strong>: quem trucou precisa pedir de novo depois.
+                Só vale contra um Truco simples (não contra Retruco ou Vale Quatro).</li>
+              <li><b>Truco aceito fecha o Envido.</b> Se o Truco for aceito ou aumentado na 1ª rodada, ninguém pode
+                mais cantar Envido nessa mão.</li>
+              <li><b>Quem responde, nas duplas.</b> Só o próximo jogador depois de quem cantou pode aceitar, correr
+                ou aumentar. O parceiro dele espera.</li>
               <li><b>Ir ao mazo.</b> Desistir da mão: você larga as cartas e o adversário leva os tentos da mão. Se for
                 ainda na 1ª rodada, ele leva pelo menos 2.</li>
               <li><b>Mazo na dupla.</b> Só quem foi ao mazo sai da mão; o parceiro segue jogando sozinho. Se os dois
@@ -990,7 +996,8 @@
           <section class="rules-panel" data-rules-panel="envido">
             <h3>Envido: os pontos das cartas</h3>
             <p>O Envido é uma aposta separada: ganha quem tiver mais <strong>pontos de envido</strong> na mão. Só pode
-              ser cantado na <strong>1ª rodada</strong>, antes de você jogar sua carta.</p>
+              ser cantado na <strong>1ª rodada</strong>, <strong>na sua vez</strong> e antes de você jogar sua carta.
+              Não vale cantar "atravessado", fora da sua vez; a única exceção é responder a um Truco.</p>
 
             <h4>Como contar</h4>
             <ul class="rules-bullets">
@@ -1040,6 +1047,7 @@
                 Ex.: placar 18 a 10 numa partida de 24 → quem ganhar o Falta Envido leva 6.</li>
               <li><b>Empate no envido:</b> ganha quem é mão (ou o mais perto do mão).</li>
               <li><b>Quem tem Flor não canta Envido</b>: canta a Flor, que passa por cima do Envido.</li>
+              <li><b>Truco aceito ou aumentado</b> na 1ª rodada fecha o Envido para os dois lados.</li>
             </ul>
           </section>
 
@@ -1052,6 +1060,8 @@
             </div>
             <p>Quem recebe três cartas do mesmo naipe tem <strong>Flor</strong> e deve cantá-la na 1ª rodada, antes de
               jogar a carta. A Flor cancela o Envido ("<em>Flor sobre Envido</em>").</p>
+            <p>Se o adversário cantar Envido e alguém do seu time tiver Flor, <strong>a Flor vem antes de qualquer
+              resposta</strong>: ninguém do time aceita ou recusa o Envido até a Flor ser cantada.</p>
 
             <table class="rules-table">
               <thead><tr><th>Situação</th><th>Tentos</th></tr></thead>
@@ -1077,9 +1087,9 @@
             <h3>Dicionário do galpão</h3>
             <dl class="glossary">
               <div><dt>Tento</dt><dd>Cada ponto do placar. Antigamente marcado com grãos de feijão ou palitos.</dd></div>
-              <div><dt>Malas e boas</dt><dd>Os primeiros 12 tentos são as malas; dos 12 aos 24, as boas.</dd></div>
+              <div><dt>Malas e boas</dt><dd>Nome tradicional para a primeira metade (malas) e a segunda metade (boas) da partida de 24.</dd></div>
               <div><dt>Mão</dt><dd>Quem joga primeiro na mão. Ganha os empates.</dd></div>
-              <div><dt>Pé</dt><dd>O último a jogar de cada lado. Nas duplas, quem canta o Envido.</dd></div>
+              <div><dt>Pé</dt><dd>O último a jogar de cada lado. Nas duplas, é quem canta o Envido.</dd></div>
               <div><dt>Vaza</dt><dd>Cada uma das três rodadas de uma mão.</dd></div>
               <div><dt>Parda</dt><dd>Rodada empatada: as cartas têm a mesma força.</dd></div>
               <div><dt>Espadão</dt><dd>O Ás de Espadas, a carta mais forte do jogo.</dd></div>
