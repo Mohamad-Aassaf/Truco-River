@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=1.9">
+  <link rel="stylesheet" href="/css/home.css?v=2.0">
 </head>
 
 <body data-screen="home">
@@ -76,7 +76,7 @@
         </div>
         <div class="hero-suits" aria-hidden="true"><span>♠</span><span>♣</span><span>♥</span><span>♦</span></div>
         <h1 class="rustic-title">Truco River</h1>
-        <p class="lobby-tagline">Truco gaúcho online · 1v1 e em dupla</p>
+        <p class="lobby-tagline">Truco gaúcho online · 1v1, em dupla e, em breve, trio</p>
         <p class="online-stats hide" id="online-stats" aria-live="polite">
           <span class="online-dot"></span>
           <span id="online-players">0 jogadores online</span>
@@ -153,6 +153,7 @@
           <div class="mode-select">
             <button class="mode-btn active" data-mode="1v1">Individual (1v1)</button>
             <button class="mode-btn" data-mode="2v2">Em Dupla (2v2)</button>
+            <button class="mode-btn soon" type="button" disabled title="Trios: em breve!">Trio (3v3) <span class="soon-tag">em breve</span></button>
           </div>
 
           <!-- Tipo de Acesso da Sala -->
@@ -457,6 +458,11 @@
 
         <!-- CONTROLE DE CARTAS DO JOGADOR (SUA MÃO) -->
         <div class="player-hand-container">
+          <!-- Tempo da jogada: 15s; acabou, a carta mais alta é jogada -->
+          <div id="turn-timer" class="turn-timer hide" aria-live="polite">
+            <span class="turn-timer-text" id="turn-timer-text">Sua vez · 15s</span>
+            <span class="turn-timer-bar"><span id="turn-timer-fill"></span></span>
+          </div>
           <!-- Resumo do fim da mão + contagem até a próxima -->
           <div id="hand-summary" class="hand-summary hide" role="status" aria-live="polite"></div>
           <div id="player-hand" class="player-hand">
@@ -601,10 +607,6 @@
           <span class="news-count inline hide" id="settings-news-count"></span>
         </button>
 
-        <button id="mobile-admin-btn" class="btn btn-secondary"
-          style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; padding: 10px 15px;">
-          <i class="fa-solid fa-screwdriver-wrench"></i> Painel Admin
-        </button>
       </div>
     </div>
   </div>
@@ -619,9 +621,19 @@
       <div class="modal-body">
         <div class="admin-tabs lobby-option-group" role="tablist">
           <button type="button" class="lobby-toggle-btn active" data-admin-tab="news" role="tab"><i class="fa-solid fa-bullhorn"></i> Novidades</button>
+          <button type="button" class="lobby-toggle-btn" data-admin-tab="games" role="tab"><i class="fa-solid fa-eye"></i> Partidas</button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="reports" role="tab"><i class="fa-solid fa-bug"></i> Relatos <span class="news-count inline hide" id="admin-reports-count"></span></button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="cards" role="tab"><i class="fa-solid fa-wand-magic-sparkles"></i> Cartas (teste)</button>
         </div>
+
+        <!-- Partidas abertas e em andamento (assistir) -->
+        <section class="admin-pane hide" data-admin-pane="games">
+          <div class="admin-games-head">
+            <span>Salas no servidor</span>
+            <button type="button" class="btn btn-sm btn-secondary" id="admin-games-refresh"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+          </div>
+          <ul id="admin-games-list" class="admin-games-list"></ul>
+        </section>
 
         <!-- Relatos de bugs e sugestões -->
         <section class="admin-pane hide" data-admin-pane="reports">
@@ -694,6 +706,27 @@
             <button id="apply-admin-cards" class="btn btn-success"><i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar Cartas</button>
           </div>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- SENHA DO ADMIN -->
+  <div id="modal-admin-login" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="admin-login-title">
+    <div class="modal-card admin-login-card">
+      <div class="modal-header">
+        <h2 id="admin-login-title"><i class="fa-solid fa-lock"></i> Acesso restrito</h2>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="admin-login-form" autocomplete="off">
+          <label for="admin-password" class="admin-login-label">Senha do administrador</label>
+          <div class="password-field">
+            <input type="password" id="admin-password" autocomplete="off" spellcheck="false" maxlength="100">
+            <button type="button" class="password-toggle" id="admin-password-toggle" aria-label="Mostrar senha"><i class="fa-solid fa-eye"></i></button>
+          </div>
+          <p class="form-error" id="admin-login-error" role="alert"></p>
+          <button type="submit" class="btn btn-primary admin-login-btn" id="admin-login-submit"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
+        </form>
       </div>
     </div>
   </div>
@@ -1211,6 +1244,22 @@
     </div>
   </div>
 
+  <!-- CONEXÃO: caiu / voltando para a partida -->
+  <div id="conn-overlay" class="conn-overlay hide" role="alertdialog" aria-live="assertive">
+    <div class="conn-card">
+      <div class="conn-spinner" aria-hidden="true"></div>
+      <h3 id="conn-title">Conexão perdida</h3>
+      <p id="conn-text">Tentando reconectar... Seu lugar na mesa fica guardado por 30 segundos.</p>
+      <button type="button" class="btn btn-secondary btn-sm hide" id="conn-reload"><i class="fa-solid fa-rotate-right"></i> Recarregar</button>
+    </div>
+  </div>
+
+  <!-- ADMIN ASSISTINDO -->
+  <div id="spectate-bar" class="spectate-bar hide">
+    <i class="fa-solid fa-eye"></i> <span id="spectate-text">Assistindo como admin</span>
+    <button type="button" class="btn btn-sm btn-secondary" id="spectate-exit">Sair</button>
+  </div>
+
   <!-- AVISOS FLUTUANTES (convites, mensagens) -->
   <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
 
@@ -1220,13 +1269,15 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=13"></script>
-  <script src="/js/social.js?v=5"></script>
+  <script src="/js/app.js?v=14"></script>
+  <script src="/js/social.js?v=6"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
   <script src="/js/news.js?v=2"></script>
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
+  <script src="/js/admin.js?v=1"></script>
+  <script src="/js/table-extras.js?v=1"></script>
 </body>
 
 </html>

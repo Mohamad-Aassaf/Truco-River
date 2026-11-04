@@ -22,7 +22,10 @@ const io = new Server(server, {
   // Relatos podem trazer um print (já comprimido no navegador)
   maxHttpBufferSize: 2e6,
   // Comprime mensagens maiores que 1 KB (o estado da mesa encolhe bastante)
-  perMessageDeflate: { threshold: 1024 }
+  perMessageDeflate: { threshold: 1024 },
+  // Percebe mais rápido quem caiu (celular que perdeu sinal, aba fechada)
+  pingInterval: 10000,
+  pingTimeout: 8000
 });
 
 const PORT = process.env.PORT || 3000;
@@ -150,6 +153,7 @@ function deleteRoom(roomId) {
   game.players.forEach(p => { if (p.reconnectTimer) clearTimeout(p.reconnectTimer); });
   if (botTimers[roomId]) { clearTimeout(botTimers[roomId]); delete botTimers[roomId]; }
   if (nextHandTimers[roomId]) { clearTimeout(nextHandTimers[roomId]); delete nextHandTimers[roomId]; }
+  if (game.turnTimer) clearTimeout(game.turnTimer);
   delete activeGames[roomId];
   console.log(`Sala ${roomId} sem jogadores de verdade apagada.`);
 }
@@ -247,24 +251,119 @@ function broadcastState(roomId) {
     scheduleNextHand(roomId);
   }
 
+  // Tempo para quem precisa agir agora (15s; acabou, o servidor joga por ele)
+  updateTurnTimer(roomId, game);
+  const turn = game.turn ? { playerIdx: game.turn.idx, kind: game.turn.kind, endsIn: Math.max(0, game.turn.deadline - Date.now()), total: TURN_MS } : null;
+
   const nextHandIn = game.state === 'hand_end' && game.nextHandAt ? Math.max(0, game.nextHandAt - Date.now()) : null;
+  const withLogs = (target, state) => {
+    const since = target.logSentSeq || 0;
+    const lastSeq = game.gameLogs.length ? game.gameLogs[game.gameLogs.length - 1].seq : 0;
+    const resetLogs = since === 0 || since > lastSeq || (game.gameLogs.length > 0 && game.gameLogs[0].seq > since + 1);
+    state.logs = resetLogs ? game.gameLogs : game.gameLogs.filter(l => l.seq > since);
+    state.logsReset = resetLogs;
+    target.logSentSeq = lastSeq;
+    if (game.state === 'playing' || game.state === 'lobby') state.lastHandSummary = null;
+    state.nextHandIn = nextHandIn;
+    state.turn = turn;
+    return state;
+  };
+
+  // Admin assistindo: vê todas as cartas, do ponto de vista do primeiro jogador
+  if (game.spectators && game.spectators.size) {
+    game.spectators.forEach((spec, sid) => {
+      if (!io.sockets.sockets.has(sid)) { game.spectators.delete(sid); return; }
+      const st = withLogs(spec, game.getGameStateForPlayer(0, true));
+      st.spectating = true;
+      io.to(sid).emit('game_state', st);
+    });
+  }
+
   game.players.forEach((player, idx) => {
     if (!player.isBot && player.socketId) {
-      const stateForPlayer = game.getGameStateForPlayer(idx);
-      // Narrativa: só as linhas que esse jogador ainda não recebeu
-      const since = player.logSentSeq || 0;
-      const lastSeq = game.gameLogs.length ? game.gameLogs[game.gameLogs.length - 1].seq : 0;
-      // Recomeça a lista se for a primeira vez ou se faltarem linhas no meio (a narrativa guarda só 50)
-      const resetLogs = since === 0 || since > lastSeq || (game.gameLogs.length > 0 && game.gameLogs[0].seq > since + 1);
-      stateForPlayer.logs = resetLogs ? game.gameLogs : game.gameLogs.filter(l => l.seq > since);
-      stateForPlayer.logsReset = resetLogs;
-      player.logSentSeq = lastSeq;
-      // O resumo da mão anterior só serve no fim da mão/partida
-      if (game.state === 'playing' || game.state === 'lobby') stateForPlayer.lastHandSummary = null;
-      stateForPlayer.nextHandIn = nextHandIn;
+      // Narrativa só com as linhas novas; resumo da mão só quando precisa
+      const stateForPlayer = withLogs(player, game.getGameStateForPlayer(idx));
       io.to(player.socketId).emit('game_state', stateForPlayer);
     }
   });
+}
+
+// --- TEMPO DA JOGADA (15s) ---
+const TURN_MS = Number(process.env.TURN_MS) || 15000;
+
+// Quem precisa agir agora e o quê ('play', 'truco', 'envido', 'flor', 'sing')
+function actorOf(game) {
+  const h = game.hand;
+  if (game.state !== 'playing' || !h) return null;
+  if (h.florResponsePending) {
+    const idx = game.players.findIndex((p, i) => p.team === h.florPendingTeam && p.hasFlor && !h.foldedPlayers.has(i));
+    return idx === -1 ? null : { idx, kind: 'flor' };
+  }
+  if (h.envidoResponsePending) {
+    const singer = game.pendingFlorSinger(h.envidoPendingTeam);
+    if (singer !== -1) return { idx: singer, kind: 'sing' };
+    return { idx: h.envidoResponderIdx, kind: 'envido' };
+  }
+  if (h.trucoResponsePending) return { idx: h.trucoResponderIdx, kind: 'truco' };
+  return { idx: h.currentPlayer, kind: 'play' };
+}
+
+function updateTurnTimer(roomId, game) {
+  const actor = actorOf(game);
+  const p = actor && game.players[actor.idx];
+  if (!p || p.isBot) {
+    if (game.turnTimer) clearTimeout(game.turnTimer);
+    game.turnTimer = null;
+    game.turn = null;
+    return;
+  }
+  const h = game.hand;
+  const key = `${h.number}:${actor.idx}:${actor.kind}:${h.playedCards.length}:${h.trucoState}:${h.envidoHistory.length}:${h.florHistory.length}`;
+  if (game.turn && game.turn.key === key) return;
+
+  if (game.turnTimer) clearTimeout(game.turnTimer);
+  // Enquanto todos leem os pontos do Envido/Flor o relógio não corre
+  const extra = game.revealPause ? Math.max(0, game.revealPause.until - Date.now()) : 0;
+  const deadline = Date.now() + TURN_MS + extra;
+  game.turn = { key, idx: actor.idx, kind: actor.kind, deadline };
+  game.turnTimer = setTimeout(() => turnTimeout(roomId, key), deadline - Date.now());
+}
+
+// Acabou o tempo: joga a carta mais alta (ou responde do jeito mais simples)
+function turnTimeout(roomId, key) {
+  const game = activeGames[roomId];
+  if (!game || !game.turn || game.turn.key !== key || game.state !== 'playing') return;
+  const { idx, kind } = game.turn;
+  const p = game.players[idx];
+  const h = game.hand;
+  game.turnTimer = null;
+  game.turn = null;
+
+  let decision;
+  if (kind === 'play') {
+    const cards = h.hands[idx] || [];
+    let best = 0;
+    cards.forEach((c, i) => { if (c.trucoRank > cards[best].trucoRank) best = i; });
+    decision = { action: 'play_card', value: best };
+    game.log(`${p.name} demorou: a carta mais alta foi jogada automaticamente.`, p.team);
+  } else if (kind === 'sing') {
+    decision = { action: 'call_flor' };
+    game.log(`${p.name} demorou: a Flor foi cantada automaticamente.`, p.team);
+  } else if (kind === 'flor') {
+    decision = { action: 'flor_response', value: 'quero' };
+    game.log(`${p.name} demorou: aceitou a Flor automaticamente.`, p.team);
+  } else if (kind === 'envido') {
+    decision = { action: 'envido_response', value: 'nao_quero' };
+    game.log(`${p.name} demorou: não quis o Envido.`, p.team);
+  } else {
+    decision = { action: 'truco_response', value: 'nao_quero' };
+    game.log(`${p.name} demorou: não quis o Truco.`, p.team);
+  }
+  const before = gameSignature(game);
+  executeGameAction(game, idx, decision);
+  if (gameSignature(game) === before) botFallback(game, idx);
+  broadcastState(roomId);
+  runBotLogic(roomId);
 }
 
 // Pausa depois de cantar os pontos do Envido/Flor: o jogo só segue (bots) quando
@@ -488,6 +587,52 @@ io.on('connection', (socket) => {
     reply(res);
   });
 
+  // Admin: partidas abertas e em andamento
+  socket.on('admin:games', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.isAdmin) return cb({ error: 'Só o admin pode ver as partidas.' });
+    cb({
+      ok: true,
+      games: Object.keys(activeGames).map(id => {
+        const g = activeGames[id];
+        return {
+          id,
+          roomName: g.roomName || id,
+          mode: g.mode,
+          state: g.state,
+          isPrivate: !!g.isPrivate,
+          score: g.score,
+          limit: g.maxPoints || 24,
+          players: g.players.map(pl => ({ name: pl.name, team: pl.team, isBot: pl.isBot, disconnected: !!pl.disconnected })),
+          spectators: g.spectators ? g.spectators.size : 0
+        };
+      })
+    });
+  });
+
+  // Admin: assistir uma partida (vê todas as cartas, não joga)
+  socket.on('admin:spectate', (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    if (!socket.isAdmin) return reply({ error: 'Só o admin pode assistir.' });
+    const game = activeGames[data && data.roomId];
+    if (!game) return reply({ error: 'Essa partida não existe mais.' });
+    if (roomOfSocket(socket.id)) return reply({ error: 'Saia da sua sala antes de assistir.' });
+    Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
+    if (!game.spectators) game.spectators = new Map();
+    game.spectators.set(socket.id, { logSentSeq: 0 });
+    socket.data.spectating = data.roomId;
+    socket.leave('lobby');
+    reply({ ok: true });
+    broadcastState(data.roomId);
+  });
+
+  socket.on('admin:unspectate', (data, cb) => {
+    Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
+    socket.data.spectating = null;
+    socket.join('lobby');
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
   // Jogador envia um bug ou sugestão (com print opcional)
   socket.on('report:send', async (data, cb) => {
     const reply = res => { if (typeof cb === 'function') cb(res); };
@@ -525,13 +670,19 @@ io.on('connection', (socket) => {
   socket.on('reports:delete', adminOnly(d => reports.remove(d.id)));
 
   // Validar senha de administrador
-  socket.on('validate_admin', ({ password }) => {
-    if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
-      socket.isAdmin = true;
-      socket.emit('admin_validated');
-    } else {
-      socket.emit('error_msg', 'Senha de administrador incorreta!');
+  // Senha do admin (com limite de tentativas por conexão)
+  socket.on('validate_admin', (data, cb) => {
+    const password = data && typeof data.password === 'string' ? data.password : '';
+    socket.data.adminTries = (socket.data.adminTries || 0) + 1;
+    if (socket.data.adminTries > 8) {
+      if (typeof cb === 'function') return cb({ error: 'Muitas tentativas. Recarregue a página para tentar de novo.' });
+      return;
     }
+    const ok = !!ADMIN_PASSWORD && password === ADMIN_PASSWORD;
+    if (ok) socket.isAdmin = true;
+    if (typeof cb === 'function') return cb(ok ? { ok: true } : { error: 'Senha incorreta.' });
+    if (ok) socket.emit('admin_validated');
+    else socket.emit('error_msg', 'Senha de administrador incorreta!');
   });
 
   // Envia salas disponíveis ao conectar
@@ -651,45 +802,58 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Trocar de time no lobby
+  // Trocar de time no lobby (duplas).
+  // Cada um pode mudar a si mesmo; o dono da sala pode mudar qualquer um.
+  // Se o outro time estiver cheio, troca de lugar com alguém de lá
+  // (swapWithId, ou quem está na mesma posição).
   socket.on('switch_team', (data) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby') return;
-
-    const targetId = (data && data.targetId) ? data.targetId : null;
     const isHost = game.players[0] && game.players[0].socketId === socket.id;
+    const me = game.players.find(pl => pl.socketId === socket.id);
+    const target = data && data.targetId ? game.players.find(pl => pl.id === data.targetId) : me;
+    if (!target || !me) return;
+    if (target !== me && !isHost) return;
 
-    let p;
-    if (targetId) {
-      p = game.players.find(player => player.id === targetId);
-      // Se for outro jogador humano (não o próprio remetente), impede
-      if (p && p.id !== socket.id && !p.isBot) {
-        return;
-      }
-      // Se for bot, apenas o host pode mudar
-      if (p && p.id !== socket.id && p.isBot && !isHost) {
-        return;
-      }
+    const to = typeof (data && data.toTeam) === 'number' ? data.toTeam : (target.team === 0 ? 1 : 0);
+    if (to !== 0 && to !== 1 || to === target.team) return;
+    const perTeam = game.maxPlayers / 2;
+    const others = game.players.filter(pl => pl.team === to);
+
+    if (others.length < perTeam) {
+      target.team = to;
     } else {
-      p = game.players.find(player => player.socketId === socket.id);
-    }
-
-    if (p) {
-      const nextTeam = p.team === 0 ? 1 : 0;
-      // Contar quantos jogadores já estão no time de destino
-      const maxPerTeam = game.maxPlayers / 2;
-      const teamCount = game.players.filter(player => player.team === nextTeam).length;
-      if (teamCount < maxPerTeam) {
-        p.team = nextTeam;
-        broadcastState(currentRoomId);
-      } else {
-        socket.emit('receive_chat', {
-          sender: 'Sistema',
-          senderId: 'system',
-          msg: `O time de destino já está cheio (máximo ${maxPerTeam} jogadores)!`
-        });
+      // Time cheio: troca de lugar
+      const mine = game.players.filter(pl => pl.team === target.team);
+      let partner = data && data.swapWithId ? others.find(pl => pl.id === data.swapWithId) : null;
+      if (!partner) {
+        // Mesma posição do outro lado; se for quem está clicando (o dono), pega o outro
+        const pool = others.length > 1 ? others.filter(pl => pl !== me) : others;
+        partner = pool[Math.min(mine.indexOf(target), pool.length - 1)];
       }
+      // Sem ser o dono, só dá para trocar com um bot
+      if (!isHost && !partner.isBot) {
+        socket.emit('error_msg', 'Esse time está cheio. Peça para o dono da sala trocar vocês de lugar.');
+        return;
+      }
+      partner.team = target.team;
+      target.team = to;
+      // Mantém a posição: quem troca fica no lugar do outro
+      const a = game.players.indexOf(target);
+      const b = game.players.indexOf(partner);
+      [game.players[a], game.players[b]] = [game.players[b], game.players[a]];
     }
+    broadcastState(currentRoomId);
+  });
+
+  // Dono da sala sorteia os times
+  socket.on('shuffle_teams', () => {
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'lobby' || game.mode !== '2v2') return;
+    if (!(game.players[0] && game.players[0].socketId === socket.id)) return;
+    const order = game.players.map((_, i) => i).sort(() => Math.random() - 0.5);
+    order.forEach((pi, k) => { game.players[pi].team = k % 2; });
+    broadcastState(currentRoomId);
   });
 
   // Expulsar bot ou jogador
@@ -784,6 +948,12 @@ io.on('connection', (socket) => {
     game.statsRecorded = false;
     game.lastHandSummary = null;
     game.dealerIndex = 0;
+    game.hand = null;
+    game.handNumber = 0;
+    game.gameStartedAt = null;
+    game.finalBlow = null;
+    if (game.turnTimer) clearTimeout(game.turnTimer);
+    game.turn = null;
 
     // Volta para o lobby pronto para iniciar
     game.state = 'lobby';
@@ -809,13 +979,18 @@ io.on('connection', (socket) => {
 
     for (const roomId of Object.keys(activeGames)) {
       const game = activeGames[roomId];
-      const p = game.players.find(pl => !pl.isBot && pl.clientId === clientId && pl.disconnected);
+      // Mesmo navegador: volta para o lugar. Se a conexão antiga ainda parecer
+      // viva (o servidor ainda não percebeu a queda), ela é encerrada.
+      const p = game.players.find(pl => !pl.isBot && pl.clientId === clientId && pl.socketId !== socket.id);
       if (!p) continue;
 
       clearTimeout(p.reconnectTimer);
       p.reconnectTimer = null;
       p.disconnected = false;
+      p.reconnectUntil = null;
       const oldSocketId = p.socketId;
+      const oldSocket = oldSocketId && io.sockets.sockets.get(oldSocketId);
+      if (oldSocket) oldSocket.disconnect(true);
       p.socketId = socket.id;
       p.id = socket.id;
       p.logSentSeq = 0;
@@ -825,7 +1000,7 @@ io.on('connection', (socket) => {
       currentRoomId = roomId;
       socket.join(roomId);
     socket.leave('lobby');
-      game.log(`${p.name} voltou para a partida.`, p.team);
+      if (game.state !== 'lobby') game.log(`${p.name} voltou para a partida.`, p.team);
       console.log(`${p.name} voltou para a sala ${roomId}`);
 
       broadcastState(roomId);
@@ -838,6 +1013,7 @@ io.on('connection', (socket) => {
   // Desconexão: o lugar fica guardado por RECONNECT_MS para o jogador voltar
   socket.on('disconnect', () => {
     console.log(`Cliente desconectado: ${socket.id}`);
+    Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
     const roomId = currentRoomId;
     const game = roomId && activeGames[roomId];
     if (!game) return;
@@ -850,6 +1026,7 @@ io.on('connection', (socket) => {
     }
 
     p.disconnected = true;
+    p.reconnectUntil = Date.now() + RECONNECT_MS;
     if (!game.isPrivate) io.to('lobby').emit('available_rooms', listRooms());
     game.log(`${p.name} caiu. Esperando ${RECONNECT_MS / 1000}s para voltar...`, p.team);
     p.reconnectTimer = setTimeout(() => {

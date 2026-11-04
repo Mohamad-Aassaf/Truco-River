@@ -218,10 +218,9 @@ class TrucoGame { // TRUCO GURIZINHO
   addPlayer(id, name, socketId, isBot = false, difficulty = 'medium') {
     if (this.players.length >= this.maxPlayers) return false;
 
-    // Determinar time:
-    // No 1v1: Jogador 0 é Time 0, Jogador 1 é Time 1
-    // No 2v2: Alternado: 0 e 2 são Time 0, 1 e 3 são Time 1
-    const team = this.players.length % 2;
+    // Entra no time com menos gente (no 1v1: um em cada time)
+    const count = t => this.players.filter(p => p.team === t).length;
+    const team = count(0) <= count(1) ? 0 : 1;
 
     this.players.push({
       id,
@@ -1271,16 +1270,16 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   // Gera dados do jogo sanitizados para enviar para um cliente específico
-  getGameStateForPlayer(playerIdx) {
-    // Partida acabou (mesmo no meio de uma mão): mostra só o resultado
-    if (!this.hand || this.state === 'game_end') {
+  getGameStateForPlayer(playerIdx, spectator = false) {
+    // Sala de espera ou partida acabada (mesmo no meio de uma mão): estado simples
+    if (!this.hand || this.state === 'game_end' || this.state === 'lobby') {
       return {
         id: this.id,
         roomName: this.roomName || this.id,
         mode: this.mode,
         maxPoints: this.maxPoints || 24,
         maxPlayers: this.maxPlayers,
-        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, disconnected: !!p.disconnected })),
+        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, disconnected: !!p.disconnected, reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null })),
         score: this.score,
         state: this.state,
         winner: this.winner,
@@ -1296,7 +1295,7 @@ class TrucoGame { // TRUCO GURIZINHO
     Object.keys(this.hand.hands).forEach(key => {
       const idx = parseInt(key);
       const isPartner = this.mode === '2v2' && this.players[idx] && this.players[playerIdx] && this.players[idx].team === this.players[playerIdx].team;
-      if (idx === playerIdx || isPartner) {
+      if (idx === playerIdx || isPartner || spectator) {
         maskedHands[idx] = this.hand.hands[idx];
       } else {
         // Mapear apenas para representar que o jogador tem cartas, mas sem revelar o valor/naipe
@@ -1312,13 +1311,15 @@ class TrucoGame { // TRUCO GURIZINHO
       maxPlayers: this.maxPlayers,
       // Pontos de envido e flor só vão para o próprio jogador e o parceiro
       players: this.players.map((p, idx) => {
-        const own = idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team);
+        const own = spectator || idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team);
         return {
           id: p.id,
           name: p.name,
           isBot: p.isBot,
           team: p.team,
+          ready: p.ready,
           disconnected: !!p.disconnected,
+          reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null,
           hasFlor: own ? p.hasFlor : undefined,
           envidoScore: own ? p.envidoScore : undefined
         };

@@ -29,8 +29,9 @@ const CLIENT_ID = (() => {
 
 // Ao conectar (ou reconectar), tenta voltar para a partida em andamento
 socket.on('connect', () => {
+  window.dispatchEvent(new CustomEvent('truco:rejoining'));
   socket.emit('rejoin', { clientId: CLIENT_ID }, res => {
-    if (res && res.ok) console.log('Voltou para a partida', res.roomId);
+    window.dispatchEvent(new CustomEvent('truco:rejoin', { detail: res || { ok: false } }));
   });
 });
 
@@ -608,7 +609,8 @@ socket.on('kicked', () => {
 
 socket.on('game_state', (gameState) => {
   lastGameState = gameState; // Armazena a cópia local para verificação nos botões
-  myPlayerId = socket.id;
+  myPlayerId = gameState.spectating && gameState.players[0] ? gameState.players[0].id : socket.id;
+  document.body.classList.toggle('spectating', !!gameState.spectating);
   currentRoomMode = gameState.mode;
 
   if (gameEndTimeout) {
@@ -655,6 +657,10 @@ function renderLobbyScreen(gameState) {
 
   // Renderizar slots de jogadores
   playersLobbyList.innerHTML = '';
+  playersLobbyList.classList.toggle('teams-mode', gameState.mode === '2v2');
+  if (gameState.mode === '2v2' && window.renderTeamsBoard) {
+    window.renderTeamsBoard(gameState, playersLobbyList);
+  } else
 
   // Preencher slots
   for (let i = 0; i < gameState.maxPlayers; i++) {
@@ -829,7 +835,7 @@ function renderGameScreen(gameState) {
     renderPlayedCards(gameState.hand.playedCards, gameState.players, gameState);
 
     // Renderizar cartas do próprio jogador
-    renderMyHand(gameState.hand.hands[mySeatIndex], gameState.hand.currentPlayer === mySeatIndex && !gameState.hand.trucoResponsePending && !gameState.hand.envidoResponsePending && !gameState.hand.florResponsePending);
+    renderMyHand(gameState.hand.hands[mySeatIndex], !gameState.spectating && gameState.hand.currentPlayer === mySeatIndex && !gameState.hand.trucoResponsePending && !gameState.hand.envidoResponsePending && !gameState.hand.florResponsePending);
 
     // Exibir balões de voz
     renderVoiceBubbles(gameState.hand.voiceBubble, gameState.players, gameState.hand.voiceStamp, gameState.hand.number);
@@ -1636,6 +1642,12 @@ function hideVoiceBubbles() {
 // Alertas de turnos e apostas pendentes
 function updateAlertBanner(gameState) {
   gameAlertBanner.classList.add('hide');
+  if (gameState.spectating) {
+    const cur = gameState.players[gameState.hand.currentPlayer];
+    gameAlertText.textContent = cur ? `Vez de ${cur.name}` : 'Assistindo';
+    gameAlertBanner.classList.remove('hide');
+    return;
+  }
 
   const hand = gameState.hand;
   const myPlayer = gameState.players[mySeatIndex];
@@ -1684,6 +1696,11 @@ function showAndEnableButton(btn) {
 // Configura dinamicamente os botões que o jogador pode clicar
 function setupActionButtons(gameState) {
   disableAllActionButtons(gameState);
+  if (gameState.spectating) {
+    const st = document.getElementById('action-panel-status');
+    if (st) { st.textContent = 'Você está assistindo esta partida.'; st.classList.remove('hide'); }
+    return;
+  }
 
   const hand = gameState.hand;
   const myPlayer = gameState.players[mySeatIndex];
@@ -2306,6 +2323,7 @@ function openAdminPanel() {
   if (btnApplyAdminCards) btnApplyAdminCards.disabled = !playing;
   if (window.trucoNews) window.trucoNews.renderAdmin();
   if (window.trucoReports) window.trucoReports.load();
+  if (window.trucoAdmin) window.trucoAdmin.loadGames();
   modalAdminPanel.classList.remove('hide');
 }
 
@@ -2319,18 +2337,13 @@ document.querySelectorAll('[data-admin-tab]').forEach(tab => {
   });
 });
 
-if (btnAdminPanel) {
-  btnAdminPanel.addEventListener('click', () => {
-    if (isClientAdminAuthenticated) {
-      openAdminPanel();
-    } else {
-      const password = prompt("Digite a senha de administrador para acessar o painel:");
-      if (password) {
-        socket.emit('validate_admin', { password });
-      }
-    }
-  });
+// Abre o painel (pede a senha na janela própria se ainda não entrou)
+function requestAdminPanel() {
+  if (isClientAdminAuthenticated) openAdminPanel();
+  else if (window.trucoAdmin) window.trucoAdmin.askPassword();
 }
+
+if (btnAdminPanel) btnAdminPanel.addEventListener('click', requestAdminPanel);
 
 // Escutar retorno de autenticação do administrador
 socket.on('admin_validated', () => {
