@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.1">
+  <link rel="stylesheet" href="/css/home.css?v=2.2">
 </head>
 
 <body data-screen="home">
@@ -225,6 +225,18 @@
         <div id="players-lobby-list" class="players-lobby-list">
           <!-- Jogadores renderizados dinamicamente -->
         </div>
+      </div>
+
+      <!-- Conversa da sala (a mesma conversa continua na partida) -->
+      <div class="lobby-chat">
+        <div class="lobby-chat-head"><i class="fa-solid fa-comments"></i> Conversa da sala</div>
+        <div id="lobby-chat-messages" class="lobby-chat-messages" aria-live="polite">
+          <p class="lobby-chat-empty">Ninguém falou nada ainda. Mande um "buenas"!</p>
+        </div>
+        <form id="lobby-chat-form" class="lobby-chat-form">
+          <input type="text" id="lobby-chat-input" placeholder="Conversar com a sala..." maxlength="60" autocomplete="off" aria-label="Mensagem para a sala">
+          <button type="submit" aria-label="Enviar"><i class="fa-solid fa-paper-plane"></i></button>
+        </form>
       </div>
 
       <div class="waiting-actions">
@@ -1277,7 +1289,7 @@
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=1"></script>
-  <script src="/js/table-extras.js?v=1"></script>
+  <script src="/js/table-extras.js?v=3"></script>
 </body>
 
 </html>

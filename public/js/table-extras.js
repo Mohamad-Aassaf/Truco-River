@@ -35,6 +35,7 @@
           <span class="tp-status">${p.ready ? '<i class="fa-solid fa-check"></i> Pronto' : 'Aguardando'}</span>
           <span class="tp-actions">
             ${canMove ? `<button type="button" class="icon-btn small tp-move" data-move="${p.id}" data-to="${other}" title="Passar para o outro time" aria-label="Passar ${name} para o outro time"><i class="fa-solid ${arrow}"></i></button>` : ''}
+            ${!isHost && me && !isMe && !p.isBot && p.team !== me.team ? `<button type="button" class="icon-btn small tp-swap" data-swap-req="${p.id}" title="Pedir para trocar de lugar" aria-label="Pedir para trocar de lugar com ${name}"><i class="fa-solid fa-right-left"></i></button>` : ''}
             ${isHost && !isMe ? `<button type="button" class="icon-btn small danger tp-kick" data-kick="${p.id}" title="Remover" aria-label="Remover ${name}"><i class="fa-solid fa-user-xmark"></i></button>` : ''}
           </span>
         </div>`;
@@ -71,7 +72,7 @@
         ${column(1)}
       </div>
       ${isHost ? '<div class="teams-tools"><button type="button" class="btn btn-sm btn-secondary" id="shuffle-teams-btn"><i class="fa-solid fa-shuffle"></i> Sortear times</button><small>Use as setas para passar alguém de time. Se o outro time estiver cheio, eles trocam de lugar.</small></div>'
-        : '<div class="teams-tools"><small>Use a seta para trocar de time. O dono da sala pode organizar todo mundo.</small></div>'}`;
+        : '<div class="teams-tools"><small>Use a seta para trocar de time. Com o time cheio, toque em <i class="fa-solid fa-right-left"></i> ao lado de alguém do outro time para pedir para trocar de lugar.</small></div>'}`;
   };
 
   // Cliques no quadro (delegados: o quadro é refeito a cada atualização)
@@ -83,11 +84,73 @@
     if (move) socket.emit('switch_team', { targetId: move.dataset.move, toTeam: Number(move.dataset.to) });
     else if (join) socket.emit('switch_team', { toTeam: Number(join.dataset.joinTeam) });
     else if (kick) socket.emit('kick_player', { playerId: kick.dataset.kick });
+    else if (e.target.closest('[data-swap-req]')) {
+      const btn = e.target.closest('[data-swap-req]');
+      socket.emit('swap_request', { targetId: btn.dataset.swapReq }, r => {
+        if (!r) return;
+        note(r.ok ? `<i class="fa-solid fa-right-left"></i> Pedido de troca enviado para <b>${escapeText(r.name)}</b>.` : escapeText(r.error));
+      });
+    }
     else if (e.target.closest('#shuffle-teams-btn')) socket.emit('shuffle_teams');
   });
   lobbyList.addEventListener('change', e => {
     const sel = e.target.closest('.teams-board .bot-level-select');
     if (sel) socket.emit('set_bot_difficulty', { playerId: sel.dataset.id, difficulty: sel.value });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Pedido de troca de lugar
+  // ---------------------------------------------------------------------------
+  function note(html, opts) { if (window.trucoSocial) window.trucoSocial.toast(html, opts); }
+  socket.on('swap_request', ({ fromId, fromName }) => {
+    if (window.soundManager && window.soundManager.playChatPing) window.soundManager.playChatPing();
+    note(`<i class="fa-solid fa-right-left"></i> <b>${escapeText(fromName)}</b> quer trocar de lugar com você.`, {
+      key: 'swap-' + fromId,
+      timeout: 30000,
+      actions: [
+        { label: 'Aceitar', primary: true, onClick: () => socket.emit('swap_answer', { fromId, accept: true }) },
+        { label: 'Recusar', onClick: () => socket.emit('swap_answer', { fromId, accept: false }) }
+      ]
+    });
+  });
+  socket.on('swap_result', ({ ok, name }) => {
+    note(ok ? `<i class="fa-solid fa-check"></i> <b>${escapeText(name)}</b> aceitou: vocês trocaram de lugar.`
+      : `<b>${escapeText(name)}</b> recusou a troca.`);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Conversa na sala de espera (a mesma conversa segue na partida)
+  // ---------------------------------------------------------------------------
+  const lobbyChat = $('lobby-chat-messages');
+  const lobbyForm = $('lobby-chat-form');
+  const lobbyInput = $('lobby-chat-input');
+  const EMPTY_CHAT = '<p class="lobby-chat-empty">Ninguém falou nada ainda. Mande um "buenas"!</p>';
+  let chatRoom = null;
+  lobbyForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const text = lobbyInput.value.trim();
+    if (!text) return;
+    socket.emit('send_chat', text);
+    lobbyInput.value = '';
+  });
+  socket.on('game_state', s => {
+    if (!s || s.id === chatRoom) return;
+    chatRoom = s.id;
+    lobbyChat.innerHTML = EMPTY_CHAT;
+  });
+  socket.on('receive_chat', ({ sender, senderId, msg }) => {
+    const empty = lobbyChat.querySelector('.lobby-chat-empty');
+    if (empty) empty.remove();
+    const mine = senderId === socket.id;
+    const div = document.createElement('div');
+    div.className = `lobby-chat-msg ${mine ? 'self' : ''}`;
+    div.innerHTML = `<b>${escapeText(sender)}</b> ${escapeText(msg)}`;
+    lobbyChat.appendChild(div);
+    while (lobbyChat.children.length > 60) lobbyChat.firstElementChild.remove();
+    lobbyChat.scrollTop = lobbyChat.scrollHeight;
+    if (!mine && $('screen-waiting').classList.contains('active') && window.soundManager && window.soundManager.playChatPing) {
+      window.soundManager.playChatPing();
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -167,7 +230,7 @@
       document.body.appendChild(waitBox);
     }
     const inTable = s && (s.state === 'playing' || s.state === 'hand_end' || s.state === 'lobby');
-    waitList = inTable ? s.players.filter(p => p.disconnected && p.reconnectIn != null)
+    waitList = inTable ? s.players.filter(p => p.disconnected && p.reconnectIn != null && p.id !== socket.id)
       .map(p => ({ name: p.name, until: Date.now() + p.reconnectIn })) : [];
     paintWait();
   }

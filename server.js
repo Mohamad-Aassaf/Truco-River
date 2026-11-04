@@ -833,7 +833,7 @@ io.on('connection', (socket) => {
       }
       // Sem ser o dono, só dá para trocar com um bot
       if (!isHost && !partner.isBot) {
-        socket.emit('error_msg', 'Esse time está cheio. Peça para o dono da sala trocar vocês de lugar.');
+        socket.emit('error_msg', 'Esse time está cheio. Use o botão de troca ao lado do nome de alguém do outro time para pedir para trocar de lugar.');
         return;
       }
       partner.team = target.team;
@@ -843,6 +843,43 @@ io.on('connection', (socket) => {
       const b = game.players.indexOf(partner);
       [game.players[a], game.players[b]] = [game.players[b], game.players[a]];
     }
+    broadcastState(currentRoomId);
+  });
+
+  // Pedir para trocar de lugar com alguém do outro time (a pessoa aceita ou recusa)
+  socket.on('swap_request', (data, cb) => {
+    const reply = r => { if (typeof cb === 'function') cb(r); };
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'lobby' || game.mode !== '2v2') return reply({ error: 'Só dá para trocar de lugar na sala de espera das duplas.' });
+    const me = game.players.find(pl => pl.socketId === socket.id);
+    const target = data && game.players.find(pl => pl.id === data.targetId);
+    if (!me || !target || target === me || target.isBot || target.team === me.team) return reply({ error: 'Não dá para pedir troca com esse jogador.' });
+    game.swapRequests = game.swapRequests || new Map();
+    const prev = game.swapRequests.get(me.id);
+    if (prev && prev.to === target.id && Date.now() - prev.at < 15000) return reply({ error: `Espere ${target.name} responder.` });
+    game.swapRequests.set(me.id, { to: target.id, at: Date.now() });
+    io.to(target.socketId).emit('swap_request', { fromId: me.id, fromName: me.name });
+    reply({ ok: true, name: target.name });
+  });
+
+  socket.on('swap_answer', (data) => {
+    const game = activeGames[currentRoomId];
+    if (!game || !game.swapRequests || !data) return;
+    const me = game.players.find(pl => pl.socketId === socket.id);
+    const from = game.players.find(pl => pl.id === data.fromId);
+    const req = game.swapRequests.get(data.fromId);
+    if (!me || !from || !req || req.to !== me.id || Date.now() - req.at > 60000) return;
+    game.swapRequests.delete(data.fromId);
+    if (!data.accept) {
+      io.to(from.socketId).emit('swap_result', { ok: false, name: me.name });
+      return;
+    }
+    if (game.state !== 'lobby' || from.team === me.team) return;
+    [from.team, me.team] = [me.team, from.team];
+    const a = game.players.indexOf(from);
+    const b = game.players.indexOf(me);
+    [game.players[a], game.players[b]] = [game.players[b], game.players[a]];
+    io.to(from.socketId).emit('swap_result', { ok: true, name: me.name });
     broadcastState(currentRoomId);
   });
 
@@ -925,7 +962,9 @@ io.on('connection', (socket) => {
 
   socket.on('send_chat', (msg) => {
     const game = activeGames[currentRoomId];
-    if (game && msg.trim()) {
+    if (typeof msg !== 'string') return;
+    msg = msg.trim().slice(0, 120);
+    if (game && msg) {
       const player = game.players.find(p => p.socketId === socket.id);
       const name = player ? player.name : 'Jogador';
       io.to(currentRoomId).emit('receive_chat', {
@@ -984,22 +1023,24 @@ io.on('connection', (socket) => {
       const p = game.players.find(pl => !pl.isBot && pl.clientId === clientId && pl.socketId !== socket.id);
       if (!p) continue;
 
+      // O lugar passa para a conexão nova ANTES de derrubar a antiga: assim a
+      // queda da antiga não marca o jogador como "caiu" de novo
+      const oldSocketId = p.socketId;
+      p.socketId = socket.id;
+      p.id = socket.id;
+      const oldSocket = oldSocketId && io.sockets.sockets.get(oldSocketId);
+      if (oldSocket) oldSocket.disconnect(true);
       clearTimeout(p.reconnectTimer);
       p.reconnectTimer = null;
       p.disconnected = false;
       p.reconnectUntil = null;
-      const oldSocketId = p.socketId;
-      const oldSocket = oldSocketId && io.sockets.sockets.get(oldSocketId);
-      if (oldSocket) oldSocket.disconnect(true);
-      p.socketId = socket.id;
-      p.id = socket.id;
       p.logSentSeq = 0;
       if (game.revealPause && game.revealPause.pending.delete(oldSocketId)) game.revealPause.pending.add(socket.id);
 
       socket.data.clientId = clientId;
       currentRoomId = roomId;
       socket.join(roomId);
-    socket.leave('lobby');
+      socket.leave('lobby');
       if (game.state !== 'lobby') game.log(`${p.name} voltou para a partida.`, p.team);
       console.log(`${p.name} voltou para a sala ${roomId}`);
 
@@ -1025,13 +1066,15 @@ io.on('connection', (socket) => {
       return;
     }
 
+    if (p.disconnected) return;
     p.disconnected = true;
     p.reconnectUntil = Date.now() + RECONNECT_MS;
     if (!game.isPrivate) io.to('lobby').emit('available_rooms', listRooms());
     game.log(`${p.name} caiu. Esperando ${RECONNECT_MS / 1000}s para voltar...`, p.team);
+    clearTimeout(p.reconnectTimer);
     p.reconnectTimer = setTimeout(() => {
       p.reconnectTimer = null;
-      if (p.disconnected && activeGames[roomId]) removeFromRoom(roomId, p.socketId);
+      if (p.disconnected && activeGames[roomId] && !io.sockets.sockets.has(p.socketId)) removeFromRoom(roomId, p.socketId);
     }, RECONNECT_MS);
     broadcastState(roomId);
   });
