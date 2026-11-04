@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.4">
+  <link rel="stylesheet" href="/css/home.css?v=2.5">
 </head>
 
 <body data-screen="home">
@@ -919,7 +919,14 @@
               <p><strong>Mão e pé.</strong> O <em>mão</em> é o primeiro a jogar (à direita de quem deu as cartas) e
                 ganha os empates. O <em>pé</em> é o último a jogar de cada lado. Nas duplas, é o pé quem canta o
                 Envido pela dupla. Já as respostas (ao Truco ou ao Envido) são dadas pelo <em>próximo</em> jogador
-                depois de quem cantou.</p>
+                depois de quem cantou. Na mesa, quem deu as cartas aparece como <em>Pé</em>.</p>
+            </div>
+
+            <div class="rules-callout">
+              <i class="fa-solid fa-stopwatch"></i>
+              <p><strong>Tempo de jogada.</strong> Cada jogador tem <strong>20 segundos</strong> na sua vez. Se o
+                tempo acabar, a carta mais alta da mão é jogada sozinha. Se era para responder um Truco ou Envido, vale
+                "Não quero"; se era para responder uma Flor, vale "Quero".</p>
             </div>
           </section>
 
@@ -1100,6 +1107,7 @@
               <li><b>Falta Envido:</b> vale os tentos que faltam para quem está na frente ganhar a partida.
                 Ex.: placar 18 a 10 numa partida de 24 → quem ganhar o Falta Envido leva 6.</li>
               <li><b>Empate no envido:</b> ganha quem é mão (ou o mais perto do mão).</li>
+              <li><b>Mostrar os pontos:</b> no fim da mão, só quem ganhou o Envido mostra as cartas na mesa.</li>
               <li><b>Quem tem Flor não canta Envido</b>: canta a Flor, que passa por cima do Envido.</li>
               <li><b>Truco aceito ou aumentado</b> na 1ª rodada fecha o Envido para os dois lados.</li>
             </ul>
@@ -1134,6 +1142,12 @@
               <p>Só quem também tem Flor pode responder com Contra-Flor. Os pontos da Flor são contados como no
                 Envido, só que somando as três cartas.</p>
             </div>
+
+            <ul class="rules-bullets">
+              <li><b>Duas Flores ou mais:</b> quando a disputa é aceita, todas as Flores são mostradas na mesa no fim
+                da mão, e a vencedora aparece com uma coroa.</li>
+              <li><b>Empate na Flor:</b> igual ao Envido, ganha quem é mão (ou o mais perto do mão).</li>
+            </ul>
           </section>
 
           <!-- GLOSSÁRIO -->
@@ -1152,7 +1166,7 @@
               <div><dt>Cantar</dt><dd>Gritar uma aposta: Truco, Envido, Flor…</dd></div>
               <div><dt>Quero / Não quero</dt><dd>Aceitar ou recusar uma aposta.</dd></div>
               <div><dt>Ir ao mazo</dt><dd>Desistir da mão e largar as cartas no monte.</dd></div>
-              <div><dt>Achicar</dt><dd>Fugir de uma Contra-Flor.</dd></div>
+              <div><dt>Achicar</dt><dd>Fugir de uma Flor ou Contra-Flor.</dd></div>
               <div><dt>Trucar de mentira</dt><dd>Blefar: gritar Truco sem ter carta para isso. Faz parte!</dd></div>
             </dl>
 
@@ -1290,7 +1304,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=17"></script>
+  <script src="/js/app.js?v=18"></script>
   <script src="/js/social.js?v=6"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
@@ -1298,7 +1312,7 @@
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=2"></script>
-  <script src="/js/table-extras.js?v=5"></script>
+  <script src="/js/table-extras.js?v=6"></script>
 </body>
 
 </html>

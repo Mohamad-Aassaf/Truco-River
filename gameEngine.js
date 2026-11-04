@@ -159,15 +159,21 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   // Guarda as cartas que alguém vai ter que mostrar no fim da mão
-  addProof(playerIdx, kind, score, cards) {
+  // win: false = Flor que perdeu a disputa (aparece na mesa, mas apagada)
+  addProof(playerIdx, kind, score, cards, win = true) {
     if (!this.hand.proofs) this.hand.proofs = [];
     if (this.hand.proofs.some(p => p.playerIdx === playerIdx && p.kind === kind)) return;
-    this.hand.proofs.push({ playerIdx, kind, score, cards: JSON.parse(JSON.stringify(cards)) });
+    this.hand.proofs.push({ playerIdx, kind, score, win, cards: JSON.parse(JSON.stringify(cards)) });
   }
 
-  addFlorProof(playerIdx) {
+  addFlorProof(playerIdx, win = true) {
     const p = this.players[playerIdx];
-    if (p && p.hasFlor) this.addProof(playerIdx, 'flor', p.florScore, this.hand.originalHands[playerIdx]);
+    if (p && p.hasFlor) this.addProof(playerIdx, 'flor', p.florScore, this.hand.originalHands[playerIdx], win);
+  }
+
+  // Quem mostrou pontos na mesa (para o selo "Flor 33" / "Envido 31" ao lado das cartas)
+  buildProofList() {
+    return (this.hand.proofs || []).map(p => ({ playerIdx: p.playerIdx, kind: p.kind, score: p.score, win: p.win !== false }));
   }
 
   log(message, team = null) {
@@ -922,13 +928,19 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   resolveFlor() {
-    // Determinar o maior placar de Flor entre todos que têm Flor
-    const { winnerIdx, lines } = this.declarePoints(
-      idx => this.players[idx].hasFlor && !this.isFolded(idx),
-      idx => this.players[idx].florScore
-    );
-    const bestPlayerIdx = winnerIdx;
-    const bestScore = winnerIdx !== -1 ? this.players[winnerIdx].florScore : -1;
+    // Flor contra Flor: todas as Flores são mostradas. Ganha a maior; no empate,
+    // ganha quem está mais perto do mão (como no Envido).
+    const order = [];
+    for (let i = 0; i < this.maxPlayers; i++) {
+      const idx = (this.hand.mão + i) % this.maxPlayers;
+      if (this.players[idx] && this.players[idx].hasFlor && !this.isFolded(idx)) order.push(idx);
+    }
+    let bestPlayerIdx = -1;
+    order.forEach(idx => {
+      if (bestPlayerIdx === -1 || this.players[idx].florScore > this.players[bestPlayerIdx].florScore) bestPlayerIdx = idx;
+    });
+    const bestScore = bestPlayerIdx !== -1 ? this.players[bestPlayerIdx].florScore : -1;
+    const lines = order.map(idx => ({ playerIdx: idx, name: this.players[idx].name, team: this.players[idx].team, score: this.players[idx].florScore }));
 
     if (bestPlayerIdx !== -1) {
       const winner = this.players[bestPlayerIdx];
@@ -942,7 +954,9 @@ class TrucoGame { // TRUCO GURIZINHO
         winnerTeam: winner.team,
         tentos: points
       };
-      this.addFlorProof(bestPlayerIdx);
+      order.forEach(idx => this.addFlorProof(idx, idx === bestPlayerIdx));
+      const tied = order.filter(idx => idx !== bestPlayerIdx && this.players[idx].florScore === bestScore && this.players[idx].team !== winner.team);
+      if (tied.length) this.log(`Flores empatadas em ${bestScore}: ganha quem está mais perto do mão.`);
 
       this.log(`Disputa de Flor vencida por ${winner.name} com ${bestScore} pontos (Time ${winner.team + 1}).`, winner.team);
       const florLabel = { contra_flor: 'Contra-Flor', contra_flor_resto: 'Contra-Flor e o Resto' }[this.hand.florState] || 'Flor contra Flor';
@@ -1195,7 +1209,8 @@ class TrucoGame { // TRUCO GURIZINHO
       awards: this.hand.awards.slice(),
       scoreAfter: { 0: this.score[0], 1: this.score[1] },
       reveal: this.hand.reveal || null,
-      proofCards: this.buildProofCards()
+      proofCards: this.buildProofCards(),
+      proofList: this.buildProofList()
     };
 
     // Verificar fim do jogo
@@ -1226,7 +1241,7 @@ class TrucoGame { // TRUCO GURIZINHO
         let round = 0;
         while (usedRounds.has(round)) round++;
         usedRounds.add(round);
-        out.push({ playerIdx: proof.playerIdx, card, round, kind: proof.kind, score: proof.score });
+        out.push({ playerIdx: proof.playerIdx, card, round, kind: proof.kind, score: proof.score, win: proof.win !== false });
       });
     });
     return out;
@@ -1257,7 +1272,8 @@ class TrucoGame { // TRUCO GURIZINHO
         awards: this.hand.awards.slice(),
         scoreAfter: { 0: this.score[0], 1: this.score[1] },
         reveal: this.hand.reveal || null,
-        proofCards: this.buildProofCards()
+        proofCards: this.buildProofCards(),
+      proofList: this.buildProofList()
       };
     }
     // O que fechou a partida (último ponto do time vencedor)

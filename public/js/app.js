@@ -832,6 +832,7 @@ function renderGameScreen(gameState) {
   if (gameState.hand) {
     hideHandSummary();
     document.body.classList.remove('hand-ended');
+    renderProofBadges([], gameState);
     // Renderizar cartas jogadas na mesa
     renderPlayedCards(gameState.hand.playedCards, gameState.players, gameState);
 
@@ -857,7 +858,8 @@ function renderGameScreen(gameState) {
     // Fim de mão ou de jogo: manter as cartas jogadas na mesa para visualização e mostrar resultado.
     // Quem ganhou Envido/Flor coloca na mesa as cartas que faltam para provar os pontos.
     const proofPlays = (gameState.lastHandSummary.proofCards || []).map(pc => ({ ...pc, proof: true }));
-    renderPlayedCards(gameState.lastHandSummary.playedCards.concat(proofPlays), gameState.players);
+    renderPlayedCards(gameState.lastHandSummary.playedCards.concat(proofPlays), gameState.players, null, gameState.lastHandSummary.roundWinners);
+    renderProofBadges(gameState.lastHandSummary.proofList || [], gameState);
 
     // Limpar mão local do jogador
     playerHand.innerHTML = '';
@@ -976,7 +978,8 @@ function setupSeatsLayout(players, dealerIndex, currentPlayerIdx, activeHand = n
     // Distintivo do Carteador (D) ou Mão (M)
     const roleBadge = seat.querySelector('.seat-role');
     if (idx === dealerIndex) {
-      roleBadge.textContent = 'Doador';
+      roleBadge.textContent = 'Pé';
+      roleBadge.title = 'Pé: quem deu as cartas e joga por último';
       roleBadge.classList.add('ready');
     } else if (idx === (dealerIndex + 1) % maxPlayers) {
       roleBadge.textContent = 'Mão';
@@ -1510,22 +1513,25 @@ function buildPlayedCard(card, playerIdx, round, key) {
 }
 
 // Desenha as cartas jogadas por rodada no centro da mesa (Estilo Blyts - Pilhas)
-function renderPlayedCards(playedCards, players, gameState) {
+function renderPlayedCards(playedCards, players, gameState, endRoundWinners) {
   // Só mexe no que mudou: cartas que já estão na mesa ficam intactas
   // (recriá-las a cada atualização fazia todas piscarem).
   const wanted = new Set();
 
   // Limpar e atualizar os marcadores de rodadas (bolinhas).
   // No fim da mão (sem gameState) mantém as bolinhas como estavam.
-  for (let r = 0; r < 3 && gameState; r++) {
+  // No fim da mão vêm os vencedores de cada vaza do resumo (inclusive a última)
+  const dotWinners = (gameState && gameState.hand && gameState.hand.roundWinners) || endRoundWinners;
+  if (!gameState && endRoundWinners) gameState = { players, _dotsOnly: true };
+  for (let r = 0; r < 3 && (gameState || dotWinners); r++) {
     const dotEl = document.getElementById(`round-dot-${r}`);
     if (dotEl) {
       dotEl.className = 'round-dot';
     }
   }
 
-  if (gameState && gameState.hand && gameState.hand.roundWinners) {
-    gameState.hand.roundWinners.forEach((winnerIdx, r) => {
+  if (gameState && dotWinners) {
+    dotWinners.forEach((winnerIdx, r) => {
       const dotEl = document.getElementById(`round-dot-${r}`);
       if (winnerIdx === -1) {
         if (dotEl) {
@@ -1564,12 +1570,10 @@ function renderPlayedCards(playedCards, players, gameState) {
       const cardEl = buildPlayedCard(card, playerIdx, round, key);
       cardEl.classList.add('entering');
 
-      // Carta mostrada para provar o Envido/Flor
+      // Carta mostrada para provar o Envido/Flor (o selo com os pontos fica ao lado das cartas)
       if (play.proof) {
-        cardEl.classList.add('proof-card', `proof-${play.kind}`);
+        cardEl.classList.add('proof-card', `proof-${play.kind}`, play.win === false ? 'proof-lose' : 'proof-win');
         cardEl.style.setProperty('--enter-y', '0%');
-        const label = play.kind === 'flor' ? 'Flor' : 'Envido';
-        cardEl.insertAdjacentHTML('beforeend', `<span class="proof-tag">${label} ${play.score}</span>`);
       }
       cardEl.addEventListener('animationend', () => cardEl.classList.remove('entering'), { once: true });
       slot.appendChild(cardEl);
@@ -1585,7 +1589,8 @@ function renderPlayedCards(playedCards, players, gameState) {
   });
 
   // Destaca quem venceu cada rodada: carta vencedora brilha, as outras escurecem
-  const winners = gameState && gameState.hand && gameState.hand.roundWinners;
+  // (no fim da mão vale também para a última vaza)
+  const winners = (gameState && gameState.hand && gameState.hand.roundWinners) || endRoundWinners;
   if (winners) {
     document.querySelectorAll('.played-card:not(.leaving)').forEach(el => {
       const w = winners[Number(el.dataset.round)];
@@ -1593,6 +1598,31 @@ function renderPlayedCards(playedCards, players, gameState) {
       el.classList.toggle('round-lose', w !== undefined && w !== -1 && w !== Number(el.dataset.player));
     });
   }
+}
+
+// Selo com os pontos de quem mostrou Envido/Flor, ao lado das cartas dele.
+// Com duas ou mais Flores, todas aparecem e a vencedora ganha a coroa.
+function renderProofBadges(list, gameState) {
+  document.querySelectorAll('.proof-badge').forEach(el => {
+    if (!list.some(p => el.dataset.key === `${p.playerIdx}-${p.kind}`)) el.remove();
+  });
+  list.forEach(p => {
+    const slot = document.getElementById(`arena-slot-${seatOf(p.playerIdx)}`);
+    if (!slot) return;
+    const key = `${p.playerIdx}-${p.kind}`;
+    let badge = slot.querySelector(`.proof-badge[data-key="${key}"]`);
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.dataset.key = key;
+      slot.appendChild(badge);
+    }
+    const name = gameState.players[p.playerIdx] ? gameState.players[p.playerIdx].name : '';
+    const label = p.kind === 'flor' ? 'Flor' : 'Envido';
+    const icon = p.win ? '<i class="fa-solid fa-crown"></i>' : (p.kind === 'flor' ? '<i class="fa-solid fa-spa"></i>' : '');
+    badge.className = `proof-badge ${p.kind} ${p.win ? 'win' : 'lose'}`;
+    badge.title = `${name}: ${label} de ${p.score}${p.win ? ' (venceu)' : ''}`;
+    badge.innerHTML = `${icon}<span>${label}</span><b>${p.score}</b>`;
+  });
 }
 
 function removePlayedCard(el) {
@@ -1604,6 +1634,7 @@ function removePlayedCard(el) {
 }
 
 function clearPlayedCardSlots() {
+  document.querySelectorAll('.proof-badge').forEach(el => el.remove());
   document.querySelectorAll('.played-card:not(.leaving)').forEach(removePlayedCard);
 }
 
@@ -2517,41 +2548,32 @@ const btnDecreaseChat = document.getElementById('btn-decrease-chat');
 const logsContainer = document.querySelector('.logs-container');
 const chatContainer = document.querySelector('.chat-container');
 
-if (btnIncreaseLogs && logsContainer) {
-  btnIncreaseLogs.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = logsContainer.offsetHeight;
-    if (currentHeight < 500) {
-      logsContainer.style.height = (currentHeight + 30) + 'px';
-    }
-  });
+// A narrativa tem altura fixa e o chat ocupa o resto da coluna: aumentar um
+// diminui o outro. (O chat é flexível, então mudar só a altura dele não fazia nada.)
+const LOGS_MIN = 70;
+const CHAT_MIN = 110;
+function setLogsHeight(h) {
+  if (!logsContainer) return;
+  logsContainer.style.flex = `0 0 ${h}px`;
+  logsContainer.style.height = `${h}px`;
+  if (chatContainer) chatContainer.style.minHeight = `${CHAT_MIN}px`;
 }
-if (btnDecreaseLogs && logsContainer) {
-  btnDecreaseLogs.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = logsContainer.offsetHeight;
-    if (currentHeight > 80) {
-      logsContainer.style.height = (currentHeight - 30) + 'px';
-    }
-  });
+function resizeLogs(delta) {
+  if (!logsContainer) return;
+  const logsH = logsContainer.offsetHeight;
+  const chatH = chatContainer ? chatContainer.offsetHeight : Infinity;
+  let next = logsH + delta;
+  if (delta > 0) next = Math.min(next, logsH + Math.max(0, chatH - CHAT_MIN));
+  next = Math.max(LOGS_MIN, next);
+  if (next === logsH) return;
+  setLogsHeight(next);
+  try { localStorage.setItem('truco_logs_h', String(next)); } catch (e) { /* sem armazenamento */ }
 }
-if (btnIncreaseChat && chatContainer) {
-  btnIncreaseChat.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = chatContainer.offsetHeight;
-    if (currentHeight < 600) {
-      chatContainer.style.height = (currentHeight + 30) + 'px';
-      chatContainer.style.minHeight = 'auto';
-    }
-  });
-}
-if (btnDecreaseChat && chatContainer) {
-  btnDecreaseChat.addEventListener('click', (e) => {
-    e.stopPropagation();
-    let currentHeight = chatContainer.offsetHeight;
-    if (currentHeight > 100) {
-      chatContainer.style.height = (currentHeight - 30) + 'px';
-      chatContainer.style.minHeight = 'auto';
-    }
-  });
-}
+try {
+  const saved = Number(localStorage.getItem('truco_logs_h'));
+  if (saved >= LOGS_MIN && saved < 600) setLogsHeight(saved);
+} catch (e) { /* sem armazenamento */ }
+const STEP = 40;
+[[btnIncreaseLogs, STEP], [btnDecreaseLogs, -STEP], [btnIncreaseChat, -STEP], [btnDecreaseChat, STEP]].forEach(([btn, delta]) => {
+  if (btn) btn.addEventListener('click', e => { e.stopPropagation(); resizeLogs(delta); });
+});

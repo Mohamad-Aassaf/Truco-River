@@ -258,12 +258,17 @@ function wantsToTruco(game, idx) {
   const p = estimateWinChance(game, idx, null, lvl.samples);
   const hard = player.difficulty === 'hard';
 
+  // Na primeira vaza quem tem mão boa costuma esperar: trucar logo de cara
+  // entrega o jogo e faz o adversário correr (o truco vale mais depois)
+  const firstRound = h.currentRound === 0;
   if (p >= (hard ? 0.72 : 0.75)) {
-    // Mão muito forte logo no começo: às vezes espera para o adversário não fugir
-    if (h.currentRound === 0 && p >= 0.88 && missing > 1 && rand() < (hard ? 0.45 : 0.25)) return false;
+    if (firstRound) {
+      if (p >= 0.88 && missing > 1) return rand() < 0.1;
+      return rand() < (hard ? 0.2 : 0.25);
+    }
     return rand() < (hard ? 0.9 : 0.7);
   }
-  if (p >= 0.55) return rand() < (hard ? 0.3 : 0.2);
+  if (p >= 0.55) return rand() < (firstRound ? 0.05 : hard ? 0.3 : 0.2);
   // Blefe: mais comum depois da primeira rodada, quando dá para "contar história"
   if (p < 0.3 && stake <= 2) return rand() < (h.currentRound > 0 ? lvl.bluff : lvl.bluff / 3);
   return false;

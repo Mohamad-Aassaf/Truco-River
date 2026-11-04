@@ -29,12 +29,19 @@
         ? `<select class="bot-level-select" data-id="${p.id}" aria-label="Dificuldade do bot">${Object.keys(LEVELS)
           .map(k => `<option value="${k}" ${p.difficulty === k ? 'selected' : ''}>${LEVELS[k]}</option>`).join('')}</select>`
         : '';
+      const tags = [
+        p.ready ? '<span class="tp-status ok"><i class="fa-solid fa-check"></i> Pronto</span>' : '<span class="tp-status">Aguardando</span>',
+        p.id === hostId ? '<span class="tp-tag tp-host">dono</span>' : '',
+        p.disconnected ? '<span class="tp-tag off">caiu</span>' : ''
+      ].join('');
+      // Linha de altura fixa: ícone | nome + detalhes | botões (não desalinha quando alguém entra)
       return `
         <div class="team-player ${p.ready ? 'ready' : ''} ${isMe ? 'me' : ''} ${p.disconnected ? 'offline' : ''}">
           <span class="tp-icon">${p.isBot ? '<i class="fa-solid fa-robot"></i>' : '<i class="fa-solid fa-user"></i>'}</span>
-          <span class="tp-name">${name}${isMe ? ' <small>(você)</small>' : ''}${p.id === hostId ? ' <small class="tp-host">dono</small>' : ''}</span>
-          ${level}
-          <span class="tp-status">${p.ready ? '<i class="fa-solid fa-check"></i> Pronto' : 'Aguardando'}</span>
+          <span class="tp-main">
+            <span class="tp-name" title="${name}">${name}${isMe ? ' <small>(você)</small>' : ''}</span>
+            <span class="tp-sub">${tags}${level}</span>
+          </span>
           <span class="tp-actions">
             ${canMove ? `<button type="button" class="icon-btn small tp-move" data-move="${p.id}" data-to="${other}" title="Passar para o outro time" aria-label="Passar ${name} para o outro time"><i class="fa-solid ${arrow}"></i></button>` : ''}
             ${duo && !isHost && me && !isMe && !p.isBot && p.team !== me.team ? `<button type="button" class="icon-btn small tp-swap" data-swap-req="${p.id}" title="Pedir para trocar de lugar" aria-label="Pedir para trocar de lugar com ${name}"><i class="fa-solid fa-right-left"></i></button>` : ''}
@@ -51,7 +58,8 @@
         else {
           const canJoin = duo && me && me.team !== team;
           slots.push(`<div class="team-player empty">
-            <span class="tp-name">Vaga livre</span>
+            <span class="tp-icon"><i class="fa-regular fa-user"></i></span>
+            <span class="tp-main"><span class="tp-name">Vaga livre</span></span>
             ${canJoin ? `<button type="button" class="btn btn-sm btn-secondary" data-join-team="${team}">Entrar aqui</button>` : ''}
           </div>`);
         }

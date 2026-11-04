@@ -2701,3 +2701,167 @@ body.spectating .player-hand .card { cursor: default; }
 .admin-timer-info small { color: var(--text-muted); font-size: 0.78rem; }
 .admin-timer-row .btn { flex-shrink: 0; }
 .admin-sep { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }
+
+/* ==========================================================================
+   Sala de espera: linhas de jogador com altura fixa (não desalinham)
+   ========================================================================== */
+.team-col-head { min-height: 30px; }
+.team-rename-form { min-height: 30px; }
+.team-player {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 10px;
+  flex-wrap: nowrap;
+  height: 60px;
+  min-height: 60px;
+  padding: 0 10px;
+}
+.team-player.empty { justify-content: initial; }
+.tp-main { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; }
+.tp-main .tp-name { flex: none; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.tp-sub { display: flex; align-items: center; gap: 6px; min-width: 0; height: 22px; white-space: nowrap; overflow: hidden; }
+.tp-sub .bot-level-select { height: 22px; padding: 0 20px 0 8px; font-size: 0.7rem; }
+.tp-status { font-size: 0.66rem; }
+.tp-status.ok { color: #7ee2a8; }
+.tp-tag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+.tp-tag.tp-host { color: var(--gold) !important; background: rgba(223, 177, 91, 0.12); }
+.tp-tag.off { color: #ff8a7a; background: rgba(231, 76, 60, 0.15); }
+.tp-actions { margin-left: 0; }
+.team-player.empty .tp-icon { color: var(--text-dim); }
+
+/* ==========================================================================
+   Mesa 2v2: cada jogador com as cartas dele em leque, na frente do lugar
+   (as cartas de cada vaza se sobrepõem um pouco, da esquerda para a direita)
+   ========================================================================== */
+.truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena {
+  --slot-h: min(var(--slot-max), 42cqh, 21cqw);
+  --fan: 0.58;
+  --dot: 11px;
+}
+.truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .played-card-slot-container {
+  width: calc(var(--slot-w) * (1 + 2 * var(--fan)));
+  height: var(--slot-h);
+}
+.truco-table:has(#seat-left:not(.hidden-seat)) .played-card-slot-container .slot-ph { display: none; }
+.truco-table:has(#seat-left:not(.hidden-seat)) .played-card-slot-container .played-card {
+  translate: calc(var(--r, 0) * var(--fan) * 100%) 0;
+}
+.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-top { top: 0; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); }
+.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-bottom { bottom: 0; top: auto; left: 50%; right: auto; transform: translateX(-50%); }
+.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: 0; right: auto; top: 50%; transform: translateY(-50%); }
+.truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: 0; left: auto; top: 50%; transform: translateY(-50%); }
+/* Bolinhas das vazas juntinhas no centro (não há mais colunas por vaza) */
+.truco-table:has(#seat-left:not(.hidden-seat)) .round-indicators { gap: 6px; }
+
+/* Celular em pé: fileiras em cima e embaixo, laterais em pilha no meio */
+@container (aspect-ratio < 1) {
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > *,
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: min(var(--slot-max), 27cqh, 34cqw);
+    --slot-w: calc(var(--slot-h) * 2 / 3);
+    --fan: 0.5;
+  }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .played-card-slot-container {
+    width: calc(var(--slot-w) * (1 + 2 * var(--fan)));
+    height: var(--slot-h);
+  }
+  /* Laterais: em pilha para baixo, coladas no centro (os lugares cobrem as bordas da mesa) */
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    width: var(--slot-w);
+    height: calc(var(--slot-h) * 1.6);
+  }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 30%); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: auto; right: calc(50% + 28px); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: auto; left: calc(50% + 28px); }
+}
+@media (max-width: 850px) and (orientation: portrait) {
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > *,
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: min(var(--slot-max), 27cqh, 34cqw);
+    --slot-w: calc(var(--slot-h) * 2 / 3);
+    --fan: 0.5;
+  }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .played-card-slot-container {
+    width: calc(var(--slot-w) * (1 + 2 * var(--fan)));
+    height: var(--slot-h);
+  }
+  /* Laterais: em pilha para baixo, coladas no centro (os lugares cobrem as bordas da mesa) */
+  .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    width: var(--slot-w);
+    height: calc(var(--slot-h) * 1.6);
+  }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 30%); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: auto; right: calc(50% + 28px); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: auto; left: calc(50% + 28px); }
+}
+
+/* ==========================================================================
+   Pontos mostrados no fim da mão (Envido vencedor / todas as Flores)
+   ========================================================================== */
+.played-card.proof-card.proof-lose {
+  border-color: rgba(210, 180, 222, 0.5);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+  filter: grayscale(0.55) brightness(0.72);
+}
+.proof-badge {
+  position: absolute;
+  /* em cima da borda das cartas (não invade o centro da mesa) */
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -60%);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  font-size: clamp(0.62rem, calc(var(--slot-w, 80px) * 0.13), 0.82rem);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  animation: proofBadgeIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.proof-badge b { font-size: 1.15em; letter-spacing: 0; }
+#arena-slot-top .proof-badge { top: auto; bottom: 0; transform: translate(-50%, 60%); }
+.proof-badge.envido { color: var(--wood-dark); background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
+.proof-badge.flor { color: #fff; background: linear-gradient(180deg, #a569bd, #7d3c98); border: 1px solid #d2b4de; }
+.proof-badge.flor.lose { background: rgba(60, 40, 70, 0.92); color: #d9c6e3; border-color: rgba(210, 180, 222, 0.35); }
+.proof-badge.win { box-shadow: 0 0 0 2px rgba(240, 201, 110, 0.5), 0 0 16px rgba(240, 201, 110, 0.45), 0 4px 12px rgba(0, 0, 0, 0.5); }
+.proof-badge.win i { color: #ffe08a; }
+.proof-badge.envido.win i { color: var(--wood-dark); }
+@keyframes proofBadgeIn { from { opacity: 0; scale: 0.85; } }
+/* Laterais estreitas no celular: selo menor */
+@media (max-width: 600px) {
+  .proof-badge { padding: 2px 7px; gap: 4px; }
+}
+
+/* ==========================================================================
+   Celular: relógio do jogador da vez em cima do lugar, sem cobrir o nome
+   ========================================================================== */
+@media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
+  .seat-timer {
+    top: -11px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.62rem;
+    min-width: 26px;
+    padding: 0 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proof-badge { animation: none; }
+}
