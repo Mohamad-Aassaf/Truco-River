@@ -1,6 +1,6 @@
 // public/js/table-extras.js
 // - Quadro de times da sala de espera nas duplas (estilo "dois lados")
-// - Relógio da jogada (15s)
+// - Relógio da jogada (20s)
 // - Avisos de conexão: "você caiu / voltando" e "fulano caiu, esperando"
 // Usa `socket`, `mySeatIndex`, `myPlayerId` e `escapeText` do app.js.
 

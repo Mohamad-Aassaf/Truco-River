@@ -2444,22 +2444,25 @@ body.hand-ended .action-panel { visibility: hidden; }
 
 /* --- Relógio da jogada --- */
 .turn-timer {
+  /* Ao lado da mão (os botões ficam logo acima dela no computador) */
   position: absolute;
-  top: -34px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
   z-index: 20;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 5px 12px;
+  gap: 6px;
+  padding: 5px 10px;
   border-radius: var(--radius-pill);
   background: rgba(15, 9, 4, 0.85);
   border: 1px solid rgba(223, 177, 91, 0.5);
-  white-space: nowrap;
+  border-radius: 14px;
+  width: 104px;
 }
-.turn-timer-text { font-size: 0.8rem; font-weight: 800; color: var(--gold-bright); }
-.turn-timer-bar { width: 90px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.turn-timer-text { font-size: 0.74rem; line-height: 1.2; font-weight: 800; color: var(--gold-bright); text-align: center; }
+.turn-timer-bar { width: 70px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .turn-timer-bar span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold-bright)); transition: width 0.25s linear; }
 .turn-timer.urgent { border-color: #e74c3c; animation: timerPulse 0.8s ease-in-out infinite; }
 .turn-timer.urgent .turn-timer-text { color: #ff8a7a; }
@@ -2597,7 +2600,7 @@ body.spectating .player-hand .card { cursor: default; }
     right: 10px;
   }
   body:not([data-screen="game"]) .audio-controls-panel .audio-btn { width: 36px; height: 36px; font-size: 0.95rem; }
-  .turn-timer { top: -30px; padding: 4px 10px; }
+  .turn-timer { top: -30px; right: auto; left: 50%; transform: translateX(-50%); flex-direction: row; gap: 10px; padding: 4px 10px; width: auto; white-space: nowrap; border-radius: var(--radius-pill); }
   .turn-timer-bar { width: 64px; }
 }
 

@@ -289,7 +289,7 @@ function broadcastState(roomId) {
 }
 
 // --- TEMPO DA JOGADA (15s) ---
-const TURN_MS = Number(process.env.TURN_MS) || 15000;
+const TURN_MS = Number(process.env.TURN_MS) || 20000;
 
 // Quem precisa agir agora e o quê ('play', 'truco', 'envido', 'flor', 'sing')
 function actorOf(game) {
