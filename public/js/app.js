@@ -669,7 +669,7 @@ function renderLobbyScreen(gameState) {
 
     if (p) {
       const isMe = p.id === myPlayerId;
-      const isHost = gameState.players[0] && gameState.players[0].id === myPlayerId;
+      const isHost = gameState.hostId ? gameState.hostId === myPlayerId : (gameState.players[0] && gameState.players[0].id === myPlayerId);
 
       const canChangeTeam = gameState.mode === '2v2' && (isMe || (isHost && p.isBot));
       const changeTeamBtnHtml = canChangeTeam

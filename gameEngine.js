@@ -1269,6 +1269,17 @@ class TrucoGame { // TRUCO GURIZINHO
     return true;
   }
 
+  // Dono da sala: marcado no próprio jogador (a ordem da lista muda com trocas
+  // de lugar e no começo da partida). Se o dono sair, passa para o primeiro humano.
+  host() {
+    let h = this.players.find(p => p.isHost && !p.isBot);
+    if (!h) {
+      h = this.players.find(p => !p.isBot) || null;
+      if (h) { this.players.forEach(p => { p.isHost = false; }); h.isHost = true; }
+    }
+    return h;
+  }
+
   // Gera dados do jogo sanitizados para enviar para um cliente específico
   getGameStateForPlayer(playerIdx, spectator = false) {
     // Sala de espera ou partida acabada (mesmo no meio de uma mão): estado simples
@@ -1279,6 +1290,7 @@ class TrucoGame { // TRUCO GURIZINHO
         mode: this.mode,
         maxPoints: this.maxPoints || 24,
         maxPlayers: this.maxPlayers,
+        hostId: this.host() ? this.host().id : null,
         players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, disconnected: !!p.disconnected, reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null })),
         score: this.score,
         state: this.state,
@@ -1309,6 +1321,7 @@ class TrucoGame { // TRUCO GURIZINHO
       mode: this.mode,
       maxPoints: this.maxPoints || 24,
       maxPlayers: this.maxPlayers,
+      hostId: this.host() ? this.host().id : null,
       // Pontos de envido e flor só vão para o próprio jogador e o parceiro
       players: this.players.map((p, idx) => {
         const own = spectator || idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team);

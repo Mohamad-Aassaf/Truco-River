@@ -184,6 +184,12 @@ function cleanClientId(id) {
 const RECONNECT_MS = Number(process.env.RECONNECT_MS) || 30000;
 
 // Tira um jogador da sala de vez (saiu, foi expulso ou não voltou a tempo)
+// Quem é o dono da sala (marcado no jogador, não pela posição na lista)
+function isHostSocket(game, socketId) {
+  const h = game.host();
+  return !!h && h.socketId === socketId;
+}
+
 function removeFromRoom(roomId, socketId) {
   const game = activeGames[roomId];
   if (!game) return;
@@ -707,6 +713,7 @@ io.on('connection', (socket) => {
     game.isPrivate = !!isPrivate;
     activeGames[roomId] = game;
     game.addPlayer(socket.id, playerName, socket.id);
+    game.players[game.players.length - 1].isHost = true;
     markAccount(game, socket);
 
     currentRoomId = roomId;
@@ -773,7 +780,7 @@ io.on('connection', (socket) => {
   socket.on('set_bot_difficulty', (data) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby' || !data || !BOT_LEVELS[data.difficulty]) return;
-    const isHost = game.players[0] && game.players[0].socketId === socket.id;
+    const isHost = isHostSocket(game, socket.id);
     if (!isHost) return;
     const bot = game.players.find(p => p.isBot && p.id === data.playerId);
     if (!bot) return;
@@ -809,7 +816,7 @@ io.on('connection', (socket) => {
   socket.on('switch_team', (data) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby') return;
-    const isHost = game.players[0] && game.players[0].socketId === socket.id;
+    const isHost = isHostSocket(game, socket.id);
     const me = game.players.find(pl => pl.socketId === socket.id);
     const target = data && data.targetId ? game.players.find(pl => pl.id === data.targetId) : me;
     if (!target || !me) return;
@@ -887,7 +894,7 @@ io.on('connection', (socket) => {
   socket.on('shuffle_teams', () => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby' || game.mode !== '2v2') return;
-    if (!(game.players[0] && game.players[0].socketId === socket.id)) return;
+    if (!(isHostSocket(game, socket.id))) return;
     const order = game.players.map((_, i) => i).sort(() => Math.random() - 0.5);
     order.forEach((pi, k) => { game.players[pi].team = k % 2; });
     broadcastState(currentRoomId);
@@ -898,11 +905,11 @@ io.on('connection', (socket) => {
     const game = activeGames[currentRoomId];
     if (!game || game.state !== 'lobby') return;
 
-    const senderIsHost = game.players[0] && game.players[0].socketId === socket.id;
+    const senderIsHost = isHostSocket(game, socket.id);
     if (!senderIsHost) return;
 
     const targetIdx = game.players.findIndex(p => p.id === playerId);
-    if (targetIdx === -1 || targetIdx === 0) return;
+    if (targetIdx === -1 || game.players[targetIdx] === game.host()) return;
 
     const targetPlayer = game.players[targetIdx];
     if (targetPlayer.isBot) {

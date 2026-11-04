@@ -14,7 +14,8 @@
   window.renderTeamsBoard = function renderTeamsBoard(gameState, container) {
     const meIdx = gameState.players.findIndex(p => p.id === myPlayerId);
     const me = gameState.players[meIdx];
-    const isHost = gameState.players[0] && gameState.players[0].id === myPlayerId;
+    const hostId = gameState.hostId || (gameState.players[0] && gameState.players[0].id);
+    const isHost = hostId === myPlayerId;
     const perTeam = gameState.maxPlayers / 2;
 
     const card = p => {
@@ -30,7 +31,7 @@
       return `
         <div class="team-player ${p.ready ? 'ready' : ''} ${isMe ? 'me' : ''} ${p.disconnected ? 'offline' : ''}">
           <span class="tp-icon">${p.isBot ? '<i class="fa-solid fa-robot"></i>' : '<i class="fa-solid fa-user"></i>'}</span>
-          <span class="tp-name">${name}${isMe ? ' <small>(você)</small>' : ''}${isHost && p === gameState.players[0] ? ' <small class="tp-host">dono</small>' : ''}</span>
+          <span class="tp-name">${name}${isMe ? ' <small>(você)</small>' : ''}${p.id === hostId ? ' <small class="tp-host">dono</small>' : ''}</span>
           ${level}
           <span class="tp-status">${p.ready ? '<i class="fa-solid fa-check"></i> Pronto' : 'Aguardando'}</span>
           <span class="tp-actions">
