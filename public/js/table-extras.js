@@ -247,7 +247,7 @@
     if (turn.idx === mySeatIndex && !(lastGameState && lastGameState.spectating)) {
       timerBox.classList.remove('hide');
       timerBox.classList.toggle('urgent', urgent);
-      timerText.textContent = `${KIND_TEXT[turn.kind] || 'Sua vez'} · ${secs}s`;
+      timerText.innerHTML = `<span class="tt-kind">${KIND_TEXT[turn.kind] || 'Sua vez'} · </span>${secs}s`;
       timerFill.style.width = `${Math.min(100, (left / turn.total) * 100)}%`;
     } else {
       timerBox.classList.add('hide');

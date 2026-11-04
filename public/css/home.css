@@ -2600,8 +2600,12 @@ body.spectating .player-hand .card { cursor: default; }
     right: 10px;
   }
   body:not([data-screen="game"]) .audio-controls-panel .audio-btn { width: 36px; height: 36px; font-size: 0.95rem; }
-  .turn-timer { top: -30px; right: auto; left: 50%; transform: translateX(-50%); flex-direction: row; gap: 10px; padding: 4px 10px; width: auto; white-space: nowrap; border-radius: var(--radius-pill); }
-  .turn-timer-bar { width: 64px; }
+  /* Relógio compacto no canto direito, acima das cartas (o nome do lugar fica no meio) */
+  .turn-timer { top: -30px; right: 4px; left: auto; transform: none; flex-direction: row; gap: 8px; padding: 4px 10px; width: auto; white-space: nowrap; border-radius: var(--radius-pill); }
+  .turn-timer-bar { width: 46px; }
+  .turn-timer .tt-kind { display: none; }
+  .turn-timer-text::before { content: "\f2f2"; font-family: "Font Awesome 6 Free"; font-weight: 900; margin-right: 5px; }
+  #seat-bottom .seat-timer { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2767,7 +2771,9 @@ body.spectating .player-hand .card { cursor: default; }
 @container (aspect-ratio < 1) {
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > *,
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
-    --slot-h: min(var(--slot-max), 27cqh, 34cqw);
+    /* fileiras: 2 cartas de altura + a pilha das laterais (78% do tamanho, 1,5 carta) = 3,17 */
+    --slot-max: 150px;
+    --slot-h: min(var(--slot-max), 31.5cqh, 40cqw);
     --slot-w: calc(var(--slot-h) * 2 / 3);
     --fan: 0.5;
   }
@@ -2777,17 +2783,20 @@ body.spectating .player-hand .card { cursor: default; }
   }
   /* Laterais: em pilha para baixo, coladas no centro (os lugares cobrem as bordas da mesa) */
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: calc(min(var(--slot-max), 31.5cqh, 40cqw) * 0.78);
     width: var(--slot-w);
-    height: calc(var(--slot-h) * 1.6);
+    height: calc(var(--slot-h) * 1.5);
   }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 30%); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: auto; right: calc(50% + 28px); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: auto; left: calc(50% + 28px); }
 }
 @media (max-width: 850px) and (orientation: portrait) {
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > *,
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
-    --slot-h: min(var(--slot-max), 27cqh, 34cqw);
+    /* fileiras: 2 cartas de altura + a pilha das laterais (78% do tamanho, 1,5 carta) = 3,17 */
+    --slot-max: 150px;
+    --slot-h: min(var(--slot-max), 31.5cqh, 40cqw);
     --slot-w: calc(var(--slot-h) * 2 / 3);
     --fan: 0.5;
   }
@@ -2797,10 +2806,11 @@ body.spectating .player-hand .card { cursor: default; }
   }
   /* Laterais: em pilha para baixo, coladas no centro (os lugares cobrem as bordas da mesa) */
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
+    --slot-h: calc(min(var(--slot-max), 31.5cqh, 40cqw) * 0.78);
     width: var(--slot-w);
-    height: calc(var(--slot-h) * 1.6);
+    height: calc(var(--slot-h) * 1.5);
   }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 30%); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: auto; right: calc(50% + 28px); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: auto; left: calc(50% + 28px); }
 }
