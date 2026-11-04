@@ -2668,3 +2668,28 @@ body.spectating .player-hand .card { cursor: default; }
 @media (max-width: 600px) {
   .lobby-chat-messages { height: 96px; }
 }
+
+/* --- Nome do time --- */
+.team-col-head { gap: 6px; align-items: center; }
+.team-col-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+.team-col-head small { margin-left: auto; white-space: nowrap; }
+.tp-rename { width: 26px; height: 26px; font-size: 0.7rem; flex-shrink: 0; }
+.team-rename-form { display: flex; gap: 6px; align-items: center; }
+.team-rename-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gold);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-light);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.team-rename-form input:focus { outline: none; }
+.scoreboard-digital .team-name, .matchstick-box h4, .final-score span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

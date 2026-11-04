@@ -17,10 +17,11 @@
     const hostId = gameState.hostId || (gameState.players[0] && gameState.players[0].id);
     const isHost = hostId === myPlayerId;
     const perTeam = gameState.maxPlayers / 2;
+    const duo = gameState.mode === '2v2';
 
     const card = p => {
       const isMe = p === me;
-      const canMove = isHost || isMe;
+      const canMove = duo && (isHost || isMe);
       const other = p.team === 0 ? 1 : 0;
       const arrow = p.team === 0 ? 'fa-arrow-right' : 'fa-arrow-left';
       const name = p.isBot && isHost ? escapeText(p.name.replace(/\s*\([^)]*\)\s*$/, '')) : escapeText(p.name);
@@ -36,7 +37,7 @@
           <span class="tp-status">${p.ready ? '<i class="fa-solid fa-check"></i> Pronto' : 'Aguardando'}</span>
           <span class="tp-actions">
             ${canMove ? `<button type="button" class="icon-btn small tp-move" data-move="${p.id}" data-to="${other}" title="Passar para o outro time" aria-label="Passar ${name} para o outro time"><i class="fa-solid ${arrow}"></i></button>` : ''}
-            ${!isHost && me && !isMe && !p.isBot && p.team !== me.team ? `<button type="button" class="icon-btn small tp-swap" data-swap-req="${p.id}" title="Pedir para trocar de lugar" aria-label="Pedir para trocar de lugar com ${name}"><i class="fa-solid fa-right-left"></i></button>` : ''}
+            ${duo && !isHost && me && !isMe && !p.isBot && p.team !== me.team ? `<button type="button" class="icon-btn small tp-swap" data-swap-req="${p.id}" title="Pedir para trocar de lugar" aria-label="Pedir para trocar de lugar com ${name}"><i class="fa-solid fa-right-left"></i></button>` : ''}
             ${isHost && !isMe ? `<button type="button" class="icon-btn small danger tp-kick" data-kick="${p.id}" title="Remover" aria-label="Remover ${name}"><i class="fa-solid fa-user-xmark"></i></button>` : ''}
           </span>
         </div>`;
@@ -48,7 +49,7 @@
       for (let i = 0; i < perTeam; i++) {
         if (members[i]) slots.push(card(members[i]));
         else {
-          const canJoin = me && me.team !== team;
+          const canJoin = duo && me && me.team !== team;
           slots.push(`<div class="team-player empty">
             <span class="tp-name">Vaga livre</span>
             ${canJoin ? `<button type="button" class="btn btn-sm btn-secondary" data-join-team="${team}">Entrar aqui</button>` : ''}
@@ -58,23 +59,55 @@
       const isMine = me && me.team === team;
       return `
         <div class="team-col team-${team} ${isMine ? 'mine' : ''}">
-          <div class="team-col-head">
-            <span>Time ${team + 1}</span>
-            ${isMine ? '<small>seu time</small>' : ''}
-          </div>
+          ${teamHead(team, isMine)}
           ${slots.join('')}
         </div>`;
     };
 
+    // Cabeçalho do time: nome (padrão "Nós"/"Eles") e lápis para o próprio time renomear
+    function teamHead(team, isMine) {
+      const label = escapeText(window.teamLabel ? window.teamLabel(gameState, team) : `Time ${team + 1}`);
+      if (isMine && renameDraft !== null) {
+        return `
+          <form class="team-rename-form" data-rename-form>
+            <input type="text" id="team-rename-input" maxlength="${TEAM_NAME_MAX}" value="${escapeText(renameDraft)}" placeholder="Nome do time" aria-label="Nome do time" autocomplete="off">
+            <button type="submit" class="icon-btn small" title="Salvar" aria-label="Salvar nome"><i class="fa-solid fa-check"></i></button>
+            <button type="button" class="icon-btn small" data-rename-cancel title="Cancelar" aria-label="Cancelar"><i class="fa-solid fa-xmark"></i></button>
+          </form>`;
+      }
+      return `
+        <div class="team-col-head">
+          <span class="team-col-name" title="${label}">${label}</span>
+          ${isMine ? `<button type="button" class="icon-btn small tp-rename" data-rename-team title="Mudar o nome do time" aria-label="Mudar o nome do time"><i class="fa-solid fa-pen"></i></button>` : ''}
+          ${isMine ? '<small>seu time</small>' : ''}
+        </div>`;
+    }
+
+    const hint = !duo
+      ? '<small>Toque no lápis para dar um nome ao seu lado.</small>'
+      : isHost
+        ? '<button type="button" class="btn btn-sm btn-secondary" id="shuffle-teams-btn"><i class="fa-solid fa-shuffle"></i> Sortear times</button><small>Use as setas para passar alguém de time. Se o outro time estiver cheio, eles trocam de lugar. Toque no lápis para dar nome ao seu time.</small>'
+        : '<small>Use a seta para trocar de time. Com o time cheio, toque em <i class="fa-solid fa-right-left"></i> ao lado de alguém do outro time para pedir para trocar de lugar. Toque no lápis para dar nome ao seu time.</small>';
     container.innerHTML = `
-      <div class="teams-board">
+      <div class="teams-board ${duo ? '' : 'solo'}">
         ${column(0)}
         <div class="teams-vs">VS</div>
         ${column(1)}
       </div>
-      ${isHost ? '<div class="teams-tools"><button type="button" class="btn btn-sm btn-secondary" id="shuffle-teams-btn"><i class="fa-solid fa-shuffle"></i> Sortear times</button><small>Use as setas para passar alguém de time. Se o outro time estiver cheio, eles trocam de lugar.</small></div>'
-        : '<div class="teams-tools"><small>Use a seta para trocar de time. Com o time cheio, toque em <i class="fa-solid fa-right-left"></i> ao lado de alguém do outro time para pedir para trocar de lugar.</small></div>'}`;
+      <div class="teams-tools">${hint}</div>`;
+
+    // Mantém a edição do nome mesmo quando a sala atualiza
+    const input = container.querySelector('#team-rename-input');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
   };
+
+  // Nome do time
+  const TEAM_NAME_MAX = 16;
+  let renameDraft = null; // texto sendo digitado (null = não está editando)
+  const rerender = () => { if (lastGameState && window.renderTeamsBoard) window.renderTeamsBoard(lastGameState, $('players-lobby-list')); };
 
   // Cliques no quadro (delegados: o quadro é refeito a cada atualização)
   const lobbyList = $('players-lobby-list');
@@ -93,7 +126,33 @@
       });
     }
     else if (e.target.closest('#shuffle-teams-btn')) socket.emit('shuffle_teams');
+    else if (e.target.closest('[data-rename-team]')) {
+      const s = lastGameState;
+      const me = s && s.players.find(p => p.id === myPlayerId);
+      renameDraft = (me && s.teamNames && s.teamNames[me.team]) || '';
+      rerender();
+    } else if (e.target.closest('[data-rename-cancel]')) {
+      renameDraft = null;
+      rerender();
+    }
   });
+  lobbyList.addEventListener('input', e => {
+    if (e.target.id === 'team-rename-input') renameDraft = e.target.value;
+  });
+  lobbyList.addEventListener('keydown', e => {
+    if (e.target.id === 'team-rename-input' && e.key === 'Escape') { renameDraft = null; rerender(); }
+  });
+  lobbyList.addEventListener('submit', e => {
+    if (!e.target.closest('[data-rename-form]')) return;
+    e.preventDefault();
+    const name = (renameDraft || '').trim().slice(0, TEAM_NAME_MAX);
+    socket.emit('set_team_name', { name }, r => {
+      if (r && r.error && window.trucoSocial) window.trucoSocial.toast(escapeText(r.error));
+    });
+    renameDraft = null;
+    rerender();
+  });
+  socket.on('game_state', s => { if (s && s.state !== 'lobby') renameDraft = null; });
   lobbyList.addEventListener('change', e => {
     const sel = e.target.closest('.teams-board .bot-level-select');
     if (sel) socket.emit('set_bot_difficulty', { playerId: sel.dataset.id, difficulty: sel.value });

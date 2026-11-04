@@ -657,8 +657,8 @@ function renderLobbyScreen(gameState) {
 
   // Renderizar slots de jogadores
   playersLobbyList.innerHTML = '';
-  playersLobbyList.classList.toggle('teams-mode', gameState.mode === '2v2');
-  if (gameState.mode === '2v2' && window.renderTeamsBoard) {
+  playersLobbyList.classList.toggle('teams-mode', !!window.renderTeamsBoard);
+  if (window.renderTeamsBoard) {
     window.renderTeamsBoard(gameState, playersLobbyList);
   } else
 
@@ -783,6 +783,7 @@ function renderGameScreen(gameState) {
   // 2. Atualizar o Placar e Narrativa.
   // "Nós" é sempre o time de quem está jogando (time 1 ou 2 no servidor).
   const { us, them } = myTeams(gameState);
+  paintTeamNames(gameState);
   scoreValTeam0.textContent = String(gameState.score[us]).padStart(2, '0');
   scoreValTeam1.textContent = String(gameState.score[them]).padStart(2, '0');
 
@@ -1103,7 +1104,7 @@ function renderHandSummary(gameState) {
 
   const rounds = (s.roundsWon || []).map(t => {
     const cls = t === -1 ? 'tie' : t === us ? 'us' : 'them';
-    const label = t === -1 ? 'Parda' : t === us ? 'Nós' : 'Eles';
+    const label = t === -1 ? 'Parda' : escapeText(teamLabel(gameState, t));
     return `<span class="hs-round ${cls}" title="${label}"></span>`;
   }).join('');
 
@@ -1117,7 +1118,7 @@ function renderHandSummary(gameState) {
   handSummaryEl.innerHTML = `
     <div class="hs-head ${won ? 'win' : 'lose'}">
       <span class="hs-title">${gameOver ? (gameState.winner === us ? 'Vencemos a partida!' : 'Perdemos a partida') : (won ? 'Mão nossa!' : 'Mão deles')}</span>
-      <span class="hs-score"><span class="us">Nós ${score[us]}</span> × <span class="them">${score[them]} Eles</span></span>
+      <span class="hs-score"><span class="us">${escapeText(teamLabel(gameState, us))} ${score[us]}</span> × <span class="them">${score[them]} ${escapeText(teamLabel(gameState, them))}</span></span>
     </div>
     <div class="hs-body">
       ${rounds ? `<span class="hs-rounds">${rounds}</span>` : ''}
@@ -1158,6 +1159,24 @@ function myTeams(gameState) {
   const me = gameState.players[mySeatIndex];
   const us = me && me.team === 1 ? 1 : 0;
   return { us, them: 1 - us };
+}
+
+// Nome do time: o que o time escolheu ou, por padrão, "Nós"/"Eles" para cada um
+function teamLabel(gameState, team) {
+  const custom = gameState && gameState.teamNames && gameState.teamNames[team];
+  if (custom) return custom;
+  const me = gameState && gameState.players.find(p => p.id === myPlayerId);
+  if (!me || gameState.spectating) return `Time ${team + 1}`;
+  return team === me.team ? 'Nós' : 'Eles';
+}
+window.teamLabel = teamLabel;
+
+function paintTeamNames(gameState) {
+  const { us, them } = myTeams(gameState);
+  const set = (id, t) => { const el = document.getElementById(id); if (el) { el.textContent = teamLabel(gameState, t); el.title = el.textContent; } };
+  set('score-name-us', us); set('score-name-them', them);
+  set('sticks-name-us', us); set('sticks-name-them', them);
+  set('final-name-us', us); set('final-name-them', them);
 }
 
 // Renderiza a Narrative/logs do jogo (azul = nosso time, vermelho = adversário)
@@ -1656,7 +1675,11 @@ function updateAlertBanner(gameState) {
 
   // 1. Resposta pendente de Flor para o meu time
   if (hand.florResponsePending && hand.florPendingTeam === myTeam && myPlayer.hasFlor) {
-    gameAlertText.textContent = `Flor cantada! Tens contra-flor para rebater?`;
+    gameAlertText.textContent = hand.florState === 'contra_flor'
+      ? 'Contra-Flor! Vale 6 para a maior Flor. Queres?'
+      : hand.florState === 'contra_flor_resto'
+        ? `Contra-Flor e o Resto! Vale ${hand.florPointsAtStake} para a maior Flor. Queres?`
+        : 'Flor cantada! Quero, Contra-Flor ou Achique?';
     gameAlertBanner.classList.remove('hide');
     return;
   }
@@ -1833,9 +1856,12 @@ function setupActionButtons(gameState) {
 
   if (hand.florResponsePending && hand.florPendingTeam === myTeam && myPlayer.hasFlor) {
     if (statusEl) statusEl.classList.add('hide');
+    // Quero: disputa a Flor/Contra-Flor (ganha a maior). Dá para aumentar só para cima.
+    groupResponse.classList.remove('hide');
+    showAndEnableButton(btnQuero);
     groupFlorResponse.classList.remove('hide');
-    showAndEnableButton(btnContraFlor);
-    showAndEnableButton(btnContraFlorResto);
+    if (hand.florState === 'flor') showAndEnableButton(btnContraFlor);
+    if (hand.florState !== 'contra_flor_resto') showAndEnableButton(btnContraFlorResto);
     showAndEnableButton(btnAchique);
     return;
   }
@@ -2149,6 +2175,7 @@ function renderGameEndScreen(gameState) {
   document.getElementById('victory-subtitle').textContent = won ? pick(WIN_LINES) : pick(LOSE_LINES);
   if (won) window.soundManager.playVictorySound();
 
+  paintTeamNames(gameState);
   document.getElementById('final-score-t0').textContent = gameState.score[us];
   document.getElementById('final-score-t1').textContent = gameState.score[them];
   const names = team => gameState.players.filter(p => p.team === team).map(p => p.name).join(' & ');

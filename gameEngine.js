@@ -116,6 +116,7 @@ class TrucoGame { // TRUCO GURIZINHO
     this.maxPlayers = mode === '1v1' ? 2 : 4;
     this.players = []; // [{ id, name, socketId, isBot, team }]
     this.score = { 0: 0, 1: 0 }; // Pontuação por equipe
+    this.teamNames = [null, null]; // Nome dos times (vazio = "Nós"/"Eles" para cada um)
     this.state = 'lobby'; // 'lobby', 'playing', 'game_end'
     this.gameLogs = [];
     this.maxPoints = maxPoints;
@@ -862,6 +863,12 @@ class TrucoGame { // TRUCO GURIZINHO
     if (team !== this.hand.florPendingTeam) return false;
     if (!player.hasFlor || this.isFolded(playerIdx)) return false; // Apenas quem tem flor pode responder à Contra-Flor
 
+    // Contra-Flor só por cima de uma Flor; Contra-Flor e o Resto só uma vez
+    const current = this.hand.florState;
+    if (!['quero', 'contra_flor', 'contra_flor_resto', 'nao_quero', 'achique'].includes(response)) return false;
+    if (response === 'contra_flor' && current !== 'flor') return false;
+    if (response === 'contra_flor_resto' && current === 'contra_flor_resto') return false;
+
     this.hand.florResponsePending = false;
     delete this.hand.voiceBubble[playerIdx];
 
@@ -887,8 +894,8 @@ class TrucoGame { // TRUCO GURIZINHO
       this.hand.florState = 'contra_flor_resto';
       this.hand.florHistory.push('contra_flor_resto');
 
-      // Vale o que falta para quem está na frente ganhar a partida
-      this.hand.florPointsAtStake = this.faltaPoints();
+      // Os 6 da Contra-Flor mais o que falta para quem está na frente ganhar (regra do Falta Envido)
+      this.hand.florPointsAtStake = 6 + this.faltaPoints();
 
       this.hand.florResponsePending = true;
       this.hand.florPendingTeam = opponentTeam;
@@ -905,7 +912,7 @@ class TrucoGame { // TRUCO GURIZINHO
         else if (prevCall === 'contra_flor') pointsWon = 6;
       }
 
-      this.log(`Contra-Flor recusada. Time ${opponentTeam} ganha ${pointsWon} ponto(s).`);
+      this.log(`${player.name} achicou. Time ${opponentTeam + 1} ganha ${pointsWon} ponto(s).`, opponentTeam);
       this.award(opponentTeam, pointsWon, 'flor', 'Flor (achicaram)');
       this.hand.florCallers.filter(i => this.players[i].team === opponentTeam).forEach(i => this.addFlorProof(i));
       this.hand.canCallEnvido = false;
@@ -1291,6 +1298,7 @@ class TrucoGame { // TRUCO GURIZINHO
         maxPoints: this.maxPoints || 24,
         maxPlayers: this.maxPlayers,
         hostId: this.host() ? this.host().id : null,
+        teamNames: this.teamNames,
         players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, disconnected: !!p.disconnected, reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null })),
         score: this.score,
         state: this.state,
@@ -1322,6 +1330,7 @@ class TrucoGame { // TRUCO GURIZINHO
       maxPoints: this.maxPoints || 24,
       maxPlayers: this.maxPlayers,
       hostId: this.host() ? this.host().id : null,
+      teamNames: this.teamNames,
       // Pontos de envido e flor só vão para o próprio jogador e o parceiro
       players: this.players.map((p, idx) => {
         const own = spectator || idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team);

@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.2">
+  <link rel="stylesheet" href="/css/home.css?v=2.3">
 </head>
 
 <body data-screen="home">
@@ -281,13 +281,13 @@
           <div id="view-score-digital" class="score-view-pane">
             <div class="scoreboard-digital">
               <div class="team-score score-team0">
-                <span class="team-name">Nós</span>
+                <span class="team-name" id="score-name-us">Nós</span>
                 <span id="score-val-team0" class="score-number">00</span>
                 <div class="team-progress"><span id="score-bar-team0"></span></div>
               </div>
               <div class="vs-badge">VS</div>
               <div class="team-score score-team1">
-                <span class="team-name">Eles</span>
+                <span class="team-name" id="score-name-them">Eles</span>
                 <span id="score-val-team1" class="score-number">00</span>
                 <div class="team-progress"><span id="score-bar-team1"></span></div>
               </div>
@@ -298,13 +298,13 @@
           <div id="view-score-sticks" class="score-view-pane hide">
             <div class="matchstick-tracker-container">
               <div class="matchstick-box">
-                <h4>Nós</h4>
+                <h4 id="sticks-name-us">Nós</h4>
                 <div id="sticks-team0" class="sticks-grid">
                   <!-- Renderização de fósforos agrupados de 5 em 5 -->
                 </div>
               </div>
               <div class="matchstick-box">
-                <h4>Eles</h4>
+                <h4 id="sticks-name-them">Eles</h4>
                 <div id="sticks-team1" class="sticks-grid">
                   <!-- Renderização de fósforos -->
                 </div>
@@ -557,13 +557,13 @@
 
       <div class="final-score-box">
         <div class="final-score us">
-          <span>Nós</span>
+          <span id="final-name-us">Nós</span>
           <strong id="final-score-t0">24</strong>
           <small id="final-names-us"></small>
         </div>
         <div class="final-vs">×</div>
         <div class="final-score them">
-          <span>Eles</span>
+          <span id="final-name-them">Eles</span>
           <strong id="final-score-t1">15</strong>
           <small id="final-names-them"></small>
         </div>
@@ -1115,8 +1115,8 @@
                 <tr><td>Você e seu parceiro têm Flor</td><td>4</td></tr>
                 <tr><td>Os dois lados têm: disputa (Quero)</td><td>3 para a maior</td></tr>
                 <tr><td>Contra-Flor</td><td>6 para a maior</td></tr>
-                <tr><td>Contra-Flor e o Resto</td><td>o que falta para quem está na frente ganhar</td></tr>
-                <tr><td>Achique (corre da Contra-Flor)</td><td>o outro lado leva o que estava valendo</td></tr>
+                <tr><td>Contra-Flor e o Resto</td><td>6 da Contra-Flor + o que falta para quem está na frente ganhar (como no Falta Envido), para a maior</td></tr>
+                <tr><td>Achique (corre da Flor ou da Contra-Flor)</td><td>o outro lado leva o que estava valendo antes (3 da Flor ou 6 da Contra-Flor)</td></tr>
               </tbody>
             </table>
 
@@ -1281,7 +1281,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=15"></script>
+  <script src="/js/app.js?v=16"></script>
   <script src="/js/social.js?v=6"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
@@ -1289,7 +1289,7 @@
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=1"></script>
-  <script src="/js/table-extras.js?v=4"></script>
+  <script src="/js/table-extras.js?v=5"></script>
 </body>
 
 </html>

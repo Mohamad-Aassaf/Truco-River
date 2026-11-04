@@ -182,6 +182,7 @@ function cleanClientId(id) {
 
 // Quem fecha a aba ou cai a conexão tem este tempo para voltar à mesma partida
 const RECONNECT_MS = Number(process.env.RECONNECT_MS) || 30000;
+const TEAM_NAME_MAX = 16;
 
 // Tira um jogador da sala de vez (saiu, foi expulso ou não voltou a tempo)
 // Quem é o dono da sala (marcado no jogador, não pela posição na lista)
@@ -851,6 +852,20 @@ io.on('connection', (socket) => {
       [game.players[a], game.players[b]] = [game.players[b], game.players[a]];
     }
     broadcastState(currentRoomId);
+  });
+
+  // Nome do time: só quem é do time muda, e só na sala de espera
+  socket.on('set_team_name', (data, cb) => {
+    const reply = r => { if (typeof cb === 'function') cb(r); };
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'lobby') return reply({ error: 'O nome do time só muda na sala de espera.' });
+    const me = game.players.find(pl => pl.socketId === socket.id);
+    if (!me) return reply({ error: 'Você não está nesta sala.' });
+    const raw = data && typeof data.name === 'string' ? data.name : '';
+    const name = raw.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, TEAM_NAME_MAX);
+    game.teamNames[me.team] = name || null;
+    broadcastState(currentRoomId);
+    reply({ ok: true, name: game.teamNames[me.team] });
   });
 
   // Pedir para trocar de lugar com alguém do outro time (a pessoa aceita ou recusa)
