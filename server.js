@@ -273,6 +273,7 @@ function broadcastState(roomId) {
     if (game.state === 'playing' || game.state === 'lobby') state.lastHandSummary = null;
     state.nextHandIn = nextHandIn;
     state.turn = turn;
+    state.turnTimerOff = !!game.noTurnTimer;
     return state;
   };
 
@@ -316,6 +317,13 @@ function actorOf(game) {
 }
 
 function updateTurnTimer(roomId, game) {
+  // O admin desligou o tempo nesta partida
+  if (game.noTurnTimer) {
+    if (game.turnTimer) clearTimeout(game.turnTimer);
+    game.turnTimer = null;
+    game.turn = null;
+    return;
+  }
   const actor = actorOf(game);
   const p = actor && game.players[actor.idx];
   if (!p || p.isBot) {
@@ -852,6 +860,19 @@ io.on('connection', (socket) => {
       [game.players[a], game.players[b]] = [game.players[b], game.players[a]];
     }
     broadcastState(currentRoomId);
+  });
+
+  // Admin liga/desliga o tempo de jogada só na partida em que está jogando
+  socket.on('admin:turn_timer', (data, cb) => {
+    const reply = r => { if (typeof cb === 'function') cb(r); };
+    if (!socket.isAdmin) return reply({ error: 'Só o admin pode mudar o tempo de jogada.' });
+    const game = activeGames[currentRoomId];
+    const me = game && game.players.find(pl => pl.socketId === socket.id);
+    if (!me) return reply({ error: 'Entre numa sala para mudar o tempo de jogada dela.' });
+    game.noTurnTimer = !!(data && data.off);
+    game.log(game.noTurnTimer ? 'O tempo de jogada foi desligado nesta partida.' : 'O tempo de jogada foi ligado de novo nesta partida.');
+    broadcastState(currentRoomId);
+    reply({ ok: true, off: game.noTurnTimer });
   });
 
   // Nome do time: só quem é do time muda, e só na sala de espera

@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.3">
+  <link rel="stylesheet" href="/css/home.css?v=2.4">
 </head>
 
 <body data-screen="home">
@@ -635,7 +635,7 @@
           <button type="button" class="lobby-toggle-btn active" data-admin-tab="news" role="tab"><i class="fa-solid fa-bullhorn"></i> Novidades</button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="games" role="tab"><i class="fa-solid fa-eye"></i> Partidas</button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="reports" role="tab"><i class="fa-solid fa-bug"></i> Relatos <span class="news-count inline hide" id="admin-reports-count"></span></button>
-          <button type="button" class="lobby-toggle-btn" data-admin-tab="cards" role="tab"><i class="fa-solid fa-wand-magic-sparkles"></i> Cartas (teste)</button>
+          <button type="button" class="lobby-toggle-btn" data-admin-tab="cards" role="tab"><i class="fa-solid fa-gamepad"></i> Minha partida</button>
         </div>
 
         <!-- Partidas abertas e em andamento (assistir) -->
@@ -694,6 +694,15 @@
 
         <!-- Cartas de teste -->
         <section class="admin-pane hide" data-admin-pane="cards">
+          <!-- Tempo de jogada: vale só para a sala em que o admin está -->
+          <div class="admin-timer-row">
+            <div class="admin-timer-info">
+              <b><i class="fa-solid fa-stopwatch"></i> Tempo de jogada</b>
+              <small id="admin-timer-hint">Vale só para a partida em que você está.</small>
+            </div>
+            <button type="button" id="admin-timer-toggle" class="btn btn-sm btn-secondary">Desligar tempo</button>
+          </div>
+          <hr class="admin-sep">
           <p class="modal-subtitle" id="admin-cards-hint" style="margin-bottom: 16px;">Selecione as 3 cartas para substituir imediatamente as cartas da sua mão:</p>
           <div style="display: flex; flex-direction: column; gap: 15px;">
             <div class="voice-selector-wrapper" style="display: flex; flex-direction: column; gap: 5px;">
@@ -1281,14 +1290,14 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=16"></script>
+  <script src="/js/app.js?v=17"></script>
   <script src="/js/social.js?v=6"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
   <script src="/js/news.js?v=2"></script>
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
-  <script src="/js/admin.js?v=1"></script>
+  <script src="/js/admin.js?v=2"></script>
   <script src="/js/table-extras.js?v=5"></script>
 </body>
 

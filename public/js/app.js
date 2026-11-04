@@ -2350,7 +2350,7 @@ function openAdminPanel() {
   if (btnApplyAdminCards) btnApplyAdminCards.disabled = !playing;
   if (window.trucoNews) window.trucoNews.renderAdmin();
   if (window.trucoReports) window.trucoReports.load();
-  if (window.trucoAdmin) window.trucoAdmin.loadGames();
+  if (window.trucoAdmin) { window.trucoAdmin.loadGames(); window.trucoAdmin.syncTimer(); }
   modalAdminPanel.classList.remove('hide');
 }
 

@@ -2693,3 +2693,11 @@ body.spectating .player-hand .card { cursor: default; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --- Admin: tempo de jogada --- */
+.admin-timer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+.admin-timer-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.admin-timer-info b { color: var(--cream); }
+.admin-timer-info small { color: var(--text-muted); font-size: 0.78rem; }
+.admin-timer-row .btn { flex-shrink: 0; }
+.admin-sep { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }

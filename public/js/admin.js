@@ -144,5 +144,29 @@
     setTimeout(() => window.location.reload(), 800);
   });
 
-  window.trucoAdmin = { askPassword, loadGames };
+  // Tempo de jogada na partida em que o admin está
+  const timerBtn = $('admin-timer-toggle');
+  const timerHint = $('admin-timer-hint');
+  function syncTimer() {
+    const s = typeof lastGameState !== 'undefined' ? lastGameState : null;
+    const inRoom = !!(s && !s.spectating && s.state !== 'game_end' && s.players.some(p => p.id === myPlayerId));
+    const off = !!(s && s.turnTimerOff);
+    timerBtn.disabled = !inRoom;
+    timerBtn.textContent = off ? 'Ligar tempo' : 'Desligar tempo';
+    timerBtn.classList.toggle('btn-success', off);
+    timerBtn.classList.toggle('btn-secondary', !off);
+    timerHint.textContent = !inRoom
+      ? 'Entre numa sala para mudar o tempo de jogada dela.'
+      : off ? `Desligado na sala ${s.roomName}: ninguém tem tempo limite para jogar.`
+        : `Ligado na sala ${s.roomName}. Desligar vale só para esta partida.`;
+  }
+  timerBtn.addEventListener('click', () => {
+    const s = typeof lastGameState !== 'undefined' ? lastGameState : null;
+    socket.emit('admin:turn_timer', { off: !(s && s.turnTimerOff) }, r => {
+      if (r && r.error && window.trucoSocial) window.trucoSocial.toast(escapeText(r.error));
+    });
+  });
+  socket.on('game_state', () => setTimeout(syncTimer, 0));
+
+  window.trucoAdmin = { askPassword, loadGames, syncTimer };
 })();
