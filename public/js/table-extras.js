@@ -45,10 +45,22 @@
           <span class="tp-actions">
             ${canMove ? `<button type="button" class="icon-btn small tp-move" data-move="${p.id}" data-to="${other}" title="Passar para o outro time" aria-label="Passar ${name} para o outro time"><i class="fa-solid ${arrow}"></i></button>` : ''}
             ${duo && !isHost && me && !isMe && !p.isBot && p.team !== me.team ? `<button type="button" class="icon-btn small tp-swap" data-swap-req="${p.id}" title="Pedir para trocar de lugar" aria-label="Pedir para trocar de lugar com ${name}"><i class="fa-solid fa-right-left"></i></button>` : ''}
+            ${friendBtn(p, isMe)}
             ${isHost && !isMe ? `<button type="button" class="icon-btn small danger tp-kick" data-kick="${p.id}" title="Remover" aria-label="Remover ${name}"><i class="fa-solid fa-user-xmark"></i></button>` : ''}
           </span>
         </div>`;
     };
+
+    // Adicionar amigo: só para quem tem conta (convidado não tem lista de amigos)
+    function friendBtn(p, isMe) {
+      if (isMe || p.isBot || !p.hasAccount || !window.trucoSocial) return '';
+      const rel = window.trucoSocial.relationWith(p.name);
+      if (rel === 'friend') return '<span class="tp-friend" title="Vocês são amigos"><i class="fa-solid fa-user-check"></i></span>';
+      if (rel === 'sent') return '<span class="tp-friend" title="Pedido de amizade enviado"><i class="fa-solid fa-paper-plane"></i></span>';
+      if (rel === 'self') return '';
+      const label = rel === 'received' ? 'Aceitar pedido de amizade' : 'Adicionar amigo';
+      return `<button type="button" class="icon-btn small tp-add-friend" data-add-friend="${escapeText(p.name)}" title="${label}" aria-label="${label}: ${escapeText(p.name)}"><i class="fa-solid fa-user-plus"></i></button>`;
+    }
 
     const column = team => {
       const members = gameState.players.filter(p => p.team === team);
@@ -134,6 +146,11 @@
       });
     }
     else if (e.target.closest('#shuffle-teams-btn')) socket.emit('shuffle_teams');
+    else if (e.target.closest('[data-add-friend]')) {
+      const btn = e.target.closest('[data-add-friend]');
+      btn.disabled = true;
+      window.trucoSocial.requestFriend(btn.dataset.addFriend).then(() => rerender());
+    }
     else if (e.target.closest('[data-rename-team]')) {
       const s = lastGameState;
       const me = s && s.players.find(p => p.id === myPlayerId);
@@ -165,6 +182,138 @@
     const sel = e.target.closest('.teams-board .bot-level-select');
     if (sel) socket.emit('set_bot_difficulty', { playerId: sel.dataset.id, difficulty: sel.value });
   });
+
+  // Amizades mudaram (pedido enviado/aceito): atualiza os botões
+  window.addEventListener('truco:social', () => {
+    if (lastGameState && lastGameState.state === 'lobby') rerender();
+    if (seatMenu && !seatMenu.classList.contains('hide') && seatMenu.dataset.name) openSeatMenuFor(seatMenu.dataset.name, null);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Na partida: tocar no lugar de alguém abre um menu com "Adicionar amigo"
+  // ---------------------------------------------------------------------------
+  let seatMenu = null;
+  let seatMenuAnchor = null;
+  function closeSeatMenu() { if (seatMenu) seatMenu.classList.add('hide'); seatMenuAnchor = null; }
+  function openSeatMenuFor(name, anchor) {
+    const s = lastGameState;
+    const p = s && s.players.find(x => x.name === name);
+    if (!p) return closeSeatMenu();
+    if (!seatMenu) {
+      seatMenu = document.createElement('div');
+      seatMenu.className = 'seat-menu hide';
+      seatMenu.setAttribute('role', 'dialog');
+      document.body.appendChild(seatMenu);
+      seatMenu.addEventListener('click', e => {
+        const b = e.target.closest('button[data-seat-act]');
+        if (!b) return;
+        if (b.dataset.seatAct === 'login') { closeSeatMenu(); window.trucoSocial.openAuth('login'); return; }
+        b.disabled = true;
+        window.trucoSocial.requestFriend(seatMenu.dataset.name).then(() => openSeatMenuFor(seatMenu.dataset.name, null));
+      });
+    }
+    if (anchor) seatMenuAnchor = anchor;
+    const social = window.trucoSocial;
+    const rel = p.isBot ? 'bot' : !p.hasAccount ? 'noaccount' : !social || !social.isLogged() ? 'guest' : social.relationWith(p.name);
+    const body = {
+      bot: '<p>É um bot: não dá para adicionar.</p>',
+      noaccount: '<p>Esse jogador está sem conta (convidado), então não dá para adicionar.</p>',
+      guest: '<p>Entre na sua conta para adicionar amigos.</p><button type="button" class="btn btn-sm btn-primary" data-seat-act="login">Entrar</button>',
+      self: '',
+      friend: '<p class="ok"><i class="fa-solid fa-user-check"></i> Vocês já são amigos.</p>',
+      sent: '<p><i class="fa-solid fa-paper-plane"></i> Pedido de amizade enviado.</p>',
+      received: '<button type="button" class="btn btn-sm btn-primary" data-seat-act="add"><i class="fa-solid fa-user-check"></i> Aceitar pedido de amizade</button>',
+      none: '<button type="button" class="btn btn-sm btn-primary" data-seat-act="add"><i class="fa-solid fa-user-plus"></i> Adicionar amigo</button>'
+    }[rel] || '';
+    seatMenu.dataset.name = p.name;
+    seatMenu.innerHTML = `<b class="seat-menu-name">${escapeText(p.name)}</b>${body}`;
+    seatMenu.classList.remove('hide');
+    const a = seatMenuAnchor && seatMenuAnchor.getBoundingClientRect();
+    if (a) {
+      const w = seatMenu.offsetWidth, h = seatMenu.offsetHeight;
+      let left = a.left + a.width / 2 - w / 2;
+      left = Math.max(8, Math.min(window.innerWidth - w - 8, left));
+      let top = a.bottom + 8;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, a.top - h - 8);
+      seatMenu.style.left = `${left}px`;
+      seatMenu.style.top = `${top}px`;
+    }
+  }
+  document.addEventListener('click', e => {
+    const seat = e.target.closest('.player-seat');
+    if (seat && seat.id !== 'seat-bottom' && lastGameState && lastGameState.players && typeof seatOf === 'function') {
+      const idx = lastGameState.players.findIndex((p, i) => `seat-${seatOf(i)}` === seat.id);
+      if (idx !== -1 && lastGameState.players[idx].id !== myPlayerId) {
+        openSeatMenuFor(lastGameState.players[idx].name, seat);
+        return;
+      }
+    }
+    if (seatMenu && !seatMenu.contains(e.target)) closeSeatMenu();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSeatMenu(); });
+  socket.on('game_state', s => { if (!s || s.state === 'lobby') closeSeatMenu(); });
+
+  // ---------------------------------------------------------------------------
+  // Sorteio de quem dá as cartas (começo da partida)
+  // ---------------------------------------------------------------------------
+  let drawBox = null;
+  let drawShown = null;
+  const ROUND_GAP_MS = 1600;
+  function renderDraw(s) {
+    if (!s || s.state !== 'drawing' || !s.dealDraw) {
+      if (drawBox) drawBox.classList.add('hide');
+      drawShown = null;
+      return;
+    }
+    const d = s.dealDraw;
+    const key = `${s.id}:${d.id}`;
+    if (drawShown === key) return;
+    drawShown = key;
+    if (!drawBox) {
+      drawBox = document.createElement('div');
+      drawBox.className = 'draw-overlay hide';
+      drawBox.setAttribute('role', 'status');
+      drawBox.setAttribute('aria-live', 'polite');
+      document.body.appendChild(drawBox);
+    }
+    const me = s.players.find(p => p.id === myPlayerId);
+    const myTeam = me ? me.team : 0;
+    const nameOf = i => (s.players[i] ? s.players[i].name : '');
+    const rounds = d.rounds.map((draws, r) => {
+      const top = Math.max(...draws.map(x => x.card.value));
+      const tiles = draws.map((x, i) => {
+        const p = s.players[x.playerIdx] || {};
+        const delay = r * ROUND_GAP_MS + i * 220;
+        const isTop = x.card.value === top;
+        const winner = r === d.rounds.length - 1 && x.playerIdx === d.dealerIdx;
+        return `
+          <div class="draw-tile ${p.team === myTeam ? 'us' : 'them'} ${isTop ? 'top' : 'low'} ${winner ? 'winner' : ''}" style="--d:${delay}ms; --r:${(d.rounds.length - 1) * ROUND_GAP_MS + draws.length * 220 + 500}ms">
+            <div class="draw-flip"><span class="draw-back"></span><img class="draw-front" src="${getCardImgSrc(x.card)}" alt="${x.card.value} de ${x.card.suit}"></div>
+            <span class="draw-name">${escapeText(p.name || '')}${p.id === myPlayerId ? ' <small>(você)</small>' : ''}</span>
+            <b class="draw-num">${x.card.value}</b>
+          </div>`;
+      }).join('');
+      return `<div class="draw-round">${r > 0 ? '<small class="draw-tie"><i class="fa-solid fa-equals"></i> Empate no maior: desempate</small>' : ''}<div class="draw-row">${tiles}</div></div>`;
+    }).join('');
+    const resultDelay = (d.rounds.length - 1) * ROUND_GAP_MS + d.rounds[d.rounds.length - 1].length * 220 + 600;
+    drawBox.innerHTML = `
+      <div class="draw-panel">
+        <span class="draw-kicker"><i class="fa-solid fa-layer-group"></i> Sorteio</span>
+        <h3>Quem dá as cartas?</h3>
+        <p class="draw-sub">Cada um tira uma carta. A de maior <b>número</b> dá as cartas e começa como o pé
+          (aqui vale o número: 12 é a maior e 1 a menor).</p>
+        <div class="draw-rounds">${rounds}</div>
+        <p class="draw-result" style="--d:${resultDelay}ms"><i class="fa-solid fa-crown"></i>
+          <b>${escapeText(nameOf(d.dealerIdx))}</b> dá as cartas (é o pé) · <b>${escapeText(nameOf(d.mãoIdx))}</b> é mão e começa</p>
+      </div>`;
+    drawBox.classList.remove('hide');
+    if (window.soundManager && window.soundManager.playCardPlaySound) {
+      d.rounds.forEach((draws, r) => draws.forEach((_, i) => setTimeout(() => {
+        if (drawShown === key) window.soundManager.playCardPlaySound();
+      }, r * ROUND_GAP_MS + i * 220)));
+    }
+  }
+  socket.on('game_state', s => renderDraw(s));
 
   // ---------------------------------------------------------------------------
   // Pedido de troca de lugar

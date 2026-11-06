@@ -10,7 +10,7 @@
 //
 // Fácil erra de propósito, Médio pensa pouco e Difícil pensa bastante.
 
-const { createDeck } = require('./gameEngine');
+const { createDeck, calculateEnvidoScore, calculateFlorScore, shuffle } = require('./gameEngine');
 
 const DECK = createDeck();
 const cardKey = c => `${c.value}-${c.suit}`;
@@ -22,6 +22,33 @@ const LEVEL = {
 };
 
 const levelOf = player => LEVEL[player.difficulty] || LEVEL.medium;
+
+// Distribuição do envido de uma mão qualquer (sem Flor): ENVIDO_BELOW[s] = chance
+// de uma mão aleatória ter MENOS que s pontos. Calculada uma vez ao carregar.
+const ENVIDO_BELOW = (() => {
+  const counts = new Array(40).fill(0);
+  let n = 0;
+  for (let i = 0; i < 20000; i++) {
+    const hand = shuffle(createDeck()).slice(0, 3);
+    if (calculateFlorScore(hand) > 0) continue;
+    counts[calculateEnvidoScore(hand)]++;
+    n++;
+  }
+  const below = new Array(41).fill(0);
+  for (let s = 1; s <= 40; s++) below[s] = below[s - 1] + counts[s - 1] / n;
+  return below;
+})();
+const envidoBelow = s => ENVIDO_BELOW[Math.max(0, Math.min(40, s))];
+
+// Chance de o time ganhar a partida com esse placar (aproximação simples:
+// diferença de pontos pesa mais perto do fim)
+function matchWinChance(mine, theirs, limit) {
+  if (mine >= limit) return 1;
+  if (theirs >= limit) return 0;
+  const lead = (mine - theirs) / limit;
+  const urgency = 1 + Math.max(mine, theirs) / limit; // perto do fim cada ponto vale mais
+  return 1 / (1 + Math.exp(-3.2 * lead * urgency));
+}
 const rand = () => Math.random();
 
 // ---------------------------------------------------------------------------
@@ -329,9 +356,47 @@ function respondEnvido(game, idx) {
     if (mayRaise && score >= 32 && rand() < (hard ? 0.5 : 0.3)) return { action: 'envido_raise', value: 'falta_envido' };
     return score >= (hard ? 28 : 28) ? quero : corre;
   }
-  // Falta envido: perder pode custar o jogo, então só com muito ponto
-  const behind = game.score[oppTeam] - game.score[myTeam];
-  return score >= (behind >= 8 ? 28 : 30) ? quero : corre;
+  return respondFaltaEnvido(game, idx, score) ? quero : corre;
+}
+
+// Falta Envido: decide pela chance de ganhar a PARTIDA, não só o envido.
+// Antes o bot quase sempre corria, e pedir Falta virou um jeito fácil de ganhar
+// pontos. Agora ele compara aceitar (ganhar ou perder a falta) com correr
+// (dar os pontos acumulados) e desconfia de quem pede Falta toda hora.
+function respondFaltaEnvido(game, idx, score) {
+  const h = game.hand;
+  const player = game.players[idx];
+  const myTeam = player.team;
+  const oppTeam = 1 - myTeam;
+  const limit = limitOf(game);
+  const falta = game.faltaPoints ? game.faltaPoints() : Math.max(1, limit - Math.max(game.score[0], game.score[1]));
+  const refuse = h.envidoPointsBeforeLastRaise || 1;
+
+  // Quantas vezes o outro time já pediu Falta nesta partida (blefe frequente?)
+  const memo = game.botMemo || (game.botMemo = { falta: [0, 0] });
+  const calls = memo.falta[oppTeam] || 0;
+
+  // Chance de o nosso envido ganhar: contra 1 ou 2 adversários (duplas)
+  const opponents = game.players.filter((p, i) => p.team === oppTeam && !h.foldedPlayers.has(i) && !p.hasFlor).length || 1;
+  let p = Math.pow(envidoBelow(score), opponents);
+  // Quem pede Falta costuma ter ponto; quanto mais pede, menos isso vale
+  const trust = Math.max(0.4, 0.8 - 0.12 * calls);
+  p = p * (1 - trust * 0.25) + (score >= 31 ? 0.12 : 0);
+  if (player.difficulty === 'medium') p += (rand() - 0.5) * 0.1;
+  p = Math.max(0, Math.min(1, p));
+
+  const now = game.score;
+  const acceptWin = matchWinChance(now[myTeam] + falta, now[oppTeam], limit);
+  const acceptLose = matchWinChance(now[myTeam], now[oppTeam] + falta, limit);
+  const accept = p * acceptWin + (1 - p) * acceptLose;
+  const fold = matchWinChance(now[myTeam], now[oppTeam] + refuse, limit);
+  return accept >= fold - (player.difficulty === 'hard' ? 0 : 0.02);
+}
+
+// Lembra quem pediu Falta Envido (para o bot perceber quem abusa)
+function noteFaltaCall(game, team) {
+  const memo = game.botMemo || (game.botMemo = { falta: [0, 0] });
+  memo.falta[team] = (memo.falta[team] || 0) + 1;
 }
 
 function wantsEnvido(game, idx) {
@@ -360,15 +425,20 @@ function respondFlor(game, idx) {
   const call = h.florHistory[h.florHistory.length - 1];
   const score = player.florScore;
 
+  // Por cima de uma Flor não existe "Quero": aumenta (Contra-Flor) ou achica
+  if (call === 'flor') {
+    if (player.difficulty === 'easy') {
+      return rand() < 0.6 ? { action: 'flor_raise', value: 'contra_flor' } : { action: 'flor_response', value: 'nao_quero' };
+    }
+    const hard = player.difficulty === 'hard';
+    if (score >= 33 && rand() < 0.4) return { action: 'flor_raise', value: 'contra_flor_resto' };
+    if (score >= (hard ? 27 : 28)) return { action: 'flor_raise', value: 'contra_flor' };
+    return { action: 'flor_response', value: 'nao_quero' };
+  }
   if (player.difficulty === 'easy') {
     return { action: 'flor_response', value: rand() < 0.7 ? 'quero' : 'nao_quero' };
   }
   const hard = player.difficulty === 'hard';
-  if (call === 'flor') {
-    if (score >= 32 && rand() < 0.4) return { action: 'flor_raise', value: 'contra_flor_resto' };
-    if (score >= (hard ? 28 : 29)) return { action: 'flor_raise', value: 'contra_flor' };
-    return { action: 'flor_response', value: 'quero' };
-  }
   if (call === 'contra_flor') {
     return { action: 'flor_response', value: score >= (hard ? 29 : 30) ? 'quero' : 'nao_quero' };
   }
@@ -431,5 +501,9 @@ function handleBotAction(game, playerIdx) {
 
 module.exports = {
   handleBotAction,
-  estimateWinChance
+  estimateWinChance,
+  respondFaltaEnvido,
+  noteFaltaCall,
+  matchWinChance,
+  envidoBelow
 };

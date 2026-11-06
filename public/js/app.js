@@ -261,10 +261,31 @@ if (!DECK_PREVIEWS[currentDeckStyle]) currentDeckStyle = 'traditional';
 
 let currentPreviewSlideIndex = 0;
 
-// Troca as cartas da prévia com uma virada rápida (uma carta de cada vez)
-const PREVIEW_FLIP_MS = 420;
-const PREVIEW_STAGGER_MS = 80;
+// Nome e descrição de cada baralho, embaixo da prévia
+const DECK_INFO = {
+  traditional: 'O baralho espanhol de sempre',
+  pixel: 'Estilo videogame antigo',
+  classico: 'Desenhos limpos e coloridos',
+  frances: 'Naipes do pôquer, em pixel'
+};
+
+// Prévia: trocar de exemplo vira as cartas em 3D, uma de cada vez; trocar de
+// baralho recolhe as cartas e distribui as do baralho novo. Sozinha, a prévia
+// passa pelos exemplos a cada poucos segundos (para quando o mouse está em cima).
+const PREVIEW_FLIP_MS = 520;
+const PREVIEW_STAGGER_MS = 110;
+const PREVIEW_COLLECT_MS = 230;
 let previewFlipTimers = [];
+
+function paintPreviewMeta() {
+  const caption = document.getElementById('deck-preview-caption');
+  if (caption) caption.textContent = DECK_INFO[currentDeckStyle] || '';
+  document.querySelectorAll('#deck-preview-dots [data-slide]').forEach(dot => {
+    const on = Number(dot.dataset.slide) === currentPreviewSlideIndex;
+    dot.classList.toggle('active', on);
+    dot.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
 
 function updateDeckPreview(animate = false) {
   const slide = DECK_PREVIEWS[currentDeckStyle][currentPreviewSlideIndex];
@@ -272,9 +293,11 @@ function updateDeckPreview(animate = false) {
   const imgs = [deckPreviewImg1, deckPreviewImg2, deckPreviewImg3];
   const rendering = PIXELATED_DECKS.includes(currentDeckStyle) ? 'pixelated' : 'auto';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mode = animate === true ? 'flip' : animate;
 
   previewFlipTimers.forEach(clearTimeout);
   previewFlipTimers = [];
+  paintPreviewMeta();
 
   imgs.forEach((img, i) => {
     if (!img) return;
@@ -282,13 +305,28 @@ function updateDeckPreview(animate = false) {
       img.src = slide[i];
       img.style.imageRendering = rendering;
     };
-    if (!animate || reduceMotion) {
+    img.classList.remove('flipping', 'collecting', 'dealing');
+    if (!mode || reduceMotion) {
       apply();
       return;
     }
     new Image().src = slide[i]; // já começa a baixar a imagem nova
-    img.classList.remove('flipping');
     void img.offsetWidth;
+    if (mode === 'deal') {
+      // Recolhe para o meio, troca e distribui de novo em leque
+      img.style.animationDelay = '0ms';
+      img.classList.add('collecting');
+      previewFlipTimers.push(setTimeout(() => {
+        apply();
+        img.classList.remove('collecting');
+        void img.offsetWidth;
+        img.style.animationDelay = `${i * PREVIEW_STAGGER_MS}ms`;
+        img.classList.add('dealing');
+      }, PREVIEW_COLLECT_MS));
+      previewFlipTimers.push(setTimeout(() => img.classList.remove('dealing'),
+        PREVIEW_COLLECT_MS + i * PREVIEW_STAGGER_MS + 600));
+      return;
+    }
     img.style.animationDelay = `${i * PREVIEW_STAGGER_MS}ms`;
     img.classList.add('flipping');
     // Troca a imagem quando a carta está de lado (metade da virada)
@@ -298,19 +336,33 @@ function updateDeckPreview(animate = false) {
   });
 }
 
-if (prevPreviewBtn) {
-  prevPreviewBtn.addEventListener('click', () => {
-    currentPreviewSlideIndex = (currentPreviewSlideIndex - 1 + 3) % 3;
-    updateDeckPreview(true);
-  });
+function goToPreviewSlide(i) {
+  currentPreviewSlideIndex = (i + 3) % 3;
+  updateDeckPreview('flip');
+  lastPreviewTouch = Date.now();
 }
 
-if (nextPreviewBtn) {
-  nextPreviewBtn.addEventListener('click', () => {
-    currentPreviewSlideIndex = (currentPreviewSlideIndex + 1) % 3;
-    updateDeckPreview(true);
-  });
+if (prevPreviewBtn) prevPreviewBtn.addEventListener('click', () => goToPreviewSlide(currentPreviewSlideIndex - 1));
+if (nextPreviewBtn) nextPreviewBtn.addEventListener('click', () => goToPreviewSlide(currentPreviewSlideIndex + 1));
+document.querySelectorAll('#deck-preview-dots [data-slide]').forEach(dot => {
+  dot.addEventListener('click', () => goToPreviewSlide(Number(dot.dataset.slide)));
+});
+
+// Passa sozinha pelos exemplos (só na tela inicial, com a aba visível e sem o mouse em cima)
+let lastPreviewTouch = Date.now();
+let previewHover = false;
+const previewBox = document.querySelector('.deck-preview-container');
+if (previewBox) {
+  previewBox.addEventListener('mouseenter', () => { previewHover = true; });
+  previewBox.addEventListener('mouseleave', () => { previewHover = false; });
 }
+setInterval(() => {
+  const onHome = document.getElementById('screen-lobby') && document.getElementById('screen-lobby').classList.contains('active');
+  if (!onHome || previewHover || document.hidden || Date.now() - lastPreviewTouch < 5500) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  currentPreviewSlideIndex = (currentPreviewSlideIndex + 1) % 3;
+  updateDeckPreview('flip');
+}, 6000);
 
 function updateBodyDeckStyle() {
   document.body.setAttribute('data-deck-style', currentDeckStyle);
@@ -351,9 +403,11 @@ deckOptions.forEach(btn => {
   btn.addEventListener('click', (e) => {
     deckOptions.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    if (currentDeckStyle === btn.dataset.deck) return;
     currentDeckStyle = btn.dataset.deck;
     localStorage.setItem('truco_deck_style', currentDeckStyle);
-    updateDeckPreview(true);
+    lastPreviewTouch = Date.now();
+    updateDeckPreview('deal');
     updateBodyDeckStyle();
     preloadDeck(currentDeckStyle);
   });
@@ -613,9 +667,13 @@ socket.on('game_state', (gameState) => {
   document.body.classList.toggle('spectating', !!gameState.spectating);
   currentRoomMode = gameState.mode;
 
-  if (gameEndTimeout) {
-    clearTimeout(gameEndTimeout);
+  // Saiu do fim de jogo (voltou para a sala, etc.): esquece a contagem
+  if (gameState.state !== 'game_end') {
+    if (gameEndTimeout) clearTimeout(gameEndTimeout);
     gameEndTimeout = null;
+    endScheduledKey = null;
+    endShownKey = null;
+    hideEndCountdown();
   }
 
   // Atualizar visualizações com base no estado do jogo
@@ -625,7 +683,7 @@ socket.on('game_state', (gameState) => {
     if (window.soundManager) {
       window.soundManager.changeMusic(window.TRUCO_MUSIC.home); // mesma música do início, sem recomeçar
     }
-  } else if (gameState.state === 'playing' || gameState.state === 'hand_end') {
+  } else if (gameState.state === 'playing' || gameState.state === 'hand_end' || gameState.state === 'drawing') {
     document.body.setAttribute('data-screen', 'game');
     renderGameScreen(gameState);
     if (window.soundManager) {
@@ -633,17 +691,70 @@ socket.on('game_state', (gameState) => {
     }
   } else if (gameState.state === 'game_end') {
     document.body.setAttribute('data-screen', 'game_end');
-    // Renderiza a mesa de jogo para mostrar o estado final do jogo por 6 segundos
-    renderGameScreen(gameState);
-    gameEndTimeout = setTimeout(() => {
+    const key = `${gameState.id}:${gameState.winner}:${gameState.score[0]}-${gameState.score[1]}`;
+    if (endShownKey === key) {
+      // Já está na tela de vitória/derrota: só atualiza
       renderGameEndScreen(gameState);
-      gameEndTimeout = null;
-    }, 6000);
-    if (window.soundManager) {
-      window.soundManager.changeMusic(null);
+    } else if (endScheduledKey === key) {
+      // Contagem em andamento: atualizações (chat, alguém saindo) não reiniciam o tempo
+      renderGameScreen(gameState);
+    } else {
+      // Mostra a mesa com a última jogada por alguns segundos, com um aviso bem
+      // visível e o botão para ir direto ao resultado
+      endScheduledKey = key;
+      renderGameScreen(gameState);
+      showEndCountdown(gameState, END_DELAY_MS);
+      gameEndTimeout = setTimeout(() => showEndScreenNow(), END_DELAY_MS);
+      if (window.soundManager) {
+        window.soundManager.changeMusic(null);
+      }
     }
   }
 });
+
+// --- FIM DE JOGO: contagem curta até a tela de vitória/derrota ---
+const END_DELAY_MS = 3500;
+let endScheduledKey = null;
+let endShownKey = null;
+let endCountdownEl = null;
+
+function showEndScreenNow() {
+  if (gameEndTimeout) clearTimeout(gameEndTimeout);
+  gameEndTimeout = null;
+  if (!lastGameState || lastGameState.state !== 'game_end') return;
+  hideEndCountdown();
+  endShownKey = endScheduledKey;
+  renderGameEndScreen(lastGameState);
+}
+
+function showEndCountdown(gameState, ms) {
+  if (!endCountdownEl) {
+    endCountdownEl = document.createElement('div');
+    endCountdownEl.className = 'end-countdown hide';
+    endCountdownEl.setAttribute('role', 'status');
+    endCountdownEl.setAttribute('aria-live', 'assertive');
+    document.body.appendChild(endCountdownEl);
+    endCountdownEl.addEventListener('click', e => {
+      if (e.target.closest('[data-end-now]')) showEndScreenNow();
+    });
+  }
+  const { us } = myTeams(gameState);
+  const won = gameState.winner === us;
+  endCountdownEl.className = `end-countdown ${won ? 'won' : 'lost'}`;
+  endCountdownEl.style.setProperty('--end-ms', `${ms}ms`);
+  endCountdownEl.innerHTML = `
+    <i class="fa-solid ${won ? 'fa-trophy' : 'fa-flag-checkered'} end-countdown-icon"></i>
+    <div class="end-countdown-text">
+      <b>${won ? '¡Vencemos a partida!' : 'Fim de partida: perdemos'}</b>
+      <small>${escapeText(teamLabel(gameState, 0))} ${gameState.score[0]} × ${gameState.score[1]} ${escapeText(teamLabel(gameState, 1))} · resultado em instantes</small>
+      <span class="end-countdown-bar"><span></span></span>
+    </div>
+    <button type="button" class="btn btn-sm btn-primary" data-end-now>Ver resultado</button>`;
+}
+
+function hideEndCountdown() {
+  if (endCountdownEl) endCountdownEl.classList.add('hide');
+}
 
 // --- RENDERIZAÇÃO DA SALA DE ESPERA (LOBBY) ---
 function renderLobbyScreen(gameState) {
@@ -819,7 +930,7 @@ function renderGameScreen(gameState) {
     phaseBadge.textContent = 'Fim de Jogo';
     phaseBadge.style.background = '#8e44ad';
   } else if (gameState.state === 'hand_end' || !gameState.hand) {
-    phaseBadge.textContent = 'Fim da Mão';
+    phaseBadge.textContent = gameState.state === 'drawing' ? 'Sorteio' : 'Fim da Mão';
     phaseBadge.style.background = '#8e44ad';
   } else {
     phaseBadge.textContent = `Rodada ${gameState.hand.currentRound + 1}`;
@@ -1710,7 +1821,7 @@ function updateAlertBanner(gameState) {
       ? 'Contra-Flor! Vale 6 para a maior Flor. Queres?'
       : hand.florState === 'contra_flor_resto'
         ? `Contra-Flor e o Resto! Vale ${hand.florPointsAtStake} para a maior Flor. Queres?`
-        : 'Flor cantada! Quero, Contra-Flor ou Achique?';
+        : 'Cantaram Flor e você também tem! Contra-Flor ou Achique?';
     gameAlertBanner.classList.remove('hide');
     return;
   }
@@ -1887,9 +1998,12 @@ function setupActionButtons(gameState) {
 
   if (hand.florResponsePending && hand.florPendingTeam === myTeam && myPlayer.hasFlor) {
     if (statusEl) statusEl.classList.add('hide');
-    // Quero: disputa a Flor/Contra-Flor (ganha a maior). Dá para aumentar só para cima.
-    groupResponse.classList.remove('hide');
-    showAndEnableButton(btnQuero);
+    // Por cima de uma Flor: só Contra-Flor, Contra-Flor e o Resto ou Achique.
+    // "Quero" só existe depois de uma Contra-Flor (disputa a maior).
+    if (hand.florState !== 'flor') {
+      groupResponse.classList.remove('hide');
+      showAndEnableButton(btnQuero);
+    }
     groupFlorResponse.classList.remove('hide');
     if (hand.florState === 'flor') showAndEnableButton(btnContraFlor);
     if (hand.florState !== 'contra_flor_resto') showAndEnableButton(btnContraFlorResto);

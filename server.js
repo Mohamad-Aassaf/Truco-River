@@ -154,6 +154,7 @@ function deleteRoom(roomId) {
   if (botTimers[roomId]) { clearTimeout(botTimers[roomId]); delete botTimers[roomId]; }
   if (nextHandTimers[roomId]) { clearTimeout(nextHandTimers[roomId]); delete nextHandTimers[roomId]; }
   if (game.turnTimer) clearTimeout(game.turnTimer);
+  if (game.drawTimer) clearTimeout(game.drawTimer);
   delete activeGames[roomId];
   console.log(`Sala ${roomId} sem jogadores de verdade apagada.`);
 }
@@ -163,7 +164,7 @@ setInterval(sweepRooms, 20000).unref();
 // Contador do lobby: jogadores online e partidas em andamento.
 // Vai para quem está no lobby a cada 5s, só quando o número muda.
 function onlineStats() {
-  const playing = Object.values(activeGames).filter(g => (g.state === 'playing' || g.state === 'hand_end') && hasLiveHuman(g)).length;
+  const playing = Object.values(activeGames).filter(g => (g.state === 'playing' || g.state === 'hand_end' || g.state === 'drawing') && hasLiveHuman(g)).length;
   return { online: io.engine.clientsCount, playing };
 }
 let lastStatsKey = '';
@@ -198,9 +199,10 @@ function removeFromRoom(roomId, socketId) {
   if (!leaving) return;
   if (leaving.reconnectTimer) clearTimeout(leaving.reconnectTimer);
 
-  // Quem abandona uma partida em andamento leva a derrota
-  if (leaving.account && (game.state === 'playing' || game.state === 'hand_end')) {
+  // Quem abandona uma partida em andamento leva a derrota (só vale contra gente de verdade)
+  if (leaving.account && countsForStats(game, leaving) && (game.state === 'playing' || game.state === 'hand_end')) {
     accounts.recordResult(leaving.account, false);
+    social.refreshAccount(leaving.account);
   }
   game.removePlayer(socketId);
 
@@ -213,6 +215,36 @@ function removeFromRoom(roomId, socketId) {
     runBotLogic(roomId);
   }
   io.to('lobby').emit('available_rooms', listRooms());
+}
+
+// Partidas e vitórias só contam contra jogadores de verdade: o time adversário
+// não pode ter bot no começo da partida (quem sai e vira bot depois não muda isso)
+function countsForStats(game, p) {
+  return !!(game.statsTeams && game.statsTeams[1 - p.team]);
+}
+
+// Começa a partida: sorteio de quem dá as cartas e, depois de mostrar as cartas
+// tiradas, a primeira mão
+const DRAW_MS = process.env.DRAW_MS !== undefined ? Number(process.env.DRAW_MS) : 4200;
+function startMatch(roomId) {
+  const game = activeGames[roomId];
+  if (!game) return;
+  // Partida nova sempre começa do zero, venha de onde vier
+  game.resetMatch();
+  game.statsRecorded = false;
+  game.botMemo = null;
+  game.statsTeams = [0, 1].map(t => game.players.filter(p => p.team === t).every(p => !p.isBot));
+  game.drawForDealer();
+  const startHand = () => {
+    game.drawTimer = null;
+    if (activeGames[roomId] !== game || game.state !== 'drawing') return;
+    game.startNewHand();
+    broadcastState(roomId);
+    runBotLogic(roomId);
+  };
+  if (DRAW_MS <= 0) return startHand();
+  // Cada desempate mostra mais uma rodada de cartas
+  game.drawTimer = setTimeout(startHand, DRAW_MS + (game.dealDraw.rounds.length - 1) * 1600);
 }
 
 function generateUniqueRoomId() {
@@ -236,7 +268,10 @@ function broadcastState(roomId) {
   if (game.state === 'game_end' && !game.statsRecorded) {
     game.statsRecorded = true;
     game.players.forEach(p => {
-      if (p.account && !p.isBot) accounts.recordResult(p.account, p.team === game.winner);
+      if (p.account && !p.isBot && countsForStats(game, p)) {
+        accounts.recordResult(p.account, p.team === game.winner);
+        social.refreshAccount(p.account); // o placar de vitórias aparece na hora
+      }
     });
   }
 
@@ -270,7 +305,7 @@ function broadcastState(roomId) {
     state.logs = resetLogs ? game.gameLogs : game.gameLogs.filter(l => l.seq > since);
     state.logsReset = resetLogs;
     target.logSentSeq = lastSeq;
-    if (game.state === 'playing' || game.state === 'lobby') state.lastHandSummary = null;
+    if (game.state === 'playing' || game.state === 'lobby' || game.state === 'drawing') state.lastHandSummary = null;
     state.nextHandIn = nextHandIn;
     state.turn = turn;
     state.turnTimerOff = !!game.noTurnTimer;
@@ -364,9 +399,13 @@ function turnTimeout(roomId, key) {
   } else if (kind === 'sing') {
     decision = { action: 'call_flor' };
     game.log(`${p.name} demorou: a Flor foi cantada automaticamente.`, p.team);
+  } else if (kind === 'flor' && h.florState === 'flor') {
+    // Flor x Flor: sem resposta, achica
+    decision = { action: 'flor_response', value: 'nao_quero' };
+    game.log(`${p.name} demorou: achicou a Flor.`, p.team);
   } else if (kind === 'flor') {
     decision = { action: 'flor_response', value: 'quero' };
-    game.log(`${p.name} demorou: aceitou a Flor automaticamente.`, p.team);
+    game.log(`${p.name} demorou: aceitou a Contra-Flor automaticamente.`, p.team);
   } else if (kind === 'envido') {
     decision = { action: 'envido_response', value: 'nao_quero' };
     game.log(`${p.name} demorou: não quis o Envido.`, p.team);
@@ -454,6 +493,8 @@ function botFallback(g, idx) {
 // Executa ações dos jogadores (humanos ou bots)
 function executeGameAction(game, playerIdx, decision) {
   const { action, value } = decision;
+  // Os bots lembram quem pede Falta Envido (para não cair sempre no mesmo truque)
+  if (value === 'falta_envido' && game.players[playerIdx]) bot.noteFaltaCall(game, game.players[playerIdx].team);
 
   // Envido/Flor pendente tem prioridade: ninguém responde ou aumenta o Truco antes
   const betPending = game.hand && (game.hand.envidoResponsePending || game.hand.florResponsePending);
@@ -810,8 +851,7 @@ io.on('connection', (socket) => {
       // Se todos estiverem prontos e a sala estiver cheia, inicia o jogo
       const allReady = game.players.every(player => player.ready);
       if (allReady && game.players.length === game.maxPlayers) {
-        game.startNewHand();
-        runBotLogic(currentRoomId);
+        startMatch(currentRoomId);
       }
 
       broadcastState(currentRoomId);
@@ -1024,16 +1064,9 @@ io.on('connection', (socket) => {
     if (!game || game.state !== 'game_end') return;
 
     // Reinicia scores
-    game.score[0] = 0;
-    game.score[1] = 0;
-    game.winner = null;
+    game.resetMatch();
     game.statsRecorded = false;
-    game.lastHandSummary = null;
     game.dealerIndex = 0;
-    game.hand = null;
-    game.handNumber = 0;
-    game.gameStartedAt = null;
-    game.finalBlow = null;
     if (game.turnTimer) clearTimeout(game.turnTimer);
     game.turn = null;
 

@@ -374,7 +374,7 @@
     btn.disabled = true;
     const event = {
       accept: 'friends:respond', decline: 'friends:respond', cancel: 'friends:cancel',
-      remove: 'friends:remove', invite: 'friends:invite'
+      remove: 'friends:remove', invite: 'friends:invite', add: 'friends:request'
     }[act];
     const res = await friendAction(event, user, act === 'accept' || act === 'decline' ? { accept: act === 'accept' } : {});
     btn.disabled = false;
@@ -389,6 +389,40 @@
         btn.disabled = true;
       }
     }
+    if (act === 'add' || btn.closest('#friend-search-results')) runSearch();
+  });
+
+  // Busca enquanto digita (nome parecido já aparece)
+  const RELATION_BTN = {
+    none: u => `<button class="btn btn-sm btn-primary" data-act="add" data-user="${escapeHtml(u)}"><i class="fa-solid fa-user-plus"></i> Adicionar</button>`,
+    sent: () => '<span class="friend-tag">Pedido enviado</span>',
+    received: u => `<button class="btn btn-sm btn-primary" data-act="accept" data-user="${escapeHtml(u)}">Aceitar pedido</button>`,
+    friend: () => '<span class="friend-tag ok"><i class="fa-solid fa-check"></i> Amigo</span>'
+  };
+  let searchTimer = null;
+  let searchSeq = 0;
+  function runSearch() {
+    const q = $('add-friend-input').value.trim();
+    const box = $('friend-search-results');
+    if (q.length < 2) { box.classList.add('hide'); box.innerHTML = ''; return; }
+    const seq = ++searchSeq;
+    socket.emit('friends:search', { query: q }, res => {
+      if (seq !== searchSeq) return;
+      const list = (res && res.results) || [];
+      box.classList.remove('hide');
+      box.innerHTML = list.length
+        ? list.map(r => `
+          <li class="friend-item ${r.online ? 'status-lobby' : 'status-offline'}">
+            ${avatarHtml(r.username)}
+            <div class="friend-info"><b>${escapeHtml(r.username)}</b><small><i class="status-dot"></i>${r.online ? 'Online' : 'Offline'}</small></div>
+            <div class="friend-actions">${(RELATION_BTN[r.relation] || RELATION_BTN.none)(r.username)}</div>
+          </li>`).join('')
+        : '<li class="friend-empty">Ninguém com esse nome. Só jogadores com conta aparecem aqui.</li>';
+    });
+  }
+  $('add-friend-input').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 220);
   });
 
   $('add-friend-form').addEventListener('submit', async e => {
@@ -401,12 +435,15 @@
     msg.textContent = res.error || res.message || '';
     msg.className = `form-msg ${res.error ? 'error' : 'ok'}`;
     if (!res.error) input.value = '';
+    runSearch();
   });
 
   function openFriends() {
     if (!me) return openAuth('register');
     [...openToasts.keys()].filter(k => k.startsWith('req:')).forEach(dismissToast);
     $('add-friend-msg').textContent = '';
+    $('add-friend-input').value = '';
+    $('friend-search-results').classList.add('hide');
     renderFriends();
     openModal('modal-friends');
   }
@@ -430,6 +467,7 @@
     if (state.user) me = state.user;
     renderAccount();
     renderFriends();
+    window.dispatchEvent(new Event('truco:social')); // atualiza os botões de amizade na sala/mesa
 
     // Pedido respondido: some o aviso dele
     if (prevIn) prevIn.filter(n => !state.requestsIn.includes(n)).forEach(n => dismissToast('req:' + n));
@@ -495,5 +533,27 @@
   renderAccount();
 
   // Usado por outros scripts (ex.: atualizar a lista ao trocar de tela)
-  window.trucoSocial = { openAuth, openFriends, toast, dismissToast };
+  // Relação com outro jogador (para os botões de "Adicionar amigo" na sala e na mesa)
+  function relationWith(name) {
+    if (!me) return 'guest';
+    const k = String(name || '').toLowerCase();
+    const has = list => (list || []).some(n => String(n.username || n).toLowerCase() === k);
+    if (String(me.username).toLowerCase() === k) return 'self';
+    if (!socialState) return 'none';
+    if (has(socialState.friends)) return 'friend';
+    if (has(socialState.requestsOut)) return 'sent';
+    if (has(socialState.requestsIn)) return 'received';
+    return 'none';
+  }
+  async function requestFriend(name) {
+    if (!me) { openAuth('login'); return { error: 'Entre na sua conta para adicionar amigos.' }; }
+    const rel = relationWith(name);
+    const res = rel === 'received'
+      ? await friendAction('friends:respond', name, { accept: true })
+      : await friendAction('friends:request', name);
+    toast(escapeHtml(res.error || res.message || 'Pedido enviado.'), { kind: res.error ? 'error' : '' });
+    return res;
+  }
+
+  window.trucoSocial = { openAuth, openFriends, toast, dismissToast, relationWith, requestFriend, isLogged: () => !!me };
 })();

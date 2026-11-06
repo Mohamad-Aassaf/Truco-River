@@ -2593,13 +2593,13 @@ body.spectating .player-hand .card { cursor: default; }
 
 /* Engrenagem de ajustes também no celular, fora da mesa */
 @media (max-width: 850px), (max-height: 500px) and (orientation: landscape) {
-  body:not([data-screen="game"]) .audio-controls-panel {
+  body:not([data-screen="game"]):not([data-screen="game_end"]) .audio-controls-panel {
     display: flex !important;
     position: fixed;
     top: 10px;
     right: 10px;
   }
-  body:not([data-screen="game"]) .audio-controls-panel .audio-btn { width: 36px; height: 36px; font-size: 0.95rem; }
+  body:not([data-screen="game"]):not([data-screen="game_end"]) .audio-controls-panel .audio-btn { width: 36px; height: 36px; font-size: 0.95rem; }
   /* Relógio compacto no canto direito, acima das cartas (o nome do lugar fica no meio) */
   .turn-timer { top: -30px; right: 4px; left: auto; transform: none; flex-direction: row; gap: 8px; padding: 4px 10px; width: auto; white-space: nowrap; border-radius: var(--radius-pill); }
   .turn-timer-bar { width: 46px; }
@@ -2874,4 +2874,250 @@ body.spectating .player-hand .card { cursor: default; }
 
 @media (prefers-reduced-motion: reduce) {
   .proof-badge { animation: none; }
+}
+
+/* ==========================================================================
+   Prévia do baralho: virada 3D, distribuição ao trocar e indicadores
+   ========================================================================== */
+.deck-preview-cards { perspective: 700px; }
+.preview-card-img { will-change: rotate, translate; }
+.preview-card-img.flipping { animation: previewFlip3d 0.52s cubic-bezier(0.45, 0, 0.25, 1) both; }
+.preview-card-img.collecting { animation: previewCollect 0.23s ease-in both; }
+.preview-card-img.dealing { animation: previewDeal 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.15) both; }
+.preview-card-img:nth-child(1) { --to-x: 52px; }
+.preview-card-img:nth-child(3) { --to-x: -52px; }
+@keyframes previewFlip3d {
+  0%   { rotate: y 0deg; }
+  50%  { rotate: y 90deg; filter: brightness(0.6); }
+  100% { rotate: y 0deg; }
+}
+@keyframes previewCollect {
+  to { translate: var(--to-x, 0) 10px; scale: 0.82; opacity: 0; }
+}
+@keyframes previewDeal {
+  from { translate: 0 34px; scale: 0.6; opacity: 0; }
+  to   { translate: 0 0; scale: 1; opacity: 1; }
+}
+.deck-preview-cards:hover .preview-card-img:nth-child(2) { transform: translateY(-10px) scale(1.04); }
+.deck-preview-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.deck-preview-caption { font-size: 0.78rem; color: var(--text-muted); min-height: 1.1em; }
+.deck-preview-dots { display: inline-flex; gap: 6px; }
+.deck-preview-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(223, 177, 91, 0.5);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s, width 0.2s;
+}
+.deck-preview-dots button.active { width: 18px; border-radius: 4px; background: var(--gold); }
+
+/* ==========================================================================
+   Amigos: busca por nome parecido e botões na sala/mesa
+   ========================================================================== */
+.friend-search-hint { margin: 6px 2px 0; font-size: 0.74rem; color: var(--text-dim); text-align: left; }
+.friends-list.search-results { margin-top: 8px; max-height: 240px; overflow-y: auto; }
+.friend-empty { list-style: none; padding: 10px; font-size: 0.82rem; color: var(--text-muted); text-align: center; }
+.friend-tag { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.friend-tag.ok { color: #7ee2a8; }
+.tp-add-friend { color: #7ee2a8; }
+.tp-friend { display: inline-flex; align-items: center; justify-content: center; width: 28px; color: #7ee2a8; font-size: 0.8rem; }
+
+body[data-screen="game"] .player-seat:not(#seat-bottom) { cursor: pointer; }
+.seat-menu {
+  position: fixed;
+  z-index: 2600;
+  min-width: 190px;
+  max-width: 260px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+.seat-menu.hide { display: none; }
+.seat-menu-name { color: var(--cream); font-size: 0.95rem; }
+.seat-menu p { margin: 0; }
+.seat-menu p.ok { color: #7ee2a8; }
+
+/* ==========================================================================
+   Sorteio de quem dá as cartas
+   ========================================================================== */
+.draw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 6, 3, 0.72);
+  animation: drawFade 0.25s ease both;
+}
+.draw-overlay.hide { display: none; }
+.draw-panel {
+  width: min(560px, 100%);
+  padding: 22px 20px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-2);
+  text-align: center;
+}
+.draw-kicker {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(223, 177, 91, 0.15);
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.draw-panel h3 { font-family: var(--font-title); color: var(--gold); font-size: 1.5rem; margin: 8px 0 4px; }
+.draw-sub { font-size: 0.82rem; color: var(--text-muted); margin: 0 auto 14px; max-width: 420px; }
+.draw-rounds { display: flex; flex-direction: column; gap: 12px; }
+.draw-tie { display: block; font-size: 0.72rem; color: #f1c40f; font-weight: 700; margin-bottom: 6px; }
+.draw-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.draw-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 92px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--hairline);
+  border-top: 3px solid var(--team-us);
+  transition: opacity 0.4s, filter 0.4s;
+}
+.draw-tile.them { border-top-color: var(--team-them); }
+.draw-flip {
+  position: relative;
+  width: 64px;
+  height: 96px;
+  perspective: 600px;
+}
+.draw-flip > * {
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
+  backface-visibility: hidden;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+.draw-back {
+  background: url('/Baralho_Espanhol_Organizado/verso.png') center / cover, #1c2833;
+  border: 1.5px solid var(--gold-dark);
+  animation: drawBack 0.6s var(--d, 0ms) ease-in-out both;
+}
+.draw-front {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+  border: 1.5px solid var(--gold-dark);
+  animation: drawFront 0.6s var(--d, 0ms) ease-in-out both;
+}
+body[data-deck-style="pixel"] .draw-front,
+body[data-deck-style="frances"] .draw-front { image-rendering: pixelated; }
+.draw-name { font-size: 0.78rem; font-weight: 700; color: var(--cream); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draw-name small { color: var(--text-muted); font-weight: 600; }
+.draw-num {
+  font-size: 1.05rem;
+  color: var(--gold-bright);
+  animation: drawFade 0.3s calc(var(--d, 0ms) + 350ms) both;
+}
+.draw-tile.low { animation: drawDim 0.4s var(--r, 2000ms) both; }
+.draw-tile.winner {
+  animation: drawWin 0.5s var(--r, 2000ms) both;
+}
+.draw-result {
+  margin: 14px 0 0;
+  font-size: 0.9rem;
+  color: var(--cream);
+  animation: drawFade 0.4s var(--d, 2000ms) both;
+}
+.draw-result i { color: var(--gold); margin-right: 4px; }
+@keyframes drawBack { 0% { rotate: y 0deg; } 100% { rotate: y 180deg; } }
+@keyframes drawFront { 0% { rotate: y -180deg; } 100% { rotate: y 0deg; } }
+@keyframes drawFade { from { opacity: 0; } }
+@keyframes drawDim { to { opacity: 0.55; filter: grayscale(0.4); } }
+@keyframes drawWin {
+  to {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px rgba(223, 177, 91, 0.5), 0 0 18px rgba(223, 177, 91, 0.45);
+    background: rgba(223, 177, 91, 0.12);
+  }
+}
+@media (max-width: 480px) {
+  .draw-panel h3 { font-size: 1.25rem; }
+  .draw-row { gap: 8px; }
+  .draw-tile { width: 74px; }
+  .draw-flip { width: 52px; height: 78px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .draw-back { animation: none; opacity: 0; }
+  .draw-front, .draw-num, .draw-result, .draw-overlay,
+  .preview-card-img.flipping, .preview-card-img.collecting, .preview-card-img.dealing { animation: none; }
+  .draw-tile.low { animation: none; opacity: 0.55; }
+}
+
+/* ==========================================================================
+   Fim de partida: aviso com contagem até a tela de vitória/derrota
+   ========================================================================== */
+.end-countdown {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(460px, calc(100vw - 32px));
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--panel-bg);
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.35), 0 18px 50px rgba(0, 0, 0, 0.7);
+  animation: endPop 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.2) both;
+}
+.end-countdown.hide { display: none; }
+.end-countdown.lost { border-color: #e74c3c; }
+.end-countdown-icon { font-size: 2rem; color: var(--gold-bright); flex-shrink: 0; }
+.end-countdown.lost .end-countdown-icon { color: #ff8a7a; }
+.end-countdown-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.end-countdown-text b { font-family: var(--font-title); font-size: 1.25rem; color: var(--gold); }
+.end-countdown.lost .end-countdown-text b { color: #ff8a7a; }
+.end-countdown-text small { color: var(--text-muted); font-size: 0.8rem; }
+.end-countdown-bar { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 4px; }
+.end-countdown-bar span { display: block; height: 100%; background: var(--gold); transform-origin: left; animation: endBar var(--end-ms, 3500ms) linear both; }
+.end-countdown.lost .end-countdown-bar span { background: #e74c3c; }
+.end-countdown .btn { flex-shrink: 0; }
+@keyframes endPop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); } }
+@keyframes endBar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (max-width: 480px) {
+  .end-countdown { flex-wrap: wrap; justify-content: center; text-align: center; }
+  .end-countdown .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .end-countdown { animation: none; }
 }

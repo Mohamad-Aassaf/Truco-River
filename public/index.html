@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.6">
+  <link rel="stylesheet" href="/css/home.css?v=2.8">
 </head>
 
 <body data-screen="home">
@@ -129,7 +129,7 @@
         <div class="deck-selector-container">
           <button type="button" class="deck-option active" data-deck="traditional">Tradicional</button>
           <button type="button" class="deck-option" data-deck="pixel">Pixel Art</button>
-          <button type="button" class="deck-option" data-deck="classico">Clássico</button>
+          <button type="button" class="deck-option" data-deck="classico">Moderno</button>
           <button type="button" class="deck-option" data-deck="frances">Francês</button>
         </div>
         <div class="deck-preview-container">
@@ -143,6 +143,14 @@
               src="/Baralho_Espanhol_Organizado/Copas/3.png" alt="card3">
           </div>
           <button type="button" id="next-preview-btn" class="icon-btn" title="Próxima"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="deck-preview-meta">
+          <span id="deck-preview-caption" class="deck-preview-caption"></span>
+          <span class="deck-preview-dots" id="deck-preview-dots" role="tablist" aria-label="Cartas de exemplo">
+            <button type="button" data-slide="0" aria-label="Exemplo 1"></button>
+            <button type="button" data-slide="1" aria-label="Exemplo 2"></button>
+            <button type="button" data-slide="2" aria-label="Exemplo 3"></button>
+          </span>
         </div>
       </div>
 
@@ -810,7 +818,7 @@
         <ul class="auth-perks register-only">
           <li><i class="fa-solid fa-user-group"></i> Adicione amigos e veja quem está online</li>
           <li><i class="fa-solid fa-envelope-open-text"></i> Convide a gurizada para a sua sala</li>
-          <li><i class="fa-solid fa-trophy"></i> Guarde suas vitórias e partidas</li>
+          <li><i class="fa-solid fa-trophy"></i> Guarde suas vitórias e partidas (contra jogadores de verdade)</li>
         </ul>
 
         <div class="auth-or"><span>ou</span></div>
@@ -832,10 +840,12 @@
       </div>
       <div class="modal-body">
         <form id="add-friend-form" class="add-friend-form">
-          <input type="text" id="add-friend-input" maxlength="16" placeholder="Usuário do amigo"
-            autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Usuário do amigo">
+          <input type="text" id="add-friend-input" maxlength="30" placeholder="Buscar jogador pelo nome"
+            autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Buscar jogador pelo nome">
           <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-user-plus"></i> Adicionar</button>
         </form>
+        <p class="friend-search-hint">Digite parte do nome: maiúsculas, acentos, espaços e "_" não importam.</p>
+        <ul class="friends-list search-results hide" id="friend-search-results" aria-live="polite"></ul>
         <p id="add-friend-msg" class="form-msg" role="status"></p>
 
         <section id="friends-requests-in" class="friends-section hide">
@@ -923,10 +933,18 @@
             </div>
 
             <div class="rules-callout">
+              <i class="fa-solid fa-layer-group"></i>
+              <p><strong>Quem dá as cartas primeiro?</strong> Antes da primeira mão, cada jogador tira uma carta do
+                baralho. Quem tirar a de <strong>maior número</strong> dá as cartas e começa como o pé (aqui vale só o
+                número: 12 é a maior e 1 a menor, não a força do truco). Se empatar no maior, os empatados tiram de
+                novo. Vale no 1v1 e nas duplas.</p>
+            </div>
+
+            <div class="rules-callout">
               <i class="fa-solid fa-stopwatch"></i>
               <p><strong>Tempo de jogada.</strong> Cada jogador tem <strong>20 segundos</strong> na sua vez. Se o
                 tempo acabar, a carta mais alta da mão é jogada sozinha. Se era para responder um Truco ou Envido, vale
-                "Não quero"; se era para responder uma Flor, vale "Quero".</p>
+                "Não quero". Se era para responder uma Flor, você achica; se era uma Contra-Flor, vale "Quero".</p>
             </div>
           </section>
 
@@ -1047,7 +1065,8 @@
               <li><b>Quem responde, nas duplas.</b> Só o próximo jogador depois de quem cantou pode aceitar, correr
                 ou aumentar. O parceiro dele espera.</li>
               <li><b>Ir ao mazo.</b> Desistir da mão: você larga as cartas e o adversário leva os tentos da mão. Se for
-                ainda na 1ª rodada, ele leva pelo menos 2.</li>
+                na 1ª rodada e ninguém tiver cantado Envido nem Flor, ele leva 2 (a mão e o Envido que não foi
+                jogado). Se já cantaram Envido ou Flor, ele leva só o que a mão vale (1 sem truco).</li>
               <li><b>Mazo na dupla.</b> Só quem foi ao mazo sai da mão; o parceiro segue jogando sozinho. Se os dois
                 forem, a dupla perde a mão.</li>
             </ul>
@@ -1130,8 +1149,8 @@
               <tbody>
                 <tr><td>Flor e ninguém do outro lado tem</td><td>3</td></tr>
                 <tr><td>Você e seu parceiro têm Flor</td><td>4</td></tr>
-                <tr><td>Os dois lados têm: disputa (Quero)</td><td>3 para a maior</td></tr>
-                <tr><td>Contra-Flor</td><td>6 para a maior</td></tr>
+                <tr><td>Os dois lados têm Flor</td><td>quem responde não tem "Quero": só Contra-Flor, Contra-Flor e o Resto ou Achique</td></tr>
+                <tr><td>Contra-Flor</td><td>6 para a maior (quem cantou a Flor responde: Quero, o Resto ou Achique)</td></tr>
                 <tr><td>Contra-Flor e o Resto</td><td>6 da Contra-Flor + o que falta para quem está na frente ganhar (como no Falta Envido), para a maior</td></tr>
                 <tr><td>Achique (corre da Flor ou da Contra-Flor)</td><td>o outro lado leva o que estava valendo antes (3 da Flor ou 6 da Contra-Flor)</td></tr>
               </tbody>
@@ -1139,13 +1158,13 @@
 
             <div class="rules-callout">
               <i class="fa-solid fa-spa"></i>
-              <p>Só quem também tem Flor pode responder com Contra-Flor. Os pontos da Flor são contados como no
-                Envido, só que somando as três cartas.</p>
+              <p>Só quem também tem Flor responde a uma Flor. Se ninguém do outro lado tiver Flor, ela vale 3 na hora e
+                a mão segue. Os pontos da Flor são contados como no Envido, só que somando as três cartas.</p>
             </div>
 
             <ul class="rules-bullets">
-              <li><b>Duas Flores ou mais:</b> quando a disputa é aceita, todas as Flores são mostradas na mesa no fim
-                da mão, e a vencedora aparece com uma coroa.</li>
+              <li><b>Duas Flores ou mais:</b> quando a Contra-Flor é aceita, todas as Flores são mostradas na mesa no
+                fim da mão, e a vencedora aparece com uma coroa.</li>
               <li><b>Empate na Flor:</b> igual ao Envido, ganha quem é mão (ou o mais perto do mão).</li>
             </ul>
           </section>
@@ -1304,15 +1323,15 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=18"></script>
-  <script src="/js/social.js?v=6"></script>
+  <script src="/js/app.js?v=20"></script>
+  <script src="/js/social.js?v=7"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
   <script src="/js/news.js?v=2"></script>
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=2"></script>
-  <script src="/js/table-extras.js?v=7"></script>
+  <script src="/js/table-extras.js?v=8"></script>
 </body>
 
 </html>

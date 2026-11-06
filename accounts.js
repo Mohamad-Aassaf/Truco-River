@@ -249,9 +249,48 @@ function createAccounts(options = {}) {
 
   const without = (list, k) => list.filter(x => x !== k);
 
+  // Busca de usuários sem depender do jeito exato de escrever: ignora maiúsculas,
+  // acentos, espaços, "_", "-" e "." ("bolsonaro god" acha "Bolsonaro_God")
+  const loose = name => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[\s_.\-]+/g, '');
+
+  function findUser(name) {
+    const exact = get(name);
+    if (exact) return exact;
+    const q = loose(name);
+    if (!q) return null;
+    const hits = Object.values(users).filter(u => loose(u.username) === q);
+    return hits.length === 1 ? hits[0] : null;
+  }
+
+  // Sugestões para a busca de amigos: igual > começa com > contém
+  function searchUsers(query, limit = 8) {
+    const q = loose(query);
+    if (q.length < 2) return [];
+    const scored = [];
+    Object.values(users).forEach(u => {
+      const n = loose(u.username);
+      const rank = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : -1;
+      if (rank >= 0) scored.push({ rank, name: u.username });
+    });
+    scored.sort((a, b) => (a.rank - b.rank) || a.name.length - b.name.length || a.name.localeCompare(b.name));
+    return scored.slice(0, limit).map(x => x.name);
+  }
+
+  function relationOf(meName, otherName) {
+    const me = get(meName);
+    const k = key(otherName);
+    if (!me) return 'none';
+    if (key(me.username) === k) return 'self';
+    if (me.friends.includes(k)) return 'friend';
+    if (me.requestsOut.includes(k)) return 'sent';
+    if (me.requestsIn.includes(k)) return 'received';
+    return 'none';
+  }
+
   function sendRequest(fromName, toName) {
     const a = get(fromName);
-    const b = get(toName);
+    const b = findUser(toName);
     if (!a) return { error: 'Entre na sua conta primeiro.' };
     if (!b) return { error: 'Não existe jogador com esse usuário.' };
     const ka = key(a.username), kb = key(b.username);
@@ -355,6 +394,9 @@ function createAccounts(options = {}) {
     cancelRequest,
     removeFriend,
     areFriends,
+    findUser,
+    searchUsers,
+    relationOf,
     recordResult
   };
 }

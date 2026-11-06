@@ -164,6 +164,17 @@ function createSocial(io, accounts, roomOfSocket) {
     };
 
     friendAction('friends:request', (me, other) => accounts.sendRequest(me, other));
+
+    // Busca de jogadores para adicionar (nome parecido, sem precisar ser exato)
+    socket.on('friends:search', safe((data, cb) => {
+      const me = socket.data.account;
+      if (!me) return reply(cb, { error: 'Entre na sua conta para usar os amigos.' });
+      const query = data && typeof data.query === 'string' ? data.query.slice(0, 40) : '';
+      const results = accounts.searchUsers(query)
+        .map(name => ({ username: name, relation: accounts.relationOf(me, name), online: statusOf(accounts.key(name)).online }))
+        .filter(r => r.relation !== 'self');
+      reply(cb, { ok: true, results });
+    }));
     friendAction('friends:respond', (me, other, data) => accounts.respondRequest(me, other, !!data.accept));
     friendAction('friends:cancel', (me, other) => accounts.cancelRequest(me, other));
     friendAction('friends:remove', (me, other) => accounts.removeFriend(me, other));
@@ -206,7 +217,7 @@ function createSocial(io, accounts, roomOfSocket) {
     return s && s.data.account ? s.data.account : null;
   }
 
-  return { attach, presenceChanged, accountOf };
+  return { attach, presenceChanged, accountOf, refreshAccount: k => pushState(k) };
 }
 
 module.exports = { createSocial };

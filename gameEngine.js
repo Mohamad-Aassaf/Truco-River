@@ -283,7 +283,14 @@ class TrucoGame { // TRUCO GURIZINHO
     } else {
       this.players.splice(idx, 1);
       this.log(`${p.name} saiu do jogo.`);
+      // Saiu na tela de fim de jogo: quem ficou volta para a sala com o placar zerado
+      // (antes o placar antigo ficava e a próxima partida começava com ele)
+      if (this.state === 'game_end') {
+        this.resetMatch();
+        this.players.forEach(pl => { pl.ready = !!pl.isBot; });
+      }
       this.state = 'lobby';
+      this.dealDraw = null; // saiu durante o sorteio: volta para a sala
     }
     return p;
   }
@@ -299,12 +306,48 @@ class TrucoGame { // TRUCO GURIZINHO
     };
   }
 
-  startNewHand() {
-    if (!this.gameStartedAt || this.state === 'lobby') {
-      this.gameStartedAt = Date.now();
-      this.handNumber = 0;
+  // Sorteio do pé: cada um tira uma carta; a maior pelo NÚMERO (1 a 12, não a
+  // força do truco) dá as cartas na primeira mão. Empatou no maior: só os
+  // empatados tiram de novo.
+  drawForDealer() {
+    this.seatPlayers();
+    const deck = shuffle(createDeck());
+    const rounds = [];
+    let contenders = this.players.map((_, i) => i);
+    while (contenders.length > 1 && rounds.length < 6) {
+      if (deck.length < contenders.length) deck.push(...shuffle(createDeck()));
+      const draws = contenders.map(playerIdx => ({ playerIdx, card: deck.pop() }));
+      rounds.push(draws);
+      const top = Math.max(...draws.map(d => d.card.value));
+      contenders = draws.filter(d => d.card.value === top).map(d => d.playerIdx);
     }
-    // Reordenar jogadores com base nos times escolhidos no lobby para coincidir com a perspectiva do motor
+    const dealer = contenders[0];
+    this.dealerIndex = dealer;
+    this.drawSeq = (this.drawSeq || 0) + 1;
+    this.dealDraw = { id: this.drawSeq, rounds, dealerIdx: dealer, mãoIdx: (dealer + 1) % this.maxPlayers };
+    this.state = 'drawing';
+    this.gameStartedAt = Date.now();
+    this.handNumber = 0;
+    this.log(`Sorteio: ${this.players[dealer].name} tirou a maior carta e dá as cartas (é o pé).`);
+    return this.dealDraw;
+  }
+
+  // Zera tudo da partida anterior (placar, vencedor, última mão)
+  resetMatch() {
+    this.score[0] = 0;
+    this.score[1] = 0;
+    this.winner = null;
+    this.lastHandSummary = null;
+    this.hand = null;
+    this.handNumber = 0;
+    this.gameStartedAt = null;
+    this.gameEndedAt = null;
+    this.finalBlow = null;
+    this.dealDraw = null;
+  }
+
+  // Lugares na mesa: nas duplas os times se alternam (0, 1, 0, 1)
+  seatPlayers() {
     if (this.mode === '2v2') {
       const team0 = this.players.filter(p => p.team === 0);
       const team1 = this.players.filter(p => p.team === 1);
@@ -330,6 +373,15 @@ class TrucoGame { // TRUCO GURIZINHO
         this.players = sorted;
       }
     }
+  }
+
+  startNewHand() {
+    if (!this.gameStartedAt || this.state === 'lobby') {
+      this.gameStartedAt = Date.now();
+      this.handNumber = 0;
+    }
+    this.seatPlayers();
+    this.dealDraw = null;
 
     this.state = 'playing';
     const deck = shuffle(createDeck());
@@ -873,6 +925,7 @@ class TrucoGame { // TRUCO GURIZINHO
     const current = this.hand.florState;
     if (!['quero', 'contra_flor', 'contra_flor_resto', 'nao_quero', 'achique'].includes(response)) return false;
     if (response === 'contra_flor' && current !== 'flor') return false;
+    if (response === 'quero' && current === 'flor') return false; // Flor x Flor: aumenta ou achica
     if (response === 'contra_flor_resto' && current === 'contra_flor_resto') return false;
 
     this.hand.florResponsePending = false;
@@ -1019,9 +1072,11 @@ class TrucoGame { // TRUCO GURIZINHO
     this.say(playerIdx, '¡ME VOU AO MAZO!');
     this.log(`${player.name} foi ao Mazo.`);
 
-    // Se for na primeira rodada e o time correr/ir ao mazo, vale no mínimo 2 pontos
+    // Mazo na 1ª rodada vale 2 (a mão + o Envido que não foi jogado).
+    // Se já cantaram Envido ou Flor, esse ponto a mais não existe: vale só a mão.
     let pointsWon = this.hand.trucoPoints;
-    if (this.hand.currentRound === 0 && pointsWon < 2) {
+    const nothingSung = this.hand.envidoState === 'none' && this.hand.florState === 'none';
+    if (this.hand.currentRound === 0 && pointsWon < 2 && nothingSung) {
       pointsWon = 2;
     }
 
@@ -1315,7 +1370,8 @@ class TrucoGame { // TRUCO GURIZINHO
         maxPlayers: this.maxPlayers,
         hostId: this.host() ? this.host().id : null,
         teamNames: this.teamNames,
-        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, disconnected: !!p.disconnected, reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null })),
+        players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, hasAccount: !!p.account, disconnected: !!p.disconnected, reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null })),
+        dealDraw: this.state === 'drawing' ? this.dealDraw : null,
         score: this.score,
         state: this.state,
         winner: this.winner,
@@ -1356,6 +1412,7 @@ class TrucoGame { // TRUCO GURIZINHO
           isBot: p.isBot,
           team: p.team,
           ready: p.ready,
+          hasAccount: !!p.account,
           disconnected: !!p.disconnected,
           reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null,
           hasFlor: own ? p.hasFlor : undefined,
