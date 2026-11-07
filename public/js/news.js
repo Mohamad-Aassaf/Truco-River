@@ -33,6 +33,18 @@
 
   const fmtDate = ts => new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
+  // As imagens ficam no servidor do jogo (no site da Vercel, o servidor é outro endereço)
+  const MEDIA_BASE = window.location.hostname.includes('vercel.app') ? 'https://truco-river.onrender.com' : '';
+  const mediaUrl = id => `${MEDIA_BASE}/news-media/${encodeURIComponent(id)}`;
+
+  function mediaHtml(images) {
+    if (!images || !images.length) return '';
+    return `<div class="news-media n${Math.min(images.length, 4)}">${images.map(id => `
+      <button type="button" class="news-shot" data-zoom="${escapeHtml(id)}" aria-label="Ampliar imagem">
+        <img loading="lazy" src="${mediaUrl(id)}" alt="">
+      </button>`).join('')}</div>`;
+  }
+
   const latest = () => items.reduce((m, it) => Math.max(m, it.date || 0), 0);
   const seenUntil = () => Number(storage.get(SEEN_KEY) || 0);
 
@@ -111,15 +123,18 @@
     }
     const seen = seenUntil();
     list.innerHTML = items.map((it, i) => `
-      <li class="news-item ${it.pinned ? 'pinned' : ''} ${it.date > seen ? 'unseen' : ''}" style="--i:${i}">
-        <div class="news-meta">
-          ${tagChip(it.tag)}
-          ${it.pinned ? '<span class="news-pinned"><i class="fa-solid fa-thumbtack"></i> Fixada</span>' : ''}
-          ${it.date > seen ? '<span class="news-new">Nova</span>' : ''}
-          <time>${fmtDate(it.date)}</time>
+      <li class="news-item tag-${escapeHtml(it.tag)} ${it.pinned ? 'pinned' : ''} ${it.date > seen ? 'unseen' : ''}" style="--i:${i}">
+        ${mediaHtml(it.images)}
+        <div class="news-content">
+          <div class="news-meta">
+            ${tagChip(it.tag)}
+            ${it.pinned ? '<span class="news-pinned"><i class="fa-solid fa-thumbtack"></i> Fixada</span>' : ''}
+            ${it.date > seen ? '<span class="news-new">Nova</span>' : ''}
+            <time>${fmtDate(it.date)}</time>
+          </div>
+          <h3>${escapeHtml(it.title)}</h3>
+          ${it.body ? `<div class="news-body">${bodyHtml(it.body)}</div>` : ''}
         </div>
-        <h3>${escapeHtml(it.title)}</h3>
-        <div class="news-body">${bodyHtml(it.body)}</div>
       </li>`).join('');
   }
 
@@ -142,6 +157,19 @@
     });
   }
   modal.addEventListener('mousedown', e => { if (e.target === modal) modal.classList.add('hide'); });
+
+  // Imagem ampliada
+  const lightbox = $('news-lightbox');
+  list.addEventListener('click', e => {
+    const shot = e.target.closest('[data-zoom]');
+    if (!shot) return;
+    lightbox.querySelector('img').src = mediaUrl(shot.dataset.zoom);
+    lightbox.classList.remove('hide');
+  });
+  lightbox.addEventListener('click', () => lightbox.classList.add('hide'));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !lightbox.classList.contains('hide')) { e.stopImmediatePropagation(); lightbox.classList.add('hide'); }
+  }, true);
   modal.querySelectorAll('[data-close-modal]').forEach(b => b.addEventListener('click', () => modal.classList.add('hide')));
 
   // ---------------------------------------------------------------------------
@@ -158,9 +186,80 @@
   const fCancel = $('news-cancel-edit');
   const fSubmit = $('news-submit');
   const adminList = $('admin-news-list');
+  const fFiles = $('news-files');
+  const fPreview = $('news-media-preview');
+  const MAX_IMAGES = 4;
+  let formImages = []; // ids das imagens já enviadas para esta notícia
+  let uploading = 0;
+
+  function renderPreview() {
+    fPreview.innerHTML = formImages.map(id => `
+      <li><img src="${mediaUrl(id)}" alt=""><button type="button" class="icon-btn small danger" data-img-del="${escapeHtml(id)}" aria-label="Tirar imagem"><i class="fa-solid fa-xmark"></i></button></li>`).join('')
+      + (uploading ? `<li class="uploading"><span class="spin"></span></li>` : '');
+  }
+
+  // Fotos são reduzidas no navegador (até 1400 px); GIF vai como está, para não perder a animação
+  function readImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Não deu para ler o arquivo.'));
+      reader.onload = () => {
+        if (file.type === 'image/gif') {
+          if (file.size > 3 * 1024 * 1024) return reject(new Error('GIF grande demais (máximo 3 MB).'));
+          return resolve(reader.result);
+        }
+        const img = new Image();
+        img.onerror = () => reject(new Error('Imagem inválida.'));
+        img.onload = () => {
+          const scale = Math.min(1, 1400 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          let url = c.toDataURL('image/webp', 0.86);
+          if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/jpeg', 0.86);
+          resolve(url);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  fFiles.addEventListener('change', async () => {
+    const files = [...fFiles.files].filter(f => /^image\/(png|jpeg|webp|gif)$/.test(f.type));
+    fFiles.value = '';
+    for (const file of files) {
+      if (formImages.length + uploading >= MAX_IMAGES) { setMsg(`No máximo ${MAX_IMAGES} imagens por notícia.`); break; }
+      uploading++;
+      renderPreview();
+      try {
+        const dataUrl = await readImage(file);
+        const res = await new Promise(r => socket.emit('news:upload', { image: dataUrl }, r));
+        if (!res || res.error) throw new Error((res && res.error) || 'Erro ao enviar a imagem.');
+        formImages.push(res.id);
+        setMsg('');
+      } catch (err) {
+        setMsg(err.message);
+      }
+      uploading--;
+      renderPreview();
+    }
+  });
+
+  fPreview.addEventListener('click', e => {
+    const del = e.target.closest('[data-img-del]');
+    if (!del) return;
+    const id = del.dataset.imgDel;
+    formImages = formImages.filter(x => x !== id);
+    socket.emit('news:discard', { id }); // só apaga se nenhuma notícia publicada usa
+    renderPreview();
+  });
 
   function resetForm() {
     form.reset();
+    formImages = [];
+    renderPreview();
     fId.value = '';
     fHead.textContent = 'Nova notícia';
     fCancel.classList.add('hide');
@@ -179,6 +278,7 @@
         <div class="admin-news-text">
           <div class="news-meta">${tagChip(it.tag)}${it.pinned ? '<span class="news-pinned"><i class="fa-solid fa-thumbtack"></i></span>' : ''}<time>${fmtDate(it.date)}</time></div>
           <b>${escapeHtml(it.title)}</b>
+          ${(it.images || []).length ? `<small class="admin-news-imgs"><i class="fa-solid fa-image"></i> ${it.images.length}</small>` : ''}
         </div>
         <div class="admin-news-actions">
           <button type="button" class="icon-btn small" data-news-edit="${escapeHtml(it.id)}" title="Editar" aria-label="Editar"><i class="fa-solid fa-pen"></i></button>
@@ -199,9 +299,11 @@
       title: fTitle.value,
       tag: fTag.value,
       body: fBody.value,
+      images: formImages.slice(),
       pinned: fPinned.checked
     };
-    if (!data.title.trim() || !data.body.trim()) return setMsg('Preencha o título e o texto.');
+    if (uploading) return setMsg('Espere a imagem terminar de enviar.');
+    if (!data.title.trim() || (!data.body.trim() && !data.images.length)) return setMsg('Preencha o título e o texto.');
     fSubmit.disabled = true;
     socket.emit('news:save', data, res => {
       fSubmit.disabled = false;
@@ -224,6 +326,8 @@
       fTag.value = it.tag;
       fBody.value = it.body;
       fPinned.checked = !!it.pinned;
+      formImages = (it.images || []).slice();
+      renderPreview();
       fHead.textContent = 'Editando notícia';
       fCancel.classList.remove('hide');
       fSubmit.querySelector('span').textContent = 'Salvar alterações';

@@ -108,13 +108,21 @@
       : isHost
         ? '<button type="button" class="btn btn-sm btn-secondary" id="shuffle-teams-btn"><i class="fa-solid fa-shuffle"></i> Sortear times</button><small>Use as setas para passar alguém de time. Se o outro time estiver cheio, eles trocam de lugar. Toque no lápis para dar nome ao seu time.</small>'
         : '<small>Use a seta para trocar de time. Com o time cheio, toque em <i class="fa-solid fa-right-left"></i> ao lado de alguém do outro time para pedir para trocar de lugar. Toque no lápis para dar nome ao seu time.</small>';
+    const specCount = gameState.spectatorCount || 0;
+    const allow = gameState.allowSpectators !== false;
+    const specRow = isHost
+      ? `<div class="spec-setting"><label class="spec-toggle"><input type="checkbox" id="allow-spectators" ${allow ? 'checked' : ''}>
+          <span class="spec-switch" aria-hidden="true"></span><i class="fa-solid fa-eye"></i> Permitir espectadores</label>
+          ${specCount ? `<small>${specCount} assistindo</small>` : ''}</div>`
+      : `<div class="spec-setting"><small><i class="fa-solid ${allow ? 'fa-eye' : 'fa-eye-slash'}"></i> ${allow ? 'Espectadores liberados' : 'Sem espectadores'}${specCount ? ` · ${specCount} assistindo` : ''}</small></div>`;
     container.innerHTML = `
       <div class="teams-board ${duo ? '' : 'solo'}">
         ${column(0)}
         <div class="teams-vs">VS</div>
         ${column(1)}
       </div>
-      <div class="teams-tools">${hint}</div>`;
+      <div class="teams-tools">${hint}</div>
+      ${specRow}`;
 
     // Mantém a edição do nome mesmo quando a sala atualiza
     const input = container.querySelector('#team-rename-input');
@@ -179,6 +187,7 @@
   });
   socket.on('game_state', s => { if (s && s.state !== 'lobby') renameDraft = null; });
   lobbyList.addEventListener('change', e => {
+    if (e.target.id === 'allow-spectators') socket.emit('set_allow_spectators', { allow: e.target.checked });
     const sel = e.target.closest('.teams-board .bot-level-select');
     if (sel) socket.emit('set_bot_difficulty', { playerId: sel.dataset.id, difficulty: sel.value });
   });
@@ -254,63 +263,118 @@
   socket.on('game_state', s => { if (!s || s.state === 'lobby') closeSeatMenu(); });
 
   // ---------------------------------------------------------------------------
-  // Sorteio de quem dá as cartas (começo da partida)
+  // Sorteio de quem dá as cartas: cartas viradas espalhadas na mesa, em linha;
+  // cada um toca numa para tirar. Quem tirar o maior número dá as cartas.
   // ---------------------------------------------------------------------------
   let drawBox = null;
-  let drawShown = null;
-  const ROUND_GAP_MS = 1600;
+  let drawSeen = new Set();   // cartas que já apareceram viradas (para animar só as novas)
+  let drawTick = null;
+  let drawState = null;
+  let drawRoundKey = null;
+  function drawNames(s, list) {
+    return list.map(i => (s.players[i] ? escapeText(s.players[i].name) : '')).join(' e ');
+  }
   function renderDraw(s) {
     if (!s || s.state !== 'drawing' || !s.dealDraw) {
       if (drawBox) drawBox.classList.add('hide');
-      drawShown = null;
+      drawSeen = new Set();
+      drawState = null;
+      drawRoundKey = null;
+      clearInterval(drawTick);
       return;
     }
-    const d = s.dealDraw;
-    const key = `${s.id}:${d.id}`;
-    if (drawShown === key) return;
-    drawShown = key;
+    drawState = { s, at: Date.now() };
     if (!drawBox) {
       drawBox = document.createElement('div');
       drawBox.className = 'draw-overlay hide';
-      drawBox.setAttribute('role', 'status');
-      drawBox.setAttribute('aria-live', 'polite');
+      drawBox.setAttribute('role', 'dialog');
+      drawBox.setAttribute('aria-label', 'Sorteio de quem dá as cartas');
       document.body.appendChild(drawBox);
+      drawBox.addEventListener('click', e => {
+        const btn = e.target.closest('[data-draw-pick]');
+        if (!btn || btn.disabled) return;
+        drawBox.querySelectorAll('[data-draw-pick]').forEach(b => { b.disabled = true; });
+        btn.classList.add('picking');
+        socket.emit('draw_pick', { index: Number(btn.dataset.drawPick) }, r => {
+          if (r && r.error && window.trucoSocial) window.trucoSocial.toast(escapeText(r.error));
+        });
+      });
     }
-    const me = s.players.find(p => p.id === myPlayerId);
-    const myTeam = me ? me.team : 0;
-    const nameOf = i => (s.players[i] ? s.players[i].name : '');
-    const rounds = d.rounds.map((draws, r) => {
-      const top = Math.max(...draws.map(x => x.card.value));
-      const tiles = draws.map((x, i) => {
-        const p = s.players[x.playerIdx] || {};
-        const delay = r * ROUND_GAP_MS + i * 220;
-        const isTop = x.card.value === top;
-        const winner = r === d.rounds.length - 1 && x.playerIdx === d.dealerIdx;
-        return `
-          <div class="draw-tile ${p.team === myTeam ? 'us' : 'them'} ${isTop ? 'top' : 'low'} ${winner ? 'winner' : ''}" style="--d:${delay}ms; --r:${(d.rounds.length - 1) * ROUND_GAP_MS + draws.length * 220 + 500}ms">
-            <div class="draw-flip"><span class="draw-back"></span><img class="draw-front" src="${getCardImgSrc(x.card)}" alt="${x.card.value} de ${x.card.suit}"></div>
-            <span class="draw-name">${escapeText(p.name || '')}${p.id === myPlayerId ? ' <small>(você)</small>' : ''}</span>
-            <b class="draw-num">${x.card.value}</b>
-          </div>`;
-      }).join('');
-      return `<div class="draw-round">${r > 0 ? '<small class="draw-tie"><i class="fa-solid fa-equals"></i> Empate no maior: desempate</small>' : ''}<div class="draw-row">${tiles}</div></div>`;
+    const d = s.dealDraw;
+    const me = s.spectating ? -1 : s.players.findIndex(p => p.id === myPlayerId);
+    const myTeam = me >= 0 ? s.players[me].team : 0;
+    const iCanPick = !s.spectating && me >= 0 && !d.done && d.contenders.includes(me) && !d.spread.some(c => c.by === me);
+    const pending = d.contenders.filter(i => !d.spread.some(c => c.by === i));
+    const lastTie = d.history.length && d.round > 1 ? d.history[d.history.length - 1] : null;
+    const roundKey = `${s.id}:${d.id}:${d.round}`;
+    const entering = roundKey !== drawRoundKey; // cartas chegando na mesa: anima só uma vez
+    drawRoundKey = roundKey;
+
+    // Linha de cartas na mesa
+    const spread = d.spread.map((c, i) => {
+      const key = `${d.id}:${d.round}:${i}`;
+      if (c.by === null) {
+        return `<button type="button" class="draw-slot back" data-draw-pick="${i}" ${iCanPick ? '' : 'disabled'} aria-label="Tirar a carta ${i + 1}" style="--k:${i}"></button>`;
+      }
+      const fresh = !drawSeen.has(key);
+      drawSeen.add(key);
+      const p = s.players[c.by] || {};
+      const won = d.done && c.by === d.dealerIdx && d.history.length && d.history[d.history.length - 1].round === d.round;
+      return `<div class="draw-slot taken ${fresh ? 'fresh' : ''} ${p.team === myTeam ? 'us' : 'them'} ${won ? 'winner' : ''}" style="--k:${i}">
+          <img src="${getCardImgSrc(c.card)}" alt="${c.card.value} de ${c.card.suit}" title="${escapeText(p.name || '')}">
+        </div>`;
     }).join('');
-    const resultDelay = (d.rounds.length - 1) * ROUND_GAP_MS + d.rounds[d.rounds.length - 1].length * 220 + 600;
+
+    // Placar do sorteio: cada jogador e a carta que tirou nesta rodada
+    const picksNow = {};
+    d.spread.forEach(c => { if (c.by !== null) picksNow[c.by] = c.card; });
+    const rows = s.players.map((p, i) => {
+      const inRound = d.contenders.includes(i);
+      const prev = lastTie ? lastTie.draws.find(x => x.playerIdx === i) : null;
+      const card = picksNow[i] || (!inRound && prev ? prev.card : null);
+      const winner = d.done && i === d.dealerIdx;
+      return `<li class="draw-player ${p.team === myTeam ? 'us' : 'them'} ${inRound ? '' : 'out'} ${winner ? 'winner' : ''}">
+          <span class="draw-player-name">${winner ? '<i class="fa-solid fa-crown"></i> ' : ''}${escapeText(p.name)}${i === me ? ' <small>(você)</small>' : ''}</span>
+          <b class="draw-player-num">${card ? card.value : (inRound && !d.done ? '<i class="fa-solid fa-hourglass-half"></i>' : '–')}</b>
+        </li>`;
+    }).join('');
+
+    let status;
+    if (d.done) {
+      status = `<p class="draw-status done"><i class="fa-solid fa-crown"></i> <b>${drawNames(s, [d.dealerIdx])}</b> tirou a maior: dá as cartas (é o pé) · <b>${drawNames(s, [d.mãoIdx])}</b> é mão e começa</p>`;
+    } else if (iCanPick) {
+      status = `<p class="draw-status mine"><i class="fa-solid fa-hand-pointer"></i> Sua vez: toque numa carta para tirar a sua!</p>`;
+    } else {
+      status = `<p class="draw-status">Esperando ${drawNames(s, pending)} tirar…</p>`;
+    }
+    const tieNote = lastTie && !d.done
+      ? `<p class="draw-tie"><i class="fa-solid fa-equals"></i> Empate no ${Math.max(...lastTie.draws.map(x => x.card.value))}: ${drawNames(s, d.contenders)} tiram de novo.</p>`
+      : '';
+
     drawBox.innerHTML = `
       <div class="draw-panel">
         <span class="draw-kicker"><i class="fa-solid fa-layer-group"></i> Sorteio</span>
         <h3>Quem dá as cartas?</h3>
-        <p class="draw-sub">Cada um tira uma carta. A de maior <b>número</b> dá as cartas e começa como o pé
-          (aqui vale o número: 12 é a maior e 1 a menor).</p>
-        <div class="draw-rounds">${rounds}</div>
-        <p class="draw-result" style="--d:${resultDelay}ms"><i class="fa-solid fa-crown"></i>
-          <b>${escapeText(nameOf(d.dealerIdx))}</b> dá as cartas (é o pé) · <b>${escapeText(nameOf(d.mãoIdx))}</b> é mão e começa</p>
+        <p class="draw-sub">Cada um tira uma carta da mesa. Quem tirar o maior <b>número</b> dá as cartas
+          (aqui vale só o número: 12 é a maior e 1 a menor).</p>
+        ${tieNote}
+        <div class="draw-spread ${iCanPick ? 'can-pick' : ''} ${entering ? 'entering' : ''}">${spread}</div>
+        ${status}
+        ${!d.done && d.endsIn != null ? '<span class="draw-timer"><span></span></span>' : ''}
+        <ul class="draw-players">${rows}</ul>
       </div>`;
     drawBox.classList.remove('hide');
-    if (window.soundManager && window.soundManager.playCardPlaySound) {
-      d.rounds.forEach((draws, r) => draws.forEach((_, i) => setTimeout(() => {
-        if (drawShown === key) window.soundManager.playCardPlaySound();
-      }, r * ROUND_GAP_MS + i * 220)));
+    clearInterval(drawTick);
+    if (!d.done && d.endsIn != null) {
+      const total = 12000;
+      const fill = () => {
+        const bar = drawBox.querySelector('.draw-timer span');
+        if (!bar || !drawState) return;
+        const left = Math.max(0, d.endsIn - (Date.now() - drawState.at));
+        bar.style.width = `${(left / total) * 100}%`;
+      };
+      fill();
+      drawTick = setInterval(fill, 250);
     }
   }
   socket.on('game_state', s => renderDraw(s));
@@ -355,13 +419,13 @@
     chatRoom = s.id;
     lobbyChat.innerHTML = EMPTY_CHAT;
   });
-  socket.on('receive_chat', ({ sender, senderId, msg }) => {
+  socket.on('receive_chat', ({ sender, senderId, msg, spectator }) => {
     const empty = lobbyChat.querySelector('.lobby-chat-empty');
     if (empty) empty.remove();
     const mine = senderId === socket.id;
     const div = document.createElement('div');
     div.className = `lobby-chat-msg ${mine ? 'self' : ''}`;
-    div.innerHTML = `<b>${escapeText(sender)}</b> ${escapeText(msg)}`;
+    div.innerHTML = `${spectator ? '<i class="fa-solid fa-eye spec-mark" title="Assistindo"></i>' : ''}<b>${escapeText(sender)}</b> ${escapeText(msg)}`;
     lobbyChat.appendChild(div);
     while (lobbyChat.children.length > 60) lobbyChat.firstElementChild.remove();
     lobbyChat.scrollTop = lobbyChat.scrollHeight;
@@ -458,7 +522,7 @@
     waitBox.innerHTML = waitList.map(w => {
       const left = Math.max(0, Math.ceil((w.until - Date.now()) / 1000));
       return `<div><span class="wait-spin"></span> <b>${escapeText(w.name)}</b> caiu · esperando voltar <b>${left}s</b></div>`;
-    }).join('') + '<small>O jogo segue: se demorar na vez, a carta mais alta é jogada por ele.</small>';
+    }).join('') + '<small>O jogo segue: se demorar na vez, uma carta qualquer é jogada por ele.</small>';
   }
   setInterval(paintWait, 500);
 
@@ -532,4 +596,5 @@
     if (b) b.addEventListener('click', () => mark(false), true);
   });
   socket.on('kicked', () => { inRoom = false; mark(false); });
+  window.addEventListener('truco:left-room', () => { inRoom = false; mark(false); hide(); });
 })();

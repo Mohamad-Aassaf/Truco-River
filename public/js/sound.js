@@ -2,9 +2,11 @@
 // Gerenciador de Áudio com Web Audio API e reprodutor de música de fundo
 
 // Músicas: a do início continua tocando na sala de espera; a da partida só na mesa
+// Listas de músicas: o menu e a sala de espera tocam a mesma (sem recomeçar ao
+// trocar de tela); na partida as duas se revezam, começando por uma sorteada.
 const MUSIC = {
-  home: '/audio/music/inicio.mp3',
-  game: '/audio/music/partida.mp3'
+  home: ['/audio/music/menu.mp3'],
+  game: ['/audio/music/partida1.mp3', '/audio/music/partida2.mp3']
 };
 
 // Vozes dos cantos. Cada canto pode ter vários áudios para o jogador escolher.
@@ -49,7 +51,10 @@ class SoundManager {
     this.sfxVolume = 0.5;
     this.muted = false;
 
-    this.bgMusicPath = MUSIC.home;
+    this.playlist = MUSIC.home;
+    this.playlistKey = MUSIC.home.join('|');
+    this.trackIdx = 0;
+    this.bgMusicPath = MUSIC.home[0];
     this.voicePrefs = this.loadVoicePrefs();
   }
 
@@ -117,43 +122,48 @@ class SoundManager {
   initAudio() {
     if (this.audioCtx) return;
     this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // Iniciar a música de fundo se o elemento já não existir
-    if (!this.bgMusic) {
-      this.bgMusic = new Audio(this.bgMusicPath);
-      this.bgMusic.loop = true;
-      this.bgMusic.volume = this.muted ? 0 : this.musicVolume;
-
-      // Capturar erros se o arquivo não existir ainda
-      this.bgMusic.addEventListener('error', () => {
-        console.warn(`Música de fundo '${this.bgMusicPath}' não encontrada. Insira o arquivo para tocar.`);
-      });
-    }
+    if (!this.bgMusic && this.bgMusicPath) this.bgMusic = this.makeTrack(this.bgMusicPath);
   }
 
-  changeMusic(newPath) {
-    if (this.bgMusicPath === newPath) return;
-    this.bgMusicPath = newPath;
+  makeTrack(path) {
+    const a = new Audio(path);
+    a.preload = 'auto';
+    a.volume = this.muted ? 0 : this.musicVolume;
+    a.loop = !this.playlist || this.playlist.length < 2; // uma música só: repete
+    a.addEventListener('ended', () => this.nextTrack());
+    a.addEventListener('error', () => console.warn(`Música de fundo '${path}' não encontrada.`));
+    return a;
+  }
+
+  // Terminou uma música da partida: toca a próxima da lista
+  nextTrack() {
+    if (!this.playlist || this.playlist.length < 2) return;
+    this.trackIdx = (this.trackIdx + 1) % this.playlist.length;
+    this.bgMusicPath = this.playlist[this.trackIdx];
+    if (this.bgMusic) this.bgMusic.pause();
+    this.bgMusic = this.makeTrack(this.bgMusicPath);
+    if (!this.muted) this.bgMusic.play().catch(() => { });
+  }
+
+  // Troca a lista de músicas. A mesma lista não reinicia a música que está tocando.
+  changeMusic(playlist) {
+    const list = playlist ? [].concat(playlist) : null;
+    const key = list ? list.join('|') : '';
+    if (this.playlistKey === key) return;
+    this.playlistKey = key;
+    this.playlist = list;
 
     if (this.bgMusic) {
       this.bgMusic.pause();
       this.bgMusic = null;
     }
+    if (!list) { this.bgMusicPath = null; return; }
 
-    if (!newPath) return;
-
+    this.trackIdx = list.length > 1 ? Math.floor(Math.random() * list.length) : 0;
+    this.bgMusicPath = list[this.trackIdx];
     if (this.audioCtx) {
-      this.bgMusic = new Audio(this.bgMusicPath);
-      this.bgMusic.loop = true;
-      this.bgMusic.volume = this.muted ? 0 : this.musicVolume;
-      this.bgMusic.addEventListener('error', () => {
-        console.warn(`Música de fundo '${newPath}' não encontrada. Insira o arquivo para tocar.`);
-      });
-      if (!this.muted) {
-        this.bgMusic.play().catch(err => {
-          console.log("Erro ao tocar nova música.", err);
-        });
-      }
+      this.bgMusic = this.makeTrack(this.bgMusicPath);
+      if (!this.muted) this.bgMusic.play().catch(err => console.log('Erro ao tocar nova música.', err));
     }
   }
 

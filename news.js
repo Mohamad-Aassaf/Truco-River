@@ -8,6 +8,13 @@ const path = require('path');
 
 const TAGS = ['novidade', 'melhoria', 'correcao', 'evento', 'aviso'];
 
+// Imagens/GIFs das notícias: guardadas à parte (não vão junto da lista para
+// todo mundo) e servidas em /news-media/<id>
+const MEDIA_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+const MAX_MEDIA_BYTES = 3 * 1024 * 1024; // GIF animado até 3 MB
+const MAX_IMAGES = 4;
+const MEDIA_ID_RE = /^[a-f0-9-]{36}$/;
+
 // Primeiras notícias (entram uma vez só, quando ainda não existe nenhuma)
 const SEED = [
   {
@@ -36,14 +43,19 @@ function cleanItem(data) {
   const title = typeof data.title === 'string' ? data.title.trim().slice(0, 90) : '';
   const body = typeof data.body === 'string' ? data.body.trim().slice(0, 2000) : '';
   const tag = TAGS.includes(data.tag) ? data.tag : 'novidade';
+  const images = Array.isArray(data.images)
+    ? data.images.filter(id => typeof id === 'string' && MEDIA_ID_RE.test(id)).slice(0, MAX_IMAGES)
+    : [];
   if (!title) return { error: 'Escreva um título.' };
-  if (!body) return { error: 'Escreva o texto da notícia.' };
-  return { item: { title, body, tag, pinned: !!data.pinned } };
+  if (!body && !images.length) return { error: 'Escreva o texto da notícia.' };
+  return { item: { title, body, tag, images, pinned: !!data.pinned } };
 }
 
 function createNews(accountStore) {
   const usePg = accountStore && accountStore.kind === 'postgres' && accountStore.pool;
   const file = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'news.json');
+  const mediaDir = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'news-media');
+  const mediaCache = new Map(); // id -> { mime, buf } (as mais vistas ficam na memória)
   let items = [];
   let seeded = false;
   let writing = Promise.resolve();
@@ -52,6 +64,7 @@ function createNews(accountStore) {
     if (usePg) {
       const pool = accountStore.pool;
       await pool.query('CREATE TABLE IF NOT EXISTS truco_news (id TEXT PRIMARY KEY, data JSONB NOT NULL)');
+      await pool.query('CREATE TABLE IF NOT EXISTS truco_news_media (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BYTEA NOT NULL, created BIGINT NOT NULL)');
       const res = await pool.query('SELECT id, data FROM truco_news');
       res.rows.forEach(r => {
         const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
@@ -131,7 +144,9 @@ function createNews(accountStore) {
     if (data.id) {
       const existing = items.find(it => it.id === data.id);
       if (!existing) return { error: 'Essa notícia não existe mais.' };
+      const dropped = (existing.images || []).filter(mid => !item.images.includes(mid));
       Object.assign(existing, item, { updatedAt: now });
+      dropped.forEach(mid => { if (!isUsed(mid)) deleteMedia(mid); });
     } else {
       if (items.length >= 200) return { error: 'Limite de 200 notícias. Apague algumas antigas.' };
       items.push({ id: crypto.randomUUID(), ...item, date: now, updatedAt: now });
@@ -141,14 +156,78 @@ function createNews(accountStore) {
   }
 
   function remove(id) {
+    const gone = items.find(it => it.id === id);
     const before = items.length;
     items = items.filter(it => it.id !== id);
     if (items.length === before) return { error: 'Essa notícia não existe mais.' };
     removeFromStore(id);
+    (gone.images || []).forEach(mid => { if (!isUsed(mid)) deleteMedia(mid); });
     return { ok: true };
   }
 
-  return { ready, list, save, remove, TAGS };
+  // --- Imagens ---------------------------------------------------------------
+  const isUsed = mid => items.some(it => (it.images || []).includes(mid));
+
+  // Recebe uma imagem como data URL (o navegador já comprime as que não são GIF)
+  async function addMedia(dataUrl) {
+    const m = typeof dataUrl === 'string' && dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) return { error: 'Use uma imagem JPG, PNG, WEBP ou GIF.' };
+    const buf = Buffer.from(m[2], 'base64');
+    if (!buf.length) return { error: 'Imagem vazia.' };
+    if (buf.length > MAX_MEDIA_BYTES) return { error: 'Imagem grande demais (máximo 3 MB).' };
+    const id = crypto.randomUUID();
+    const mime = m[1];
+    try {
+      if (usePg) {
+        await accountStore.pool.query('INSERT INTO truco_news_media (id, mime, data, created) VALUES ($1, $2, $3, $4)', [id, mime, buf, Date.now()]);
+      } else {
+        fs.mkdirSync(mediaDir, { recursive: true });
+        fs.writeFileSync(path.join(mediaDir, `${id}.${MEDIA_TYPES[mime]}`), buf);
+      }
+    } catch (e) {
+      console.error('Erro ao guardar imagem da novidade:', e.message);
+      return { error: 'Não deu para guardar a imagem. Tente de novo.' };
+    }
+    mediaCache.set(id, { mime, buf });
+    return { ok: true, id };
+  }
+
+  async function getMedia(id) {
+    if (!MEDIA_ID_RE.test(String(id))) return null;
+    if (mediaCache.has(id)) return mediaCache.get(id);
+    let found = null;
+    try {
+      if (usePg) {
+        const r = await accountStore.pool.query('SELECT mime, data FROM truco_news_media WHERE id = $1', [id]);
+        if (r.rows[0]) found = { mime: r.rows[0].mime, buf: r.rows[0].data };
+      } else if (fs.existsSync(mediaDir)) {
+        const name = fs.readdirSync(mediaDir).find(f => f.startsWith(id + '.'));
+        if (name) {
+          const ext = name.split('.').pop();
+          const mime = Object.keys(MEDIA_TYPES).find(k => MEDIA_TYPES[k] === ext);
+          found = { mime, buf: fs.readFileSync(path.join(mediaDir, name)) };
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ler imagem da novidade:', e.message);
+    }
+    if (found) {
+      mediaCache.set(id, found);
+      if (mediaCache.size > 40) mediaCache.delete(mediaCache.keys().next().value);
+    }
+    return found;
+  }
+
+  function deleteMedia(id) {
+    mediaCache.delete(id);
+    if (usePg) {
+      accountStore.pool.query('DELETE FROM truco_news_media WHERE id = $1', [id]).catch(e => console.error('Erro ao apagar imagem:', e.message));
+    } else if (fs.existsSync(mediaDir)) {
+      fs.readdirSync(mediaDir).filter(f => f.startsWith(id + '.')).forEach(f => fs.unlinkSync(path.join(mediaDir, f)));
+    }
+  }
+
+  return { ready, list, save, remove, addMedia, getMedia, deleteMedia, isUsed, TAGS, MAX_IMAGES };
 }
 
 module.exports = { createNews, TAGS };

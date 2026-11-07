@@ -132,17 +132,7 @@
     });
   });
 
-  // Barra "Assistindo" e sair
-  const bar = $('spectate-bar');
-  socket.on('game_state', s => {
-    if (!s || !s.spectating) return;
-    bar.classList.remove('hide');
-    $('spectate-text').textContent = `Assistindo: ${s.roomName} (${s.mode}) — você vê todas as cartas`;
-  });
-  $('spectate-exit').addEventListener('click', () => {
-    socket.emit('admin:unspectate', {}, () => window.location.reload());
-    setTimeout(() => window.location.reload(), 800);
-  });
+  // (A barra "Assistindo" e o botão Sair ficam no spectate.js)
 
   // Tempo de jogada na partida em que o admin está
   const timerBtn = $('admin-timer-toggle');

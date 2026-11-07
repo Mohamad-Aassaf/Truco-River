@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.8">
+  <link rel="stylesheet" href="/css/home.css?v=2.9">
 </head>
 
 <body data-screen="home">
@@ -89,6 +89,9 @@
           </button>
           <button type="button" id="open-rules-btn" class="rules-cta">
             <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
+          </button>
+          <button type="button" id="open-watch-btn" class="rules-cta watch-cta">
+            <i class="fa-solid fa-eye"></i> Assistir partidas
           </button>
           <button type="button" id="open-news-btn" class="rules-cta news-cta">
             <i class="fa-solid fa-bullhorn"></i> Novidades
@@ -345,7 +348,7 @@
         <!-- CHAT DO LOBBY -->
         <div class="chat-container">
           <div class="panel-header">
-            <h4><i class="fa-solid fa-comments"></i> Conversa</h4>
+            <h4 id="chat-title"><i class="fa-solid fa-comments"></i> Conversa</h4>
             <div class="resize-controls">
               <button type="button" class="resize-btn" id="btn-increase-chat" title="Aumentar"><i
                   class="fa-solid fa-plus"></i></button>
@@ -478,7 +481,7 @@
 
         <!-- CONTROLE DE CARTAS DO JOGADOR (SUA MÃO) -->
         <div class="player-hand-container">
-          <!-- Tempo da jogada: 20s; acabou, a carta mais alta é jogada -->
+          <!-- Tempo da jogada: 20s; acabou, uma carta qualquer é jogada -->
           <div id="turn-timer" class="turn-timer hide" aria-live="polite">
             <span class="turn-timer-text" id="turn-timer-text">Sua vez · 20s</span>
             <span class="turn-timer-bar"><span id="turn-timer-fill"></span></span>
@@ -692,6 +695,14 @@
               <label class="news-pin"><input type="checkbox" id="news-pinned"> Fixar no topo</label>
             </div>
             <textarea id="news-body" maxlength="2000" rows="5" placeholder="O que há de novo? (pode pular linhas)" aria-label="Texto"></textarea>
+            <div class="news-media-field">
+              <label class="btn btn-sm btn-secondary news-attach">
+                <input type="file" id="news-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+                <i class="fa-solid fa-image"></i> Anexar imagem ou GIF
+              </label>
+              <small>Até 4 por notícia · GIF até 3 MB (fotos são reduzidas sozinhas)</small>
+            </div>
+            <ul id="news-media-preview" class="news-media-preview"></ul>
             <p id="news-form-msg" class="form-msg" role="status"></p>
             <button type="submit" id="news-submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> <span>Publicar para todos</span></button>
           </form>
@@ -764,11 +775,18 @@
   <div id="modal-news" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="news-title-h">
     <div class="modal-card news-card">
       <div class="modal-header">
-        <h2 id="news-title-h"><i class="fa-solid fa-bullhorn"></i> Novidades</h2>
+        <div class="news-heading">
+          <h2 id="news-title-h"><i class="fa-solid fa-bullhorn"></i> Novidades</h2>
+          <small>O que mudou no Truco River</small>
+        </div>
         <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
       </div>
       <div class="modal-body">
         <ul id="news-list" class="news-list"></ul>
+      </div>
+      <div id="news-lightbox" class="news-lightbox hide" role="dialog" aria-label="Imagem ampliada">
+        <img alt="">
+        <button type="button" class="btn-close-modal" aria-label="Fechar imagem">&times;</button>
       </div>
     </div>
   </div>
@@ -866,6 +884,27 @@
     </div>
   </div>
 
+  <!-- ASSISTIR PARTIDAS -->
+  <div id="modal-watch" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="watch-title">
+    <div class="modal-card watch-card">
+      <div class="modal-header">
+        <div class="news-heading">
+          <h2 id="watch-title"><i class="fa-solid fa-eye"></i> Assistir partidas</h2>
+          <small>Escolha uma mesa em andamento. Você vê o jogo pelo lado de um jogador e conversa com quem também está assistindo.</small>
+        </div>
+        <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <ul id="watch-list" class="watch-list"></ul>
+        <form id="watch-code-form" class="watch-code-form" autocomplete="off">
+          <input type="text" id="watch-code" maxlength="5" placeholder="Código de uma sala privada" aria-label="Código da sala">
+          <button type="submit" class="btn btn-sm btn-secondary"><i class="fa-solid fa-eye"></i> Assistir</button>
+        </form>
+        <p id="watch-msg" class="form-msg" role="status"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL DE REGRAS DO TRUCO GAÚCHO -->
   <div id="modal-rules" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="rules-title">
     <div class="modal-card rules-card">
@@ -934,16 +973,17 @@
 
             <div class="rules-callout">
               <i class="fa-solid fa-layer-group"></i>
-              <p><strong>Quem dá as cartas primeiro?</strong> Antes da primeira mão, cada jogador tira uma carta do
-                baralho. Quem tirar a de <strong>maior número</strong> dá as cartas e começa como o pé (aqui vale só o
-                número: 12 é a maior e 1 a menor, não a força do truco). Se empatar no maior, os empatados tiram de
-                novo. Vale no 1v1 e nas duplas.</p>
+              <p><strong>Quem dá as cartas primeiro?</strong> Antes da primeira mão, algumas cartas ficam espalhadas
+                na mesa, viradas para baixo, e cada jogador escolhe uma para tirar. Quem tirar a de <strong>maior
+                número</strong> dá as cartas e começa como o pé (aqui vale só o número: 12 é a maior e 1 a menor, não a
+                força do truco). Se empatar no maior, os empatados tiram de novo. Quem não escolher em 12 segundos tira
+                uma carta qualquer. Vale no 1v1 e nas duplas.</p>
             </div>
 
             <div class="rules-callout">
               <i class="fa-solid fa-stopwatch"></i>
               <p><strong>Tempo de jogada.</strong> Cada jogador tem <strong>20 segundos</strong> na sua vez. Se o
-                tempo acabar, a carta mais alta da mão é jogada sozinha. Se era para responder um Truco ou Envido, vale
+                tempo acabar, uma carta qualquer da mão é jogada sozinha. Se era para responder um Truco ou Envido, vale
                 "Não quero". Se era para responder uma Flor, você achica; se era uma Contra-Flor, vale "Quero".</p>
             </div>
           </section>
@@ -1310,7 +1350,10 @@
 
   <!-- ADMIN ASSISTINDO -->
   <div id="spectate-bar" class="spectate-bar hide">
-    <i class="fa-solid fa-eye"></i> <span id="spectate-text">Assistindo como admin</span>
+    <i class="fa-solid fa-eye"></i> <span id="spectate-text">Assistindo</span>
+    <label class="spectate-view-label"><span>Ver pelo</span>
+      <select id="spectate-view" aria-label="Ver a mesa pelo lado de"></select>
+    </label>
     <button type="button" class="btn btn-sm btn-secondary" id="spectate-exit">Sair</button>
   </div>
 
@@ -1323,15 +1366,16 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=20"></script>
+  <script src="/js/app.js?v=21"></script>
   <script src="/js/social.js?v=7"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
-  <script src="/js/news.js?v=2"></script>
+  <script src="/js/news.js?v=3"></script>
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
-  <script src="/js/admin.js?v=2"></script>
-  <script src="/js/table-extras.js?v=8"></script>
+  <script src="/js/admin.js?v=3"></script>
+  <script src="/js/table-extras.js?v=9"></script>
+  <script src="/js/spectate.js?v=1"></script>
 </body>
 
 </html>

@@ -19,8 +19,8 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST']
   },
-  // Relatos podem trazer um print (já comprimido no navegador)
-  maxHttpBufferSize: 2e6,
+  // Relatos podem trazer um print e as novidades um GIF de até 3 MB (em base64)
+  maxHttpBufferSize: 4.5e6,
   // Comprime mensagens maiores que 1 KB (o estado da mesa encolhe bastante)
   perMessageDeflate: { threshold: 1024 },
   // Percebe mais rápido quem caiu (celular que perdeu sinal, aba fechada)
@@ -53,6 +53,15 @@ const reportAttempts = new Map(); // IP -> horários dos últimos envios
 function adminSockets() {
   return [...io.sockets.sockets.values()].filter(s => s.isAdmin);
 }
+
+// Imagens e GIFs das novidades (o id é aleatório e não muda: pode guardar em cache)
+app.get('/news-media/:id', async (req, res) => {
+  const media = await news.getMedia(req.params.id);
+  if (!media) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.set('Access-Control-Allow-Origin', '*');
+  res.type(media.mime).send(media.buf);
+});
 
 // Para o UptimeRobot: resposta mínima, só para manter o servidor acordado
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
@@ -154,12 +163,78 @@ function deleteRoom(roomId) {
   if (botTimers[roomId]) { clearTimeout(botTimers[roomId]); delete botTimers[roomId]; }
   if (nextHandTimers[roomId]) { clearTimeout(nextHandTimers[roomId]); delete nextHandTimers[roomId]; }
   if (game.turnTimer) clearTimeout(game.turnTimer);
-  if (game.drawTimer) clearTimeout(game.drawTimer);
+  clearDrawTimers(game);
+  endSpectating(game, 'A sala foi fechada.');
   delete activeGames[roomId];
   console.log(`Sala ${roomId} sem jogadores de verdade apagada.`);
 }
 
 setInterval(sweepRooms, 20000).unref();
+
+// ---------------------------------------------------------------------------
+// Espectadores: qualquer um pode assistir (se o dono da sala deixar). Cada um
+// escolhe por quem quer ver a mesa: vê só as cartas daquele jogador (o admin vê
+// todas). Conversa própria, que os jogadores da mesa não veem (e vice-versa);
+// na sala de espera a conversa é uma só.
+// ---------------------------------------------------------------------------
+const specRoom = roomId => `spec:${roomId}`;
+const publicSpectators = game => (game.spectators ? [...game.spectators.values()].filter(s => !s.admin).length : 0);
+
+function cleanSpectatorName(socket, name) {
+  if (socket.data.account) return accounts.displayName(socket.data.account);
+  const n = typeof name === 'string' ? name.replace(/[<>]/g, '').trim().slice(0, 18) : '';
+  return n || 'Espectador';
+}
+
+function addSpectator(socket, roomId, { admin = false, name } = {}) {
+  const game = activeGames[roomId];
+  removeSpectator(socket);
+  if (!game.spectators) game.spectators = new Map();
+  game.spectators.set(socket.id, { logSentSeq: 0, admin, view: 0, name: cleanSpectatorName(socket, name) });
+  socket.data.spectating = roomId;
+  socket.leave('lobby');
+  socket.join(specRoom(roomId));
+}
+
+function removeSpectator(socket) {
+  const roomId = socket.data.spectating;
+  Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
+  if (roomId) socket.leave(specRoom(roomId));
+  socket.data.spectating = null;
+  if (roomId && activeGames[roomId]) broadcastState(roomId); // atualiza o "assistindo" dos jogadores
+}
+
+// Tira todo mundo que está assistindo (sala fechada ou o dono não deixa mais)
+function endSpectating(game, reason, onlyPublic = false) {
+  if (!game.spectators) return;
+  [...game.spectators.entries()].forEach(([sid, spec]) => {
+    if (onlyPublic && spec.admin) return;
+    game.spectators.delete(sid);
+    const s = io.sockets.sockets.get(sid);
+    if (s) {
+      s.leave(specRoom(game.id));
+      s.data.spectating = null;
+      s.join('lobby');
+      s.emit('spectate:ended', { reason });
+    }
+  });
+}
+
+// Partidas que dá para assistir (públicas, em andamento, com o dono deixando)
+function watchableGames() {
+  return Object.values(activeGames)
+    .filter(g => !g.isPrivate && g.allowSpectators !== false && ['playing', 'hand_end', 'drawing'].includes(g.state) && hasLiveHuman(g))
+    .map(g => ({
+      id: g.id,
+      roomName: g.roomName || g.id,
+      mode: g.mode,
+      score: g.score,
+      limit: g.maxPoints || 24,
+      teamNames: g.teamNames,
+      players: g.players.map(p => ({ name: p.name, team: p.team, isBot: p.isBot })),
+      spectators: publicSpectators(g)
+    }));
+}
 
 // Contador do lobby: jogadores online e partidas em andamento.
 // Vai para quem está no lobby a cada 5s, só quando o número muda.
@@ -223,9 +298,64 @@ function countsForStats(game, p) {
   return !!(game.statsTeams && game.statsTeams[1 - p.team]);
 }
 
-// Começa a partida: sorteio de quem dá as cartas e, depois de mostrar as cartas
-// tiradas, a primeira mão
-const DRAW_MS = process.env.DRAW_MS !== undefined ? Number(process.env.DRAW_MS) : 4200;
+// Começa a partida: cartas espalhadas na mesa, cada um tira a sua; quem tirar o
+// maior número dá as cartas. DRAW_MS=0 (testes) tira por todos na hora.
+const DRAW_MS = process.env.DRAW_MS !== undefined ? Number(process.env.DRAW_MS) : 2800; // mostra o resultado
+const DRAW_PICK_MS = Number(process.env.DRAW_PICK_MS) || 12000; // tempo para cada um tirar
+function clearDrawTimers(game) {
+  (game.drawTimers || []).forEach(clearTimeout);
+  game.drawTimers = [];
+  if (game.drawTimer) clearTimeout(game.drawTimer);
+  game.drawTimer = null;
+}
+// Agenda o que falta no sorteio: bots tiram sozinhos, quem não tirar a tempo
+// tira automaticamente e, no fim, começa a primeira mão
+function driveDraw(roomId) {
+  const game = activeGames[roomId];
+  if (!game || game.state !== 'drawing' || !game.dealDraw) return;
+  clearDrawTimers(game);
+  const d = game.dealDraw;
+  const drawId = d.id;
+  const alive = () => activeGames[roomId] === game && game.state === 'drawing' && game.dealDraw && game.dealDraw.id === drawId;
+  if (d.done) {
+    game.drawTimer = setTimeout(() => {
+      game.drawTimer = null;
+      if (!alive()) return;
+      game.startNewHand();
+      broadcastState(roomId);
+      runBotLogic(roomId);
+    }, DRAW_MS);
+    return;
+  }
+  const round = d.round;
+  const afterPick = res => {
+    if (!res || !res.ok) return;
+    broadcastState(roomId);
+    if (res.resolved) driveDraw(roomId);
+  };
+  d.deadline = Date.now() + DRAW_PICK_MS;
+  d.contenders.forEach(i => {
+    const p = game.players[i];
+    if (!p || !p.isBot || d.picks[i] !== undefined) return;
+    game.drawTimers.push(setTimeout(() => {
+      if (alive() && game.dealDraw.round === round) afterPick(game.drawAutoPick(i));
+    }, 700 + Math.random() * 1500));
+  });
+  game.drawTimers.push(setTimeout(() => {
+    if (!alive() || game.dealDraw.round !== round) return;
+    const pending = game.dealDraw.contenders.filter(i => game.dealDraw.picks[i] === undefined);
+    let last = null;
+    pending.forEach(i => {
+      const r = game.drawAutoPick(i);
+      if (r && r.ok) {
+        last = r;
+        game.log(`${game.players[i].name} demorou: a carta do sorteio foi tirada automaticamente.`);
+      }
+    });
+    if (last) afterPick(last);
+  }, DRAW_PICK_MS));
+}
+
 function startMatch(roomId) {
   const game = activeGames[roomId];
   if (!game) return;
@@ -234,17 +364,19 @@ function startMatch(roomId) {
   game.statsRecorded = false;
   game.botMemo = null;
   game.statsTeams = [0, 1].map(t => game.players.filter(p => p.team === t).every(p => !p.isBot));
+  clearDrawTimers(game);
   game.drawForDealer();
-  const startHand = () => {
-    game.drawTimer = null;
-    if (activeGames[roomId] !== game || game.state !== 'drawing') return;
+  if (DRAW_MS <= 0) {
+    // Testes: tira por todos e já começa
+    for (let guard = 0; guard < 50 && !game.dealDraw.done; guard++) {
+      game.dealDraw.contenders.forEach(i => game.drawAutoPick(i));
+    }
     game.startNewHand();
     broadcastState(roomId);
     runBotLogic(roomId);
-  };
-  if (DRAW_MS <= 0) return startHand();
-  // Cada desempate mostra mais uma rodada de cartas
-  game.drawTimer = setTimeout(startHand, DRAW_MS + (game.dealDraw.rounds.length - 1) * 1600);
+    return;
+  }
+  driveDraw(roomId);
 }
 
 function generateUniqueRoomId() {
@@ -309,15 +441,21 @@ function broadcastState(roomId) {
     state.nextHandIn = nextHandIn;
     state.turn = turn;
     state.turnTimerOff = !!game.noTurnTimer;
+    state.allowSpectators = game.allowSpectators !== false;
+    state.spectatorCount = publicSpectators(game);
     return state;
   };
 
-  // Admin assistindo: vê todas as cartas, do ponto de vista do primeiro jogador
+  // Quem assiste vê a mesa pelo lado do jogador escolhido (só as cartas dele);
+  // o admin vê todas as cartas
   if (game.spectators && game.spectators.size) {
     game.spectators.forEach((spec, sid) => {
       if (!io.sockets.sockets.has(sid)) { game.spectators.delete(sid); return; }
-      const st = withLogs(spec, game.getGameStateForPlayer(0, true));
+      const view = Math.min(Math.max(0, spec.view || 0), game.players.length - 1);
+      const st = withLogs(spec, game.getGameStateForPlayer(view, !!spec.admin));
       st.spectating = true;
+      st.spectatorView = view;
+      st.spectatorAdmin = !!spec.admin;
       io.to(sid).emit('game_state', st);
     });
   }
@@ -379,7 +517,7 @@ function updateTurnTimer(roomId, game) {
   game.turnTimer = setTimeout(() => turnTimeout(roomId, key), deadline - Date.now());
 }
 
-// Acabou o tempo: joga a carta mais alta (ou responde do jeito mais simples)
+// Acabou o tempo: joga uma carta qualquer (ou responde do jeito mais simples)
 function turnTimeout(roomId, key) {
   const game = activeGames[roomId];
   if (!game || !game.turn || game.turn.key !== key || game.state !== 'playing') return;
@@ -392,10 +530,8 @@ function turnTimeout(roomId, key) {
   let decision;
   if (kind === 'play') {
     const cards = h.hands[idx] || [];
-    let best = 0;
-    cards.forEach((c, i) => { if (c.trucoRank > cards[best].trucoRank) best = i; });
-    decision = { action: 'play_card', value: best };
-    game.log(`${p.name} demorou: a carta mais alta foi jogada automaticamente.`, p.team);
+    decision = { action: 'play_card', value: Math.floor(Math.random() * Math.max(1, cards.length)) };
+    game.log(`${p.name} demorou: uma carta qualquer foi jogada automaticamente.`, p.team);
   } else if (kind === 'sing') {
     decision = { action: 'call_flor' };
     game.log(`${p.name} demorou: a Flor foi cantada automaticamente.`, p.team);
@@ -635,6 +771,20 @@ io.on('connection', (socket) => {
     reply(res);
   });
 
+  // Admin anexa imagem/GIF (sobe antes de publicar; a notícia guarda só o id)
+  socket.on('news:upload', async (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    if (!socket.isAdmin) return reply({ error: 'Só o admin pode mexer nas novidades.' });
+    await news.ready;
+    reply(await news.addMedia(data && data.image));
+  });
+
+  // Imagem que o admin tirou antes de publicar: apaga se nenhuma notícia usa
+  socket.on('news:discard', (data) => {
+    if (!socket.isAdmin || !data || typeof data.id !== 'string') return;
+    if (!news.isUsed(data.id)) news.deleteMedia(data.id);
+  });
+
   socket.on('news:delete', (data, cb) => {
     const reply = res => { if (typeof cb === 'function') cb(res); };
     if (!socket.isAdmin) return reply({ error: 'Só o admin pode mexer nas novidades.' });
@@ -666,27 +816,67 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Admin: assistir uma partida (vê todas as cartas, não joga)
+  // Admin: assistir qualquer partida (vê todas as cartas, não joga)
   socket.on('admin:spectate', (data, cb) => {
     const reply = res => { if (typeof cb === 'function') cb(res); };
     if (!socket.isAdmin) return reply({ error: 'Só o admin pode assistir.' });
     const game = activeGames[data && data.roomId];
     if (!game) return reply({ error: 'Essa partida não existe mais.' });
     if (roomOfSocket(socket.id)) return reply({ error: 'Saia da sua sala antes de assistir.' });
-    Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
-    if (!game.spectators) game.spectators = new Map();
-    game.spectators.set(socket.id, { logSentSeq: 0 });
-    socket.data.spectating = data.roomId;
-    socket.leave('lobby');
+    addSpectator(socket, data.roomId, { admin: true, name: 'Admin' });
     reply({ ok: true });
     broadcastState(data.roomId);
   });
 
   socket.on('admin:unspectate', (data, cb) => {
-    Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
-    socket.data.spectating = null;
+    removeSpectator(socket);
     socket.join('lobby');
     if (typeof cb === 'function') cb({ ok: true });
+  });
+
+  // Todos: lista das partidas em andamento que dá para assistir
+  socket.on('spectate:list', (data, cb) => {
+    if (typeof cb === 'function') cb({ ok: true, games: watchableGames() });
+  });
+
+  socket.on('spectate:join', (data, cb) => {
+    const reply = res => { if (typeof cb === 'function') cb(res); };
+    const roomId = data && typeof data.roomId === 'string' ? data.roomId.trim().toUpperCase() : '';
+    const game = activeGames[roomId];
+    if (!game) return reply({ error: 'Essa partida não existe mais.' });
+    if (game.allowSpectators === false) return reply({ error: 'O dono dessa sala não deixa assistir.' });
+    if (roomOfSocket(socket.id)) return reply({ error: 'Saia da sua sala antes de assistir.' });
+    addSpectator(socket, roomId, { name: data.name });
+    reply({ ok: true, roomName: game.roomName || roomId });
+    broadcastState(roomId);
+  });
+
+  // Trocar por qual jogador está vendo a mesa
+  socket.on('spectate:view', (data) => {
+    const game = activeGames[socket.data.spectating];
+    const spec = game && game.spectators && game.spectators.get(socket.id);
+    const idx = Number(data && data.playerIdx);
+    if (!spec || !Number.isInteger(idx) || idx < 0 || idx >= game.players.length) return;
+    spec.view = idx;
+    spec.logSentSeq = 0;
+    broadcastState(game.id);
+  });
+
+  socket.on('spectate:leave', (data, cb) => {
+    removeSpectator(socket);
+    socket.join('lobby');
+    socket.emit('available_rooms', listRooms());
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
+  // Dono da sala deixa (ou não) assistirem a partida
+  socket.on('set_allow_spectators', (data) => {
+    const game = activeGames[currentRoomId];
+    if (!game || !isHostSocket(game, socket.id)) return;
+    game.allowSpectators = !!(data && data.allow);
+    if (!game.allowSpectators) endSpectating(game, 'O dono da sala fechou para espectadores.', true);
+    game.log(game.allowSpectators ? 'O dono da sala liberou para assistirem a partida.' : 'O dono da sala fechou a partida para espectadores.');
+    broadcastState(currentRoomId);
   });
 
   // Jogador envia um bug ou sugestão (com print opcional)
@@ -761,6 +951,7 @@ io.on('connection', (socket) => {
     const game = new TrucoGame(roomId, mode, points);
     game.roomName = finalRoomName;
     game.isPrivate = !!isPrivate;
+    game.allowSpectators = true;
     activeGames[roomId] = game;
     game.addPlayer(socket.id, playerName, socket.id);
     game.players[game.players.length - 1].isHost = true;
@@ -915,6 +1106,21 @@ io.on('connection', (socket) => {
     reply({ ok: true, off: game.noTurnTimer });
   });
 
+  // Sorteio do pé: o jogador tira uma das cartas espalhadas na mesa
+  socket.on('draw_pick', (data, cb) => {
+    const reply = r => { if (typeof cb === 'function') cb(r); };
+    const game = activeGames[currentRoomId];
+    if (!game || game.state !== 'drawing') return reply({ error: 'Não é hora de tirar carta.' });
+    const idx = game.players.findIndex(p => p.socketId === socket.id);
+    if (idx === -1) return reply({ error: 'Você não está nesta mesa.' });
+    const res = game.drawPick(idx, data && data.index);
+    if (res.ok) {
+      broadcastState(currentRoomId);
+      if (res.resolved) driveDraw(currentRoomId);
+    }
+    reply(res);
+  });
+
   // Nome do time: só quem é do time muda, e só na sala de espera
   socket.on('set_team_name', (data, cb) => {
     const reply = r => { if (typeof cb === 'function') cb(r); };
@@ -1043,18 +1249,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Conversa: na sala de espera, jogadores e espectadores conversam juntos; na
+  // partida, a mesa e quem assiste têm cada um a sua (um não vê a do outro)
   socket.on('send_chat', (msg) => {
-    const game = activeGames[currentRoomId];
     if (typeof msg !== 'string') return;
     msg = msg.trim().slice(0, 120);
-    if (game && msg) {
-      const player = game.players.find(p => p.socketId === socket.id);
-      const name = player ? player.name : 'Jogador';
-      io.to(currentRoomId).emit('receive_chat', {
-        sender: name,
-        senderId: socket.id,
-        msg: msg.trim()
-      });
+    const roomId = currentRoomId || socket.data.spectating;
+    const game = activeGames[roomId];
+    if (!game || !msg) return;
+    const spec = game.spectators && game.spectators.get(socket.id);
+    const player = game.players.find(p => p.socketId === socket.id);
+    if (!spec && !player) return;
+    const payload = {
+      sender: player ? player.name : spec.name,
+      senderId: socket.id,
+      msg,
+      spectator: !player
+    };
+    if (game.state === 'lobby') {
+      payload.channel = 'room';
+      io.to(roomId).to(specRoom(roomId)).emit('receive_chat', payload);
+    } else if (player) {
+      payload.channel = 'table';
+      io.to(roomId).emit('receive_chat', payload);
+    } else {
+      payload.channel = 'spec';
+      io.to(specRoom(roomId)).emit('receive_chat', payload);
     }
   });
 
@@ -1081,8 +1301,14 @@ io.on('connection', (socket) => {
 
   // Sair da sala de propósito (botão Abandonar): sai na hora, sem esperar
   socket.on('leave_room', (data, cb) => {
-    if (currentRoomId) removeFromRoom(currentRoomId, socket.id);
+    const roomId = currentRoomId;
+    if (roomId) removeFromRoom(roomId, socket.id);
     currentRoomId = null;
+    // Volta para a lista de salas (a página não recarrega mais ao sair da sala de espera)
+    if (roomId) socket.leave(roomId);
+    socket.join('lobby');
+    socket.emit('available_rooms', listRooms());
+    social.presenceChanged(socket.id);
     if (typeof cb === 'function') cb({ ok: true });
   });
 
@@ -1130,7 +1356,7 @@ io.on('connection', (socket) => {
   // Desconexão: o lugar fica guardado por RECONNECT_MS para o jogador voltar
   socket.on('disconnect', () => {
     console.log(`Cliente desconectado: ${socket.id}`);
-    Object.values(activeGames).forEach(g => g.spectators && g.spectators.delete(socket.id));
+    if (socket.data.spectating) removeSpectator(socket);
     const roomId = currentRoomId;
     const game = roomId && activeGames[roomId];
     if (!game) return;

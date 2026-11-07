@@ -36,6 +36,33 @@ socket.on('connect', () => {
 });
 
 // Sair da sala de propósito: avisa o servidor (sem esperar os 30s) e recarrega
+// Volta para a tela inicial sem recarregar a página (a música do menu continua)
+function goHomeScreen() {
+  lastGameState = null;
+  document.body.classList.remove('spectating');
+  screenWaiting.classList.remove('active');
+  screenGame.classList.remove('active');
+  screenGameEnd.classList.remove('active');
+  screenLobby.classList.add('active');
+  document.body.setAttribute('data-screen', 'home');
+  if (window.soundManager) window.soundManager.changeMusic(window.TRUCO_MUSIC.home);
+  window.dispatchEvent(new Event('truco:left-room'));
+}
+
+// Sair da sala de espera: volta para o início sem recarregar a página, então a
+// música do menu continua de onde estava
+function leaveWaitingRoom() {
+  let done = false;
+  const go = res => {
+    if (done) return;
+    done = true;
+    if (!res || !res.ok) { window.location.reload(); return; }
+    goHomeScreen();
+  };
+  socket.emit('leave_room', {}, go);
+  setTimeout(() => { if (!done) { done = true; window.location.reload(); } }, 2500);
+}
+
 function leaveRoomAndReload() {
   let done = false;
   const go = () => { if (!done) { done = true; window.location.reload(); } };
@@ -549,7 +576,7 @@ document.getElementById('ready-btn').addEventListener('click', () => {
 });
 
 // Abandonar Sala
-document.getElementById('leave-room-btn').addEventListener('click', leaveRoomAndReload);
+document.getElementById('leave-room-btn').addEventListener('click', leaveWaitingRoom);
 
 // Botão de volume / Mudo
 const audioBtn = document.getElementById('toggle-audio-btn');
@@ -663,7 +690,13 @@ socket.on('kicked', () => {
 
 socket.on('game_state', (gameState) => {
   lastGameState = gameState; // Armazena a cópia local para verificação nos botões
-  myPlayerId = gameState.spectating && gameState.players[0] ? gameState.players[0].id : socket.id;
+  // Quem assiste vê a mesa pelo jogador escolhido; na sala de espera não é ninguém
+  if (gameState.spectating) {
+    const viewed = gameState.players[gameState.spectatorView || 0];
+    myPlayerId = gameState.state === 'lobby' || !viewed ? '__espectador__' : viewed.id;
+  } else {
+    myPlayerId = socket.id;
+  }
   document.body.classList.toggle('spectating', !!gameState.spectating);
   currentRoomMode = gameState.mode;
 
@@ -2412,12 +2445,12 @@ function notifyChatMessage(sender, msg) {
   }
 }
 
-socket.on('receive_chat', ({ sender, senderId, msg }) => {
+socket.on('receive_chat', ({ sender, senderId, msg, spectator }) => {
   const isSelf = senderId === socket.id;
   const div = document.createElement('div');
   div.className = `chat-bubble ${isSelf ? 'self' : ''}`;
   div.innerHTML = `
-    <span class="chat-sender">${escapeText(sender)}</span>
+    <span class="chat-sender">${spectator ? '<i class="fa-solid fa-eye"></i> ' : ''}${escapeText(sender)}</span>
     <span class="chat-text">${escapeText(msg)}</span>
   `;
   chatMessages.appendChild(div);

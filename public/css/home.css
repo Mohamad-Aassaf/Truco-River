@@ -2771,9 +2771,10 @@ body.spectating .player-hand .card { cursor: default; }
 @container (aspect-ratio < 1) {
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > *,
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
-    /* fileiras: 2 cartas de altura + a pilha das laterais (78% do tamanho, 1,5 carta) = 3,17 */
+    /* Todas as cartas do mesmo tamanho: fileira de cima + pilha das laterais
+       (1,44 carta) + fileira de baixo = 3,44 cartas de altura */
     --slot-max: 150px;
-    --slot-h: min(var(--slot-max), 31.5cqh, 40cqw);
+    --slot-h: min(var(--slot-max), 28.6cqh, 38cqw);
     --slot-w: calc(var(--slot-h) * 2 / 3);
     --fan: 0.5;
   }
@@ -2783,20 +2784,20 @@ body.spectating .player-hand .card { cursor: default; }
   }
   /* Laterais: em pilha para baixo, coladas no centro (os lugares cobrem as bordas da mesa) */
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
-    --slot-h: calc(min(var(--slot-max), 31.5cqh, 40cqw) * 0.78);
     width: var(--slot-w);
-    height: calc(var(--slot-h) * 1.5);
+    height: calc(var(--slot-h) * 1.44);
   }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 22%); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: auto; right: calc(50% + 28px); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: auto; left: calc(50% + 28px); }
 }
 @media (max-width: 850px) and (orientation: portrait) {
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > *,
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
-    /* fileiras: 2 cartas de altura + a pilha das laterais (78% do tamanho, 1,5 carta) = 3,17 */
+    /* Todas as cartas do mesmo tamanho: fileira de cima + pilha das laterais
+       (1,44 carta) + fileira de baixo = 3,44 cartas de altura */
     --slot-max: 150px;
-    --slot-h: min(var(--slot-max), 31.5cqh, 40cqw);
+    --slot-h: min(var(--slot-max), 28.6cqh, 38cqw);
     --slot-w: calc(var(--slot-h) * 2 / 3);
     --fan: 0.5;
   }
@@ -2806,11 +2807,10 @@ body.spectating .player-hand .card { cursor: default; }
   }
   /* Laterais: em pilha para baixo, coladas no centro (os lugares cobrem as bordas da mesa) */
   .truco-table:has(#seat-left:not(.hidden-seat)) .played-cards-arena > .slot-col {
-    --slot-h: calc(min(var(--slot-max), 31.5cqh, 40cqw) * 0.78);
     width: var(--slot-w);
-    height: calc(var(--slot-h) * 1.5);
+    height: calc(var(--slot-h) * 1.44);
   }
-  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 25%); }
+  .truco-table:has(#seat-left:not(.hidden-seat)) .slot-col .played-card { translate: 0 calc(var(--r, 0) * 22%); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-left { left: auto; right: calc(50% + 28px); }
   .truco-table:has(#seat-left:not(.hidden-seat)) #arena-slot-right { right: auto; left: calc(50% + 28px); }
 }
@@ -3120,4 +3120,242 @@ body[data-deck-style="frances"] .draw-front { image-rendering: pixelated; }
 }
 @media (prefers-reduced-motion: reduce) {
   .end-countdown { animation: none; }
+}
+
+/* ==========================================================================
+   Novidades: cartões com imagem/GIF, galeria e imagem ampliada
+   ========================================================================== */
+.news-card { max-width: 600px; }
+.news-heading { display: flex; flex-direction: column; gap: 2px; }
+.news-heading small { color: var(--text-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
+.news-list { gap: 14px; }
+.news-item {
+  --tag-color: var(--gold);
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.28));
+  border: 1px solid var(--hairline);
+  border-top: 3px solid var(--tag-color);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.news-item:hover { transform: translateY(-2px); }
+.news-item.tag-melhoria { --tag-color: #2ecc71; }
+.news-item.tag-correcao { --tag-color: #60a5fa; }
+.news-item.tag-evento { --tag-color: #9b59b6; }
+.news-item.tag-aviso { --tag-color: #e74c3c; }
+.news-item.unseen { box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.45), 0 8px 22px rgba(0, 0, 0, 0.35); }
+.news-item.pinned { background: linear-gradient(180deg, rgba(223, 177, 91, 0.12), rgba(0, 0, 0, 0.28)); }
+.news-content { padding: 14px 16px 16px; }
+.news-item h3 { font-size: 1.12rem; margin: 2px 0 6px; }
+.news-media { display: grid; gap: 2px; background: rgba(0, 0, 0, 0.4); }
+.news-media.n2 { grid-template-columns: 1fr 1fr; }
+.news-media.n3, .news-media.n4 { grid-template-columns: 1fr 1fr; }
+.news-media.n3 .news-shot:first-child { grid-column: 1 / -1; }
+.news-shot { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; overflow: hidden; }
+.news-shot img { display: block; width: 100%; height: 100%; max-height: 300px; object-fit: cover; transition: transform 0.3s ease; }
+.news-media.n2 .news-shot img, .news-media.n3 .news-shot img, .news-media.n4 .news-shot img { height: 150px; }
+.news-media.n3 .news-shot:first-child img { height: 200px; }
+.news-shot:hover img { transform: scale(1.03); }
+.news-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 3, 2, 0.92);
+  cursor: zoom-out;
+}
+.news-lightbox.hide { display: none; }
+.news-lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7); }
+.news-lightbox .btn-close-modal { position: absolute; top: 14px; right: 14px; }
+
+/* Admin: anexar imagens */
+.news-media-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.news-media-field small { color: var(--text-dim); font-size: 0.74rem; }
+.news-attach { cursor: pointer; }
+.news-media-preview { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
+.news-media-preview:empty { display: none; }
+.news-media-preview li { position: relative; width: 84px; height: 64px; border-radius: 8px; overflow: hidden; border: 1px solid var(--hairline); background: rgba(0, 0, 0, 0.3); }
+.news-media-preview img { width: 100%; height: 100%; object-fit: cover; }
+.news-media-preview .icon-btn { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; font-size: 0.65rem; }
+.news-media-preview li.uploading { display: flex; align-items: center; justify-content: center; }
+.news-media-preview .spin { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(223, 177, 91, 0.25); border-top-color: var(--gold); animation: spinRing 0.9s linear infinite; }
+.admin-news-imgs { color: var(--text-muted); font-size: 0.72rem; margin-left: 6px; }
+@media (max-width: 480px) {
+  .news-media.n2 .news-shot img, .news-media.n3 .news-shot img, .news-media.n4 .news-shot img { height: 110px; }
+  .news-content { padding: 12px 13px 14px; }
+}
+
+/* Celular em pé, duplas: a área das cartas usa mais da altura da mesa */
+@media (max-width: 850px) and (orientation: portrait) {
+  .truco-table:has(#seat-left:not(.hidden-seat)) .table-center { top: 28px; bottom: 28px; }
+}
+
+/* Celular deitado: o resumo da mão cabe na coluna da direita (não cobre a mesa) */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hand-summary { width: 100%; max-width: 100%; }
+}
+
+/* ==========================================================================
+   Sorteio do pé: cartas viradas em linha na mesa; cada um tira a sua
+   ========================================================================== */
+.draw-panel { width: min(640px, 100%); }
+.draw-spread {
+  --cw: clamp(38px, 8.6vw, 62px);
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 18px calc(var(--cw) * 0.35);
+  margin: 4px 0 6px;
+}
+.draw-slot {
+  position: relative;
+  flex: 0 0 var(--cw);
+  width: var(--cw);
+  aspect-ratio: 2 / 3;
+  margin-left: calc(var(--cw) * -0.35);
+  border-radius: 6px;
+  border: 1.5px solid var(--gold-dark);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  padding: 0;
+}
+.draw-spread.entering .draw-slot.back { animation: drawSpreadIn 0.4s calc(var(--k, 0) * 45ms) cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+.draw-slot.back { background: url('/Baralho_Espanhol_Organizado/verso.png') center / cover, #1c2833; cursor: default; }
+.draw-spread.can-pick .draw-slot.back { cursor: pointer; transition: transform 0.15s ease; }
+.draw-spread.can-pick .draw-slot.back:hover,
+.draw-spread.can-pick .draw-slot.back:focus-visible { transform: translateY(-12px); z-index: 5; outline: none; box-shadow: 0 0 0 2px var(--gold), 0 10px 18px rgba(0, 0, 0, 0.5); }
+.draw-spread.can-pick:not(.entering) .draw-slot.back { animation: drawInvite 1.6s ease-in-out infinite; }
+.draw-slot.picking { transform: translateY(-16px); }
+.draw-slot.taken { background: #fff; transform: translateY(-14px); z-index: 4; }
+.draw-slot.taken img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; display: block; }
+.draw-slot.taken.fresh { animation: drawFlipIn 0.5s ease both; }
+.draw-slot.taken.us { border-color: var(--team-us); }
+.draw-slot.taken.them { border-color: var(--team-them); }
+.draw-slot.taken.winner { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(223, 177, 91, 0.6), 0 0 18px rgba(223, 177, 91, 0.6); }
+.draw-slot-name {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 3px);
+  transform: translateX(-50%);
+  max-width: 120%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--cream);
+}
+body[data-deck-style="pixel"] .draw-slot img,
+body[data-deck-style="frances"] .draw-slot img { image-rendering: pixelated; }
+.draw-status { margin: 4px 0 8px; font-size: 0.9rem; color: var(--text-muted); }
+.draw-status.mine { color: var(--gold-bright); font-weight: 800; }
+.draw-status.done { color: var(--cream); }
+.draw-status i { color: var(--gold); }
+.draw-tie { margin: 0 0 4px; font-size: 0.8rem; font-weight: 700; color: #f1c40f; }
+.draw-timer { display: block; height: 4px; width: min(260px, 80%); margin: 0 auto 10px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.draw-timer span { display: block; height: 100%; background: var(--gold); transition: width 0.25s linear; }
+.draw-players { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 0; margin: 0; }
+.draw-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--team-us);
+  font-size: 0.8rem;
+}
+.draw-player.them { border-left-color: var(--team-them); }
+.draw-player.out { opacity: 0.55; }
+.draw-player.winner { border-color: var(--gold); background: rgba(223, 177, 91, 0.14); }
+.draw-player-name { color: var(--cream); font-weight: 700; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draw-player-name small { color: var(--text-muted); font-weight: 600; }
+.draw-player-name i { color: var(--gold); }
+.draw-player-num { color: var(--gold-bright); min-width: 18px; text-align: center; }
+.draw-player-num i { color: var(--text-dim); font-size: 0.75rem; }
+@keyframes drawSpreadIn { from { opacity: 0; transform: translate(-40px, 10px) rotate(-6deg); } }
+@keyframes drawFlipIn { 0% { rotate: y 90deg; } 100% { rotate: y 0deg; } }
+@keyframes drawInvite { 50% { box-shadow: 0 0 0 2px rgba(223, 177, 91, 0.55), 0 4px 10px rgba(0, 0, 0, 0.45); } }
+@media (max-width: 480px) {
+  .draw-panel { padding: 18px 12px 14px; }
+  .draw-player { font-size: 0.74rem; padding: 4px 8px; }
+  .draw-player-name { max-width: 96px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .draw-slot, .draw-slot.taken.fresh { animation: none !important; }
+}
+
+/* ==========================================================================
+   Espectadores
+   ========================================================================== */
+.watch-card { max-width: 620px; }
+.watch-list { list-style: none; display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0 0 14px; text-align: left; }
+.watch-empty { padding: 18px; text-align: center; color: var(--text-muted); border: 1px dashed var(--hairline); border-radius: var(--radius-md); }
+.watch-item { padding: 12px 14px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--hairline); border-left: 3px solid #2ecc71; }
+.watch-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.watch-head b { color: var(--cream); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-tag { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
+.watch-teams { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin: 10px 0; font-size: 0.82rem; color: var(--cream); }
+.watch-teams small { display: block; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px; }
+.watch-teams .t0 small { color: var(--team-us); }
+.watch-teams .t1 { text-align: right; }
+.watch-teams .t1 small { color: var(--team-them); }
+.watch-score { font-family: var(--font-title); font-size: 1.4rem; color: var(--gold-bright); white-space: nowrap; }
+.watch-score span { font-size: 0.9rem; color: var(--text-dim); }
+.watch-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.watch-foot small { color: var(--text-muted); }
+.watch-code-form { display: flex; gap: 8px; }
+.watch-code-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(223, 177, 91, 0.3);
+  background: var(--inset-bg);
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.watch-cta i { color: #7ee2a8; }
+
+.spectate-bar { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
+.spectate-view-label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; }
+.spectate-view-label.hide { display: none; }
+.spectate-view-label select {
+  max-width: 150px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid #60a5fa;
+  background: rgba(10, 20, 40, 0.9);
+  color: #cfe2ff;
+  font-size: 0.78rem;
+}
+.spec-count { margin-left: 6px; font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+
+/* Quem assiste a sala de espera não tem botões de jogador */
+body.spectating #ready-btn,
+body.spectating #add-bot-btn,
+body.spectating #leave-room-btn,
+body.spectating #invite-friends-btn { display: none !important; }
+body.spectating .spectate-bar { bottom: 14px; }
+
+/* Dono da sala: liberar/fechar espectadores */
+.spec-setting { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; text-align: left; font-size: 0.82rem; color: var(--cream); }
+.spec-setting small { color: var(--text-muted); font-size: 0.76rem; }
+.spec-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; }
+.spec-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.spec-switch { position: relative; width: 36px; height: 20px; border-radius: 10px; background: rgba(255, 255, 255, 0.15); transition: background 0.2s; flex-shrink: 0; }
+.spec-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.spec-toggle input:checked + .spec-switch { background: #2ecc71; }
+.spec-toggle input:checked + .spec-switch::after { transform: translateX(16px); }
+.spec-toggle input:focus-visible + .spec-switch { box-shadow: 0 0 0 2px var(--gold); }
+.lobby-chat-msg .spec-mark { color: #60a5fa; margin-right: 3px; }
+@media (max-width: 480px) {
+  .watch-teams { font-size: 0.74rem; }
+  .watch-score { font-size: 1.15rem; }
+  .spectate-bar { left: 8px; right: 8px; transform: none; max-width: none; border-radius: 14px; }
 }

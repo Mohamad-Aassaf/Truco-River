@@ -53,6 +53,9 @@ function shuffle(deck) {
 }
 
 // Calcula os pontos de Envido de uma mão (3 cartas)
+// Quantas cartas ficam espalhadas na mesa no sorteio do pé
+const DRAW_SPREAD = 10;
+
 function calculateEnvidoScore(cards) {
   // Se houver Flor (3 cartas do mesmo naipe), não se calcula Envido aqui
   if (cards[0].suit === cards[1].suit && cards[1].suit === cards[2].suit) {
@@ -311,25 +314,92 @@ class TrucoGame { // TRUCO GURIZINHO
   // empatados tiram de novo.
   drawForDealer() {
     this.seatPlayers();
-    const deck = shuffle(createDeck());
-    const rounds = [];
-    let contenders = this.players.map((_, i) => i);
-    while (contenders.length > 1 && rounds.length < 6) {
-      if (deck.length < contenders.length) deck.push(...shuffle(createDeck()));
-      const draws = contenders.map(playerIdx => ({ playerIdx, card: deck.pop() }));
-      rounds.push(draws);
-      const top = Math.max(...draws.map(d => d.card.value));
-      contenders = draws.filter(d => d.card.value === top).map(d => d.playerIdx);
-    }
-    const dealer = contenders[0];
-    this.dealerIndex = dealer;
     this.drawSeq = (this.drawSeq || 0) + 1;
-    this.dealDraw = { id: this.drawSeq, rounds, dealerIdx: dealer, mãoIdx: (dealer + 1) % this.maxPlayers };
+    this.dealDraw = {
+      id: this.drawSeq,
+      round: 0,
+      contenders: this.players.map((_, i) => i),
+      spread: [],      // cartas viradas na mesa (o valor só aparece para quem já tirou)
+      picks: {},       // jogador -> posição da carta que tirou nesta rodada
+      history: [],     // rodadas anteriores (empates), já com as cartas abertas
+      dealerIdx: null,
+      mãoIdx: null,
+      done: false
+    };
+    this.newDrawRound(this.dealDraw.contenders);
     this.state = 'drawing';
     this.gameStartedAt = Date.now();
     this.handNumber = 0;
-    this.log(`Sorteio: ${this.players[dealer].name} tirou a maior carta e dá as cartas (é o pé).`);
     return this.dealDraw;
+  }
+
+  // Espalha cartas viradas na mesa, em linha: sempre algumas a mais que os jogadores
+  newDrawRound(contenders) {
+    const d = this.dealDraw;
+    d.round += 1;
+    d.contenders = contenders.slice();
+    d.spread = shuffle(createDeck()).slice(0, DRAW_SPREAD);
+    d.picks = {};
+  }
+
+  // Um jogador tira a carta da posição `index`. Quando todos tiraram, vê quem
+  // tirou o maior NÚMERO (1 a 12, não a força do truco). Empate no maior: só os
+  // empatados tiram de novo, de cartas novas.
+  drawPick(playerIdx, index) {
+    const d = this.dealDraw;
+    if (this.state !== 'drawing' || !d || d.done) return { error: 'Não é hora de tirar carta.' };
+    if (!d.contenders.includes(playerIdx)) return { error: 'Você não está tirando agora.' };
+    if (d.picks[playerIdx] !== undefined) return { error: 'Você já tirou a sua carta.' };
+    index = Number(index);
+    if (!Number.isInteger(index) || index < 0 || index >= d.spread.length) return { error: 'Carta inválida.' };
+    if (Object.values(d.picks).includes(index)) return { error: 'Essa carta já foi tirada.' };
+    d.picks[playerIdx] = index;
+    if (d.contenders.some(i => d.picks[i] === undefined)) return { ok: true, resolved: false };
+
+    const draws = d.contenders.map(i => ({ playerIdx: i, index: d.picks[i], card: d.spread[d.picks[i]] }));
+    d.history.push({ round: d.round, draws });
+    const top = Math.max(...draws.map(x => x.card.value));
+    const tied = draws.filter(x => x.card.value === top).map(x => x.playerIdx);
+    if (tied.length > 1 && d.round < 8) {
+      this.log(`Sorteio: empate no ${top}. ${tied.map(i => this.players[i].name).join(' e ')} tiram de novo.`);
+      this.newDrawRound(tied);
+      return { ok: true, resolved: true, tie: true };
+    }
+    const dealer = tied[0];
+    d.dealerIdx = dealer;
+    d.mãoIdx = (dealer + 1) % this.maxPlayers;
+    d.done = true;
+    this.dealerIndex = dealer;
+    this.log(`Sorteio: ${this.players[dealer].name} tirou a maior carta e dá as cartas (é o pé).`);
+    return { ok: true, resolved: true, done: true };
+  }
+
+  // Tira por quem ainda não tirou (bot, tempo esgotado ou teste)
+  drawAutoPick(playerIdx) {
+    const d = this.dealDraw;
+    if (!d || d.done || d.picks[playerIdx] !== undefined || !d.contenders.includes(playerIdx)) return null;
+    const taken = Object.values(d.picks);
+    const free = d.spread.map((_, i) => i).filter(i => !taken.includes(i));
+    return this.drawPick(playerIdx, free[Math.floor(Math.random() * free.length)]);
+  }
+
+  // O que todos veem do sorteio: as cartas não tiradas ficam viradas (sem valor)
+  publicDraw() {
+    const d = this.dealDraw;
+    if (!d) return null;
+    const byIndex = {};
+    Object.keys(d.picks).forEach(p => { byIndex[d.picks[p]] = Number(p); });
+    return {
+      id: d.id,
+      round: d.round,
+      contenders: d.contenders,
+      spread: d.spread.map((c, i) => (byIndex[i] !== undefined ? { by: byIndex[i], card: c } : { by: null })),
+      history: d.history,
+      dealerIdx: d.dealerIdx,
+      mãoIdx: d.mãoIdx,
+      done: d.done,
+      endsIn: d.deadline ? Math.max(0, d.deadline - Date.now()) : null
+    };
   }
 
   // Zera tudo da partida anterior (placar, vencedor, última mão)
@@ -1371,7 +1441,7 @@ class TrucoGame { // TRUCO GURIZINHO
         hostId: this.host() ? this.host().id : null,
         teamNames: this.teamNames,
         players: this.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot, difficulty: p.isBot ? p.difficulty : undefined, team: p.team, ready: p.ready, hasAccount: !!p.account, disconnected: !!p.disconnected, reconnectIn: p.disconnected && p.reconnectUntil ? Math.max(0, p.reconnectUntil - Date.now()) : null })),
-        dealDraw: this.state === 'drawing' ? this.dealDraw : null,
+        dealDraw: this.state === 'drawing' ? this.publicDraw() : null,
         score: this.score,
         state: this.state,
         winner: this.winner,
