@@ -402,34 +402,45 @@
   // ---------------------------------------------------------------------------
   // Conversa na sala de espera (a mesma conversa segue na partida)
   // ---------------------------------------------------------------------------
-  const lobbyChat = $('lobby-chat-messages');
-  const lobbyForm = $('lobby-chat-form');
-  const lobbyInput = $('lobby-chat-input');
+  // A mesma conversa aparece na sala de espera e na tela do fim da partida
+  const chatBoxes = [$('lobby-chat-messages'), $('end-chat-messages')].filter(Boolean);
   const EMPTY_CHAT = '<p class="lobby-chat-empty">Ninguém falou nada ainda. Mande um "buenas"!</p>';
   let chatRoom = null;
-  lobbyForm.addEventListener('submit', e => {
-    e.preventDefault();
-    const text = lobbyInput.value.trim();
-    if (!text) return;
-    socket.emit('send_chat', text);
-    lobbyInput.value = '';
+  [['lobby-chat-form', 'lobby-chat-input'], ['end-chat-form', 'end-chat-input']].forEach(([formId, inputId]) => {
+    const form = $(formId);
+    const input = $(inputId);
+    if (!form || !input) return;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      socket.emit('send_chat', text);
+      input.value = '';
+    });
   });
   socket.on('game_state', s => {
     if (!s || s.id === chatRoom) return;
     chatRoom = s.id;
-    lobbyChat.innerHTML = EMPTY_CHAT;
+    chatBoxes.forEach(box => { box.innerHTML = EMPTY_CHAT; });
+  });
+  window.addEventListener('truco:left-room', () => {
+    chatRoom = null;
+    chatBoxes.forEach(box => { box.innerHTML = EMPTY_CHAT; });
   });
   socket.on('receive_chat', ({ sender, senderId, msg, spectator }) => {
-    const empty = lobbyChat.querySelector('.lobby-chat-empty');
-    if (empty) empty.remove();
     const mine = senderId === socket.id;
-    const div = document.createElement('div');
-    div.className = `lobby-chat-msg ${mine ? 'self' : ''}`;
-    div.innerHTML = `${spectator ? '<i class="fa-solid fa-eye spec-mark" title="Assistindo"></i>' : ''}<b>${escapeText(sender)}</b> ${escapeText(msg)}`;
-    lobbyChat.appendChild(div);
-    while (lobbyChat.children.length > 60) lobbyChat.firstElementChild.remove();
-    lobbyChat.scrollTop = lobbyChat.scrollHeight;
-    if (!mine && $('screen-waiting').classList.contains('active') && window.soundManager && window.soundManager.playChatPing) {
+    chatBoxes.forEach(box => {
+      const empty = box.querySelector('.lobby-chat-empty');
+      if (empty) empty.remove();
+      const div = document.createElement('div');
+      div.className = `lobby-chat-msg ${mine ? 'self' : ''}`;
+      div.innerHTML = `${spectator ? '<i class="fa-solid fa-eye spec-mark" title="Assistindo"></i>' : ''}<b>${escapeText(sender)}</b> ${escapeText(msg)}`;
+      box.appendChild(div);
+      while (box.children.length > 60) box.firstElementChild.remove();
+      box.scrollTop = box.scrollHeight;
+    });
+    const onChatScreen = $('screen-waiting').classList.contains('active') || $('screen-game-end').classList.contains('active');
+    if (!mine && onChatScreen && window.soundManager && window.soundManager.playChatPing) {
       window.soundManager.playChatPing();
     }
   });

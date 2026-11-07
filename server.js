@@ -172,10 +172,10 @@ function deleteRoom(roomId) {
 setInterval(sweepRooms, 20000).unref();
 
 // ---------------------------------------------------------------------------
-// Espectadores: qualquer um pode assistir (se o dono da sala deixar). Cada um
-// escolhe por quem quer ver a mesa: vê só as cartas daquele jogador (o admin vê
-// todas). Conversa própria, que os jogadores da mesa não veem (e vice-versa);
-// na sala de espera a conversa é uma só.
+// Espectadores: qualquer um pode assistir (se o dono da sala deixar). Quem
+// assiste vê as cartas de todos e escolhe por qual jogador ver a mesa. Conversa
+// própria, que os jogadores da mesa não veem (e vice-versa); na sala de espera e
+// no fim da partida a conversa é uma só.
 // ---------------------------------------------------------------------------
 const specRoom = roomId => `spec:${roomId}`;
 const publicSpectators = game => (game.spectators ? [...game.spectators.values()].filter(s => !s.admin).length : 0);
@@ -220,12 +220,15 @@ function endSpectating(game, reason, onlyPublic = false) {
   });
 }
 
-// Partidas que dá para assistir (públicas, em andamento, com o dono deixando)
+// Salas que dá para assistir (públicas, com o dono deixando): em andamento
+// primeiro, depois as que ainda estão na sala de espera
 function watchableGames() {
   return Object.values(activeGames)
-    .filter(g => !g.isPrivate && g.allowSpectators !== false && ['playing', 'hand_end', 'drawing'].includes(g.state) && hasLiveHuman(g))
+    .filter(g => !g.isPrivate && g.allowSpectators !== false && ['playing', 'hand_end', 'drawing', 'lobby', 'game_end'].includes(g.state) && hasLiveHuman(g))
     .map(g => ({
       id: g.id,
+      status: g.state === 'lobby' ? 'lobby' : g.state === 'game_end' ? 'finished' : 'playing',
+      maxPlayers: g.maxPlayers,
       roomName: g.roomName || g.id,
       mode: g.mode,
       score: g.score,
@@ -233,7 +236,8 @@ function watchableGames() {
       teamNames: g.teamNames,
       players: g.players.map(p => ({ name: p.name, team: p.team, isBot: p.isBot })),
       spectators: publicSpectators(g)
-    }));
+    }))
+    .sort((a, b) => ({ playing: 0, lobby: 1, finished: 2 }[a.status] - { playing: 0, lobby: 1, finished: 2 }[b.status]));
 }
 
 // Contador do lobby: jogadores online e partidas em andamento.
@@ -446,13 +450,12 @@ function broadcastState(roomId) {
     return state;
   };
 
-  // Quem assiste vê a mesa pelo lado do jogador escolhido (só as cartas dele);
-  // o admin vê todas as cartas
+  // Quem assiste vê as cartas de todos, com a mesa pelo lado do jogador escolhido
   if (game.spectators && game.spectators.size) {
     game.spectators.forEach((spec, sid) => {
       if (!io.sockets.sockets.has(sid)) { game.spectators.delete(sid); return; }
       const view = Math.min(Math.max(0, spec.view || 0), game.players.length - 1);
-      const st = withLogs(spec, game.getGameStateForPlayer(view, !!spec.admin));
+      const st = withLogs(spec, game.getGameStateForPlayer(view, true));
       st.spectating = true;
       st.spectatorView = view;
       st.spectatorAdmin = !!spec.admin;
@@ -1249,7 +1252,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Conversa: na sala de espera, jogadores e espectadores conversam juntos; na
+  // Conversa: na sala de espera e no fim da partida, jogadores e espectadores conversam juntos; na
   // partida, a mesa e quem assiste têm cada um a sua (um não vê a do outro)
   socket.on('send_chat', (msg) => {
     if (typeof msg !== 'string') return;
@@ -1266,7 +1269,7 @@ io.on('connection', (socket) => {
       msg,
       spectator: !player
     };
-    if (game.state === 'lobby') {
+    if (game.state === 'lobby' || game.state === 'game_end') {
       payload.channel = 'room';
       io.to(roomId).to(specRoom(roomId)).emit('receive_chat', payload);
     } else if (player) {

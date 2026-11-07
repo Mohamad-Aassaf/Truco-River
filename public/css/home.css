@@ -3359,3 +3359,28 @@ body.spectating .spectate-bar { bottom: 14px; }
   .watch-score { font-size: 1.15rem; }
   .spectate-bar { left: 8px; right: 8px; transform: none; max-width: none; border-radius: 14px; }
 }
+
+/* Conversa da sala na tela do fim da partida */
+.end-chat { margin: 14px 0 16px; text-align: left; }
+.end-chat .lobby-chat-messages { height: 110px; }
+@media (max-width: 480px) {
+  .end-chat .lobby-chat-messages { height: 90px; }
+}
+.end-chat, .game-end-card .end-actions { position: relative; z-index: 1; }
+.end-chat { background: rgba(14, 9, 5, 0.92); }
+
+/* Celular: a barra de quem assiste não cobre a conversa aberta no menu lateral */
+body.drawer-open .spectate-bar { display: none; }
+/* Quem assiste sai pela barra "Assistindo" (não abandona a partida de ninguém) */
+body.spectating #game-leave-btn { display: none !important; }
+
+/* Lista de salas para assistir: jogando ou ainda na sala de espera */
+.watch-status { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.watch-status i { font-size: 0.6rem; }
+.watch-status.playing { color: #7ee2a8; }
+.watch-status.playing i { animation: badgePulse 1.6s ease-in-out infinite; }
+.watch-status.lobby { color: #f1c40f; }
+.watch-status.finished { color: var(--text-muted); }
+.watch-item.lobby { border-left-color: #f1c40f; }
+.watch-item.finished { border-left-color: var(--text-dim); }
+.watch-code-form input::placeholder { text-transform: none; letter-spacing: 0; }

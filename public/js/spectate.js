@@ -18,21 +18,27 @@
   // ---------------------------------------------------------------------------
   function renderList(games) {
     if (!games.length) {
-      list.innerHTML = '<li class="watch-empty"><i class="fa-solid fa-mug-hot"></i> Nenhuma partida pública em andamento agora. Volte daqui a pouco!</li>';
+      list.innerHTML = '<li class="watch-empty"><i class="fa-solid fa-mug-hot"></i> Nenhuma sala pública aberta agora. Volte daqui a pouco!</li>';
       return;
     }
     list.innerHTML = games.map(g => {
       const side = t => g.players.filter(p => p.team === t)
         .map(p => `${p.isBot ? '<i class="fa-solid fa-robot"></i> ' : ''}${escapeText(p.name)}`).join('<br>');
+      const status = {
+        playing: '<span class="watch-status playing"><i class="fa-solid fa-circle"></i> Jogando</span>',
+        lobby: `<span class="watch-status lobby"><i class="fa-solid fa-hourglass-half"></i> Na sala de espera · ${g.players.length}/${g.maxPlayers}</span>`,
+        finished: '<span class="watch-status finished"><i class="fa-solid fa-flag-checkered"></i> Acabou</span>'
+      }[g.status] || '';
       return `
-        <li class="watch-item">
+        <li class="watch-item ${g.status}">
           <div class="watch-head">
             <b>${escapeText(g.roomName)}</b>
             <span class="watch-tag">${g.mode === '2v2' ? 'Duplas' : '1v1'} · até ${g.limit}</span>
           </div>
+          ${status}
           <div class="watch-teams">
             <div class="t0"><small>${escapeText(teamName(g, 0))}</small>${side(0)}</div>
-            <div class="watch-score">${g.score[0]} <span>×</span> ${g.score[1]}</div>
+            <div class="watch-score">${g.status === 'lobby' ? '<span>vs</span>' : `${g.score[0]} <span>×</span> ${g.score[1]}`}</div>
             <div class="t1"><small>${escapeText(teamName(g, 1))}</small>${side(1)}</div>
           </div>
           <div class="watch-foot">
@@ -104,9 +110,9 @@
   function setChatMode(s) {
     if (!chatTitle) return;
     const spectatorChat = s && s.spectating && s.state !== 'lobby';
-    const count = s && !s.spectating && s.spectatorCount ? ` <small class="spec-count"><i class="fa-solid fa-eye"></i> ${s.spectatorCount} assistindo</small>` : '';
+    const count = s && s.spectatorCount ? ` <small class="spec-count"><i class="fa-solid fa-eye"></i> ${s.spectatorCount} assistindo</small>` : '';
     chatTitle.innerHTML = spectatorChat
-      ? '<i class="fa-solid fa-eye"></i> Conversa de quem assiste'
+      ? '<i class="fa-solid fa-eye"></i> Conversa de quem assiste' + count
       : CHAT_TITLE + count;
     if (chatInput) chatInput.placeholder = spectatorChat ? 'Comentar com quem está assistindo...' : CHAT_PLACEHOLDER;
   }
@@ -120,9 +126,8 @@
     }
     wasAdmin = !!s.spectatorAdmin;
     bar.classList.remove('hide');
-    barText.textContent = s.spectatorAdmin
-      ? `Assistindo ${s.roomName} (admin: todas as cartas)`
-      : `Assistindo ${s.roomName}`;
+    const n = s.spectatorCount || 0;
+    barText.textContent = `Assistindo ${s.roomName}${s.spectatorAdmin ? ' (admin)' : ''}${n ? ` · ${n} ${n === 1 ? 'pessoa assistindo' : 'pessoas assistindo'}` : ''}`;
     // Por quem ver a mesa (na sala de espera não tem mão para ver)
     const options = s.players.map((p, i) => `<option value="${i}" ${i === s.spectatorView ? 'selected' : ''}>${escapeText(p.name)}</option>`).join('');
     if (viewSel.dataset.opts !== options) { viewSel.innerHTML = options; viewSel.dataset.opts = options; }
@@ -166,6 +171,14 @@
     toast(`<i class="fa-solid fa-eye-slash"></i> ${escapeText(reason || 'Você parou de assistir.')}`, { timeout: 6000 });
     if (typeof goHomeScreen === 'function') goHomeScreen();
   });
+
+  // Celular: com a conversa (menu lateral) aberta, a barra sai da frente
+  const sidebar = document.querySelector('.info-sidebar');
+  if (sidebar) {
+    const sync = () => document.body.classList.toggle('drawer-open', sidebar.classList.contains('open'));
+    new MutationObserver(sync).observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    sync();
+  }
 
   window.trucoWatch = { open: openWatch };
 })();

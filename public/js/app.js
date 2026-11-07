@@ -736,14 +736,37 @@ socket.on('game_state', (gameState) => {
       // visível e o botão para ir direto ao resultado
       endScheduledKey = key;
       renderGameScreen(gameState);
-      showEndCountdown(gameState, END_DELAY_MS);
-      gameEndTimeout = setTimeout(() => showEndScreenNow(), END_DELAY_MS);
       if (window.soundManager) {
         window.soundManager.changeMusic(null);
       }
+      // Se a partida acabou num Envido/Flor, a janela dos pontos aparece primeiro;
+      // o aviso de vitória/derrota só vem depois que ela fecha
+      afterRevealClosed(() => {
+        if (endScheduledKey !== key || endShownKey === key) return;
+        showEndCountdown(lastGameState, END_DELAY_MS);
+        gameEndTimeout = setTimeout(() => showEndScreenNow(), END_DELAY_MS);
+      });
     }
   }
 });
+
+// Espera a janela dos pontos do Envido/Flor fechar (OK). Se ninguém fechar em
+// 10 segundos, fecha sozinha para seguir para o resultado.
+function afterRevealClosed(fn) {
+  setTimeout(() => {
+    const modal = document.getElementById('modal-reveal');
+    if (!modal || modal.classList.contains('hide')) { fn(); return; }
+    let done = false;
+    const finish = () => { if (done) return; done = true; obs.disconnect(); clearTimeout(fallback); fn(); };
+    const obs = new MutationObserver(() => { if (modal.classList.contains('hide')) finish(); });
+    obs.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    const fallback = setTimeout(() => {
+      const ok = document.getElementById('reveal-ok');
+      if (ok && !modal.classList.contains('hide')) ok.click();
+      finish();
+    }, 10000);
+  }, 60); // a janela abre logo depois deste mesmo estado
+}
 
 // --- FIM DE JOGO: contagem curta até a tela de vitória/derrota ---
 const END_DELAY_MS = 3500;
@@ -758,6 +781,12 @@ function showEndScreenNow() {
   hideEndCountdown();
   endShownKey = endScheduledKey;
   renderGameEndScreen(lastGameState);
+  // Música do resultado (e o som de vitória uma vez só)
+  if (window.soundManager) {
+    window.soundManager.changeMusic(window.TRUCO_MUSIC.end);
+    const { us } = myTeams(lastGameState);
+    if (lastGameState.winner === us) window.soundManager.playVictorySound();
+  }
 }
 
 function showEndCountdown(gameState, ms) {
@@ -2350,8 +2379,11 @@ function renderGameEndScreen(gameState) {
     : 'fa-solid fa-heart-crack trophy-icon';
   document.getElementById('victory-title').textContent = won ? '¡Vitória Campeira!' : 'Não foi dessa vez';
   document.getElementById('victory-title').style.color = '';
-  document.getElementById('victory-subtitle').textContent = won ? pick(WIN_LINES) : pick(LOSE_LINES);
-  if (won) window.soundManager.playVictorySound();
+  const subtitle = document.getElementById('victory-subtitle');
+  if (subtitle.dataset.key !== `${gameState.id}:${won}`) {
+    subtitle.dataset.key = `${gameState.id}:${won}`;
+    subtitle.textContent = won ? pick(WIN_LINES) : pick(LOSE_LINES);
+  }
 
   paintTeamNames(gameState);
   document.getElementById('final-score-t0').textContent = gameState.score[us];

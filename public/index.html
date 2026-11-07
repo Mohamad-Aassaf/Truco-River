@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=2.9">
+  <link rel="stylesheet" href="/css/home.css?v=3.0">
 </head>
 
 <body data-screen="home">
@@ -582,6 +582,18 @@
 
       <ul class="end-facts" id="end-facts"></ul>
 
+      <!-- Conversa da sala: jogadores e quem assiste conversam juntos -->
+      <div class="lobby-chat end-chat">
+        <div class="lobby-chat-head"><i class="fa-solid fa-comments"></i> Conversa da sala</div>
+        <div id="end-chat-messages" class="lobby-chat-messages" aria-live="polite">
+          <p class="lobby-chat-empty">Ninguém falou nada ainda. Mande um "buenas"!</p>
+        </div>
+        <form id="end-chat-form" class="lobby-chat-form">
+          <input type="text" id="end-chat-input" placeholder="Bah, que partida!" maxlength="60" autocomplete="off" aria-label="Mensagem para a sala">
+          <button type="submit" aria-label="Enviar"><i class="fa-solid fa-paper-plane"></i></button>
+        </form>
+      </div>
+
       <div class="end-actions">
         <button id="restart-game-btn" class="btn btn-primary btn-large"><i class="fa-solid fa-rotate-right"></i> Jogar Novamente</button>
         <button id="end-lobby-btn" class="btn btn-secondary"><i class="fa-solid fa-house"></i> Voltar ao início</button>
@@ -890,7 +902,7 @@
       <div class="modal-header">
         <div class="news-heading">
           <h2 id="watch-title"><i class="fa-solid fa-eye"></i> Assistir partidas</h2>
-          <small>Escolha uma mesa em andamento. Você vê o jogo pelo lado de um jogador e conversa com quem também está assistindo.</small>
+          <small>Escolha uma sala. Você vê as cartas de todos, escolhe por qual jogador ver a mesa e conversa com quem também está assistindo.</small>
         </div>
         <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
       </div>
@@ -1365,8 +1377,8 @@
 
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/sound.js?v=5"></script>
-  <script src="/js/app.js?v=21"></script>
+  <script src="/js/sound.js?v=6"></script>
+  <script src="/js/app.js?v=22"></script>
   <script src="/js/social.js?v=7"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
@@ -1374,8 +1386,8 @@
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=3"></script>
-  <script src="/js/table-extras.js?v=9"></script>
-  <script src="/js/spectate.js?v=1"></script>
+  <script src="/js/table-extras.js?v=10"></script>
+  <script src="/js/spectate.js?v=3"></script>
 </body>
 
 </html>

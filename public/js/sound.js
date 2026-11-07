@@ -6,7 +6,8 @@
 // trocar de tela); na partida as duas se revezam, começando por uma sorteada.
 const MUSIC = {
   home: ['/audio/music/menu.mp3'],
-  game: ['/audio/music/partida1.mp3', '/audio/music/partida2.mp3']
+  game: ['/audio/music/partida1.mp3', '/audio/music/partida2.mp3'],
+  end: ['/audio/music/final.mp3']
 };
 
 // Vozes dos cantos. Cada canto pode ter vários áudios para o jogador escolher.
