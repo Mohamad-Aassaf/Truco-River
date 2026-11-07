@@ -7,7 +7,7 @@
 const MUSIC = {
   home: ['/audio/music/menu.mp3'],
   game: ['/audio/music/partida1.mp3', '/audio/music/partida2.mp3'],
-  end: ['/audio/music/final.mp3']
+  end: ['/audio/music/final.mp3?v=2'] // ?v: a versão nova do arquivo não fica presa no cache
 };
 
 // Vozes dos cantos. Cada canto pode ter vários áudios para o jogador escolher.

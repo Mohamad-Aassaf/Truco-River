@@ -736,8 +736,11 @@ socket.on('game_state', (gameState) => {
       // visível e o botão para ir direto ao resultado
       endScheduledKey = key;
       renderGameScreen(gameState);
-      if (window.soundManager) {
-        window.soundManager.changeMusic(null);
+      // A música da partida continua até abrir a tela de resultado (lá entra a
+      // música final); já deixa a final baixando para começar sem demora
+      if (window.TRUCO_MUSIC && window.TRUCO_MUSIC.end) {
+        const pre = new Audio(window.TRUCO_MUSIC.end[0]);
+        pre.preload = 'auto';
       }
       // Se a partida acabou num Envido/Flor, a janela dos pontos aparece primeiro;
       // o aviso de vitória/derrota só vem depois que ela fecha
