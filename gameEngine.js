@@ -124,6 +124,7 @@ class TrucoGame { // TRUCO GURIZINHO
     this.teamNames = [null, null]; // Nome dos times (vazio = "Nós"/"Eles" para cada um)
     this.state = 'lobby'; // 'lobby', 'playing', 'game_end'
     this.gameLogs = [];
+    this.fullLog = [];
     this.maxPoints = maxPoints;
 
     // Estado da rodada/mão atual
@@ -185,6 +186,9 @@ class TrucoGame { // TRUCO GURIZINHO
     this.logSeq = (this.logSeq || 0) + 1;
     this.gameLogs.push({ seq: this.logSeq, time: Date.now(), msg: message, team });
     if (this.gameLogs.length > 50) this.gameLogs.shift();
+    // Narrativa completa da partida (vai para o histórico do admin)
+    if (!this.fullLog) this.fullLog = [];
+    if (this.fullLog.length < 3000) this.fullLog.push({ t: Date.now(), h: this.hand ? this.hand.number : 0, msg: message, team });
   }
 
   // Fala de um jogador no balão (o carimbo muda a cada fala, mesmo se o texto repetir)
@@ -407,6 +411,7 @@ class TrucoGame { // TRUCO GURIZINHO
 
   // Zera tudo da partida anterior (placar, vencedor, última mão)
   resetMatch() {
+    this.fullLog = [];
     this.score[0] = 0;
     this.score[1] = 0;
     this.winner = null;

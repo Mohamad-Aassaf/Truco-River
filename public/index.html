@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=3.4">
+  <link rel="stylesheet" href="/css/home.css?v=3.5">
 </head>
 
 <body data-screen="home">
@@ -662,6 +662,7 @@
         <div class="admin-tabs lobby-option-group" role="tablist">
           <button type="button" class="lobby-toggle-btn active" data-admin-tab="news" role="tab"><i class="fa-solid fa-bullhorn"></i> Novidades</button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="games" role="tab"><i class="fa-solid fa-eye"></i> Partidas</button>
+          <button type="button" class="lobby-toggle-btn" data-admin-tab="history" role="tab"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="reports" role="tab"><i class="fa-solid fa-bug"></i> Relatos <span class="news-count inline hide" id="admin-reports-count"></span></button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="cards" role="tab"><i class="fa-solid fa-gamepad"></i> Minha partida</button>
           <button type="button" class="lobby-toggle-btn" data-admin-tab="tours" role="tab"><i class="fa-solid fa-trophy"></i> Campeonatos</button>
@@ -673,6 +674,10 @@
         </section>
 
         <!-- Partidas abertas e em andamento (assistir) -->
+        <section class="admin-pane hide" data-admin-pane="history">
+          <div id="admin-history"></div>
+        </section>
+
         <section class="admin-pane hide" data-admin-pane="games">
           <div class="admin-games-head">
             <span>Salas no servidor</span>
@@ -1420,6 +1425,7 @@
   <script src="/js/voices.js?v=1"></script>
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=3"></script>
+  <script src="/js/match-history.js?v=1"></script>
   <script src="/js/table-extras.js?v=11"></script>
   <script src="/js/spectate.js?v=3"></script>
   <script src="/js/tournaments.js?v=2"></script>

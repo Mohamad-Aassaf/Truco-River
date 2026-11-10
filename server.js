@@ -11,6 +11,7 @@ const { createAccounts } = require('./accounts');
 const { createSocial } = require('./social');
 const { createNews } = require('./news');
 const { createReports } = require('./reports');
+const { createHistory } = require('./history');
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +49,7 @@ const news = createNews(accounts.store);
 
 // Relatos de bugs e sugestões (só o admin vê)
 const reports = createReports(accounts.store);
+const matchHistory = createHistory(accounts.store);
 
 // Campeonatos (mesmo armazenamento das contas). Os ganchos ligam o módulo às
 // salas e aos sockets daqui.
@@ -192,6 +194,7 @@ function deleteRoom(roomId) {
   if (nextHandTimers[roomId]) { clearTimeout(nextHandTimers[roomId]); delete nextHandTimers[roomId]; }
   if (game.turnTimer) clearTimeout(game.turnTimer);
   clearDrawTimers(game);
+  recordHistory(roomId, game);
   endSpectating(game, 'A sala foi fechada.');
   delete activeGames[roomId];
   console.log(`Sala ${roomId} sem jogadores de verdade apagada.`);
@@ -306,6 +309,9 @@ function removeFromRoom(roomId, socketId) {
   if (!leaving) return;
   if (leaving.reconnectTimer) clearTimeout(leaving.reconnectTimer);
 
+  if (game.histMeta && ['playing', 'hand_end', 'drawing'].includes(game.state)) {
+    game.histMeta.leaves.push({ name: leaving.name, at: Date.now(), hand: game.handNumber || 0 });
+  }
   // Partida de campeonato: quem sai perde esta partida (abandono)
   if (game.tournament && ['playing', 'hand_end', 'drawing'].includes(game.state)) {
     game.endReason = 'abandono';
@@ -330,6 +336,44 @@ function removeFromRoom(roomId, socketId) {
     runBotLogic(roomId);
   }
   io.to('lobby').emit('available_rooms', listRooms());
+}
+
+// Histórico do admin: guarda a partida quando termina ou quando a sala fecha no meio
+function recordHistory(roomId, game) {
+  if (!game || !game.histMeta || game.historyRecorded || game.state === 'lobby') return;
+  game.historyRecorded = true;
+  const ended = game.state === 'game_end';
+  const winner = ended && (game.winner === 0 || game.winner === 1) ? game.winner : null;
+  const limit = typeof game.limit === 'function' ? game.limit() : game.maxPoints;
+  const how = !ended ? 'interrompida' : winner !== null && game.score[winner] >= limit ? 'pontos' : 'desistencia';
+  const endedAt = game.gameEndedAt && ended ? game.gameEndedAt : Date.now();
+  const startedAt = game.histMeta.startedAt;
+  const left = new Set(game.histMeta.leaves.map(l => l.name));
+  // Quem começou + quem entrou depois (bot que assumiu um lugar, por exemplo)
+  const players = game.histMeta.players.map(p => ({ ...p, left: left.has(p.name) }));
+  game.players.forEach(p => {
+    if (!players.some(x => x.name === p.name)) players.push({ name: p.name, team: p.team, bot: !!p.isBot, account: p.account || null, joinedLater: true });
+  });
+  matchHistory.add({
+    id: `${roomId}-${startedAt}`,
+    roomId,
+    roomName: game.roomName || roomId,
+    mode: game.mode,
+    maxPoints: game.maxPoints,
+    startedAt,
+    endedAt,
+    durationMs: Math.max(0, endedAt - startedAt),
+    players,
+    teamNames: game.teamNames ? game.teamNames.slice() : [null, null],
+    score: { 0: game.score[0], 1: game.score[1] },
+    winner,
+    how,
+    finalBlow: game.finalBlow || null,
+    hands: game.handNumber || 0,
+    tournament: game.tournament ? { tid: game.tournament.tid, label: game.tournament.label, name: (tournaments.get(game.tournament.tid) || {}).name || '' } : null,
+    leaves: game.histMeta.leaves,
+    log: (game.fullLog || []).map(l => ({ t: l.t, h: l.h, msg: l.msg, team: l.team }))
+  });
 }
 
 // Partidas e vitórias só contam contra jogadores de verdade: o time adversário
@@ -399,8 +443,16 @@ function driveDraw(roomId) {
 function startMatch(roomId) {
   const game = activeGames[roomId];
   if (!game) return;
+  // Partida anterior que não terminou (reiniciada no meio) vai para o histórico
+  recordHistory(roomId, game);
   // Partida nova sempre começa do zero, venha de onde vier
   game.resetMatch();
+  game.historyRecorded = false;
+  game.histMeta = {
+    startedAt: Date.now(),
+    players: game.players.map(p => ({ name: p.name, team: p.team, bot: !!p.isBot, account: p.account || null })),
+    leaves: []
+  };
   game.statsRecorded = false;
   game.botMemo = null;
   game.statsTeams = [0, 1].map(t => game.players.filter(p => p.team === t).every(p => !p.isBot));
@@ -586,6 +638,8 @@ function broadcastState(roomId) {
 
   // Partida de campeonato terminou: o resultado vai para a chave
   if (game.tournament && game.state === 'game_end' && !game.tournamentReported) reportTournamentGame(roomId);
+
+  if (game.state === 'game_end' && !game.historyRecorded) recordHistory(roomId, game);
 
   // Fim de partida: registra vitórias/derrotas de quem tem conta
   if (game.state === 'game_end' && !game.statsRecorded) {
@@ -1039,6 +1093,20 @@ io.on('connection', (socket) => {
   });
 
   // Admin: assistir qualquer partida (vê todas as cartas, não joga)
+  // Histórico de partidas (só o admin)
+  socket.on('history:list', async (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.isAdmin) return cb({ error: 'Só o admin vê o histórico.' });
+    await matchHistory.ready;
+    cb(matchHistory.list({ q: data && typeof data.q === 'string' ? data.q.slice(0, 60) : '', offset: data && data.offset }));
+  });
+  socket.on('history:get', async (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.isAdmin) return cb({ error: 'Só o admin vê o histórico.' });
+    await matchHistory.ready;
+    try { cb(await matchHistory.get(data && data.id)); } catch (e) { cb({ error: 'Não deu para abrir essa partida.' }); }
+  });
+
   socket.on('admin:spectate', (data, cb) => {
     const reply = res => { if (typeof cb === 'function') cb(res); };
     if (!socket.isAdmin) return reply({ error: 'Só o admin pode assistir.' });

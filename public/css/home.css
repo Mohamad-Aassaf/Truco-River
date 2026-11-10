@@ -3729,3 +3729,49 @@ body.tour-game #restart-game-btn { display: none !important; }
 .played-cards-arena.proof-spread #arena-slot-bottom { translate: 0 calc(var(--slot-h) * 0.1); }
 .proof-center.row { flex-direction: row; gap: 10px; }
 .tadm-code { color: var(--gold-bright); letter-spacing: 0.08em; user-select: all; }
+
+/* ==========================================================================
+   Painel admin: histórico de partidas
+   ========================================================================== */
+.hist-search { display: flex; gap: 6px; margin-bottom: 6px; }
+.hist-search input { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(223, 177, 91, 0.3); background: var(--inset-bg); color: var(--text-light); font-size: 0.85rem; }
+.hist-note { color: var(--text-dim); font-size: 0.75rem; text-align: left; margin: 4px 0 8px; }
+.hist-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.hist-item { padding: 10px 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--hairline); }
+.hist-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.72rem; }
+.hist-date { color: var(--cream); font-weight: 800; }
+.hist-tag { color: var(--text-muted); padding: 1px 7px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.05); }
+.hist-tag.tour { color: var(--gold-bright); }
+.hist-how { margin-left: auto; font-weight: 800; padding: 1px 8px; border-radius: var(--radius-pill); }
+.hist-how.ok { background: rgba(46, 204, 113, 0.15); color: #8fe3b0; }
+.hist-how.warn { background: rgba(241, 196, 15, 0.15); color: #f5d76e; }
+.hist-how.off { background: rgba(255, 255, 255, 0.08); color: var(--text-dim); }
+.hist-teams { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin: 8px 0; }
+.hist-team { display: flex; flex-wrap: wrap; gap: 3px 8px; font-size: 0.8rem; align-items: baseline; }
+.hist-team small { width: 100%; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+.hist-team.t0 { color: #cfe2ff; }
+.hist-team.t1 { color: #ffd0c8; justify-content: flex-end; text-align: right; }
+.hist-team.win small { color: var(--gold-bright); }
+.hist-p.bot { opacity: 0.75; }
+.hist-p.left { text-decoration: line-through; opacity: 0.7; }
+.hist-score { font-size: 1.05rem; color: var(--text-muted); white-space: nowrap; }
+.hist-score b { color: var(--cream); }
+.hist-score b.win { color: var(--gold-bright); }
+.hist-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hist-foot small { color: var(--text-dim); font-size: 0.72rem; }
+.hist-log { margin-top: 8px; max-height: 340px; overflow-y: auto; border-top: 1px solid var(--hairline); padding-top: 6px; }
+.hist-leaves { font-size: 0.74rem; color: #f5d76e; margin: 2px 0 6px; }
+.hist-lines { list-style: none; padding: 0; margin: 0; font-size: 0.76rem; display: flex; flex-direction: column; gap: 2px; }
+.hist-lines li { color: var(--text-light); line-height: 1.35; }
+.hist-lines li time { color: var(--text-dim); font-variant-numeric: tabular-nums; margin-right: 6px; font-size: 0.9em; }
+.hist-lines li.t0 { color: #cfe2ff; }
+.hist-lines li.t1 { color: #ffd0c8; }
+.hist-lines li.hist-hand { margin-top: 6px; color: var(--gold); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.hist-more { text-align: center; margin-top: 8px; }
+@media (max-width: 480px) {
+  .hist-teams { grid-template-columns: 1fr; }
+  .hist-team.t1 { justify-content: flex-start; text-align: left; }
+}
+/* Seis abas no painel admin: duas linhas de três */
+.admin-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.admin-tabs .lobby-toggle-btn { white-space: nowrap; }
