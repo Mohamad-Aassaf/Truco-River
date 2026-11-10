@@ -345,17 +345,13 @@
       // Resultado em destaque: quem venceu, com a carta que tirou
       const lastRound = d.history[d.history.length - 1];
       const winDraw = lastRound && lastRound.draws.find(x => x.playerIdx === d.dealerIdx);
-      const others = lastRound ? lastRound.draws.filter(x => x.playerIdx !== d.dealerIdx)
-        .map(x => `${escapeText(s.players[x.playerIdx] ? s.players[x.playerIdx].name : '')} <b>${x.card.value}</b>`).join(' · ') : '';
       const isMe = d.dealerIdx === me;
       result = `
         <div class="draw-result-box ${isMe ? 'me' : ''}">
           ${winDraw ? `<img class="draw-result-card" src="${getCardImgSrc(winDraw.card)}" alt="${winDraw.card.value} de ${winDraw.card.suit}">` : ''}
           <div class="draw-result-text">
-            <small><i class="fa-solid fa-crown"></i> Venceu o sorteio</small>
-            <b>${isMe ? 'Você' : drawNames(s, [d.dealerIdx])}</b>
-            <span>tirou ${winDraw ? `o <b>${winDraw.card.value}</b>, a maior carta` : 'a maior carta'}${others ? ` <em>(${others})</em>` : ''}</span>
-            <span class="draw-result-roles"><i class="fa-solid fa-hand-holding"></i> ${isMe ? 'Você dá' : `${drawNames(s, [d.dealerIdx])} dá`} as cartas (é o pé) · <i class="fa-solid fa-play"></i> ${d.mãoIdx === me ? 'Você é' : `${drawNames(s, [d.mãoIdx])} é`} mão e começa</span>
+            <b>${isMe ? 'Você dá as cartas' : `${drawNames(s, [d.dealerIdx])} dá as cartas`}</b>
+            <span class="draw-result-roles"><i class="fa-solid fa-play"></i> ${d.mãoIdx === me ? 'Você começa' : `${drawNames(s, [d.mãoIdx])} começa`}</span>
           </div>
         </div>`;
       status = '';
@@ -371,15 +367,15 @@
     drawBox.innerHTML = `
       <div class="draw-panel">
         <span class="draw-kicker"><i class="fa-solid fa-layer-group"></i> Sorteio</span>
-        <h3>Quem dá as cartas?</h3>
+        ${d.done ? '' : `<h3>Quem dá as cartas?</h3>
         <p class="draw-sub">Cada um tira uma carta da mesa. Quem tirar o maior <b>número</b> dá as cartas
-          (aqui vale só o número: 12 é a maior e 1 a menor).</p>
+          (aqui vale só o número: 12 é a maior e 1 a menor).</p>`}
         ${tieNote}
         ${result}
         <div class="draw-spread ${iCanPick ? 'can-pick' : ''} ${entering ? 'entering' : ''} ${d.done ? 'done' : ''}">${spread}</div>
         ${status}
         ${!d.done && d.endsIn != null ? '<span class="draw-timer"><span></span></span>' : ''}
-        <ul class="draw-players">${rows}</ul>
+        ${d.done ? '' : `<ul class="draw-players">${rows}</ul>`}
       </div>`;
     drawBox.classList.remove('hide');
     clearInterval(drawTick);

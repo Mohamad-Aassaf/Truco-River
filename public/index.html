@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=3.5">
+  <link rel="stylesheet" href="/css/home.css?v=3.8">
 </head>
 
 <body data-screen="home">
@@ -90,12 +90,7 @@
           <button type="button" id="open-rules-btn" class="rules-cta">
             <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
           </button>
-          <!-- Campeonatos: escondido por enquanto (testers entram pelo código em "Entrar em sala") -->
-          <button type="button" id="open-tour-btn" class="rules-cta tour-cta hide" hidden>
-            <i class="fa-solid fa-trophy"></i> Campeonatos
-            <span class="news-count hide" id="tour-count" aria-label="Campeonatos abertos"></span>
-          </button>
-          <button type="button" id="open-watch-btn" class="rules-cta watch-cta">
+                    <button type="button" id="open-watch-btn" class="rules-cta watch-cta">
             <i class="fa-solid fa-eye"></i> Assistir partidas
           </button>
           <button type="button" id="open-news-btn" class="rules-cta news-cta">
@@ -914,11 +909,11 @@
 
   <!-- CAMPEONATOS -->
   <div id="modal-tour" class="modal-overlay hide" role="dialog" aria-modal="true" aria-labelledby="tour-modal-title">
-    <div class="modal-card tour-modal-card">
+    <div class="modal-card tour-modal-card tour-full">
       <div class="modal-header">
         <div class="news-heading">
-          <h2 id="tour-modal-title"><i class="fa-solid fa-trophy"></i> Campeonatos</h2>
-          <small>Chave eliminatória: quem ganha avança até a final</small>
+          <h2 id="tour-modal-title"><i class="fa-solid fa-trophy"></i> Campeonato</h2>
+          <small id="tour-modal-sub" class="tour-modal-sub"></small>
         </div>
         <button class="btn-close-modal" data-close-modal aria-label="Fechar">&times;</button>
       </div>
@@ -1426,9 +1421,9 @@
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=3"></script>
   <script src="/js/match-history.js?v=1"></script>
-  <script src="/js/table-extras.js?v=11"></script>
+  <script src="/js/table-extras.js?v=12"></script>
   <script src="/js/spectate.js?v=3"></script>
-  <script src="/js/tournaments.js?v=2"></script>
+  <script src="/js/tournaments.js?v=4"></script>
 </body>
 
 </html>

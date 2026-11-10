@@ -483,6 +483,8 @@ function socketsOfAccount(account) {
 function startTournamentGame(t, m, n) {
   const pick = side => {
     const acc = m[side];
+    // Bot de teste: entra na mesa como bot (não tem conexão)
+    if (tournaments.isBotAcc(acc)) return { bot: true, account: acc, name: (t.participants.find(p => p.account === acc) || {}).name || 'Bot' };
     const pref = m.readySocket && m.readySocket[side] && io.sockets.sockets.get(m.readySocket[side]);
     if (pref && pref.data.account === acc) return pref;
     return socketsOfAccount(acc)[0] || null;
@@ -490,7 +492,7 @@ function startTournamentGame(t, m, n) {
   const sa = pick('a');
   const sb = pick('b');
   if (!sa || !sb) return null;
-  [sa, sb].forEach(s => {
+  [sa, sb].filter(s => !s.bot).forEach(s => {
     const r = roomOfSocket(s.id);
     if (r) removeFromRoom(r.roomId, s.id); // estava em outra sala: sai dela
     if (s.data.spectating) removeSpectator(s);
@@ -509,6 +511,14 @@ function startTournamentGame(t, m, n) {
   game.pausedMs = 0;
   activeGames[roomId] = game;
   [sa, sb].forEach((s, i) => {
+    if (s.bot) {
+      game.addPlayer(`tbot_${Date.now()}_${i}`, s.name, null, true, 'medium');
+      const b = game.players[game.players.length - 1];
+      b.team = i;
+      b.account = s.account;
+      b.ready = true;
+      return;
+    }
     game.addPlayer(s.id, accounts.displayName(s.data.account), s.id);
     const p = game.players[game.players.length - 1];
     p.team = i;
@@ -1453,6 +1463,9 @@ io.on('connection', (socket) => {
       case 'finish': return tournaments.finishNow(id, 'admin');
       case 'extend': return tournaments.extend(id, d.minutes, 'admin');
       case 'start': return tournaments.startEarly(id, 'admin');
+      case 'delete': return tournaments.remove(id, 'admin');
+      case 'add_bots': return tournaments.addBots(id, d.count, 'admin');
+      case 'remove_bots': return tournaments.removeBots(id, 'admin');
       default: return { error: 'Ação desconhecida.' };
     }
   }));

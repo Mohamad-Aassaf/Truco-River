@@ -66,6 +66,13 @@ function shuffle(a) {
   return a;
 }
 
+// Bots de teste: contas de mentira "bot:1", "bot:2"... (não existem no banco de contas)
+const isBotAcc = acc => typeof acc === 'string' && acc.startsWith('bot:');
+const BOT_NAMES = ['Gaudêncio', 'Chiru', 'Tropeiro', 'Peão Véio', 'Prenda', 'Sinuelo', 'Xiru', 'Bagual', 'Taura', 'Pilcha', 'Guasca', 'Chimango',
+  'Guri', 'Piá', 'Campeiro', 'Tchê', 'Cusco', 'Pingo', 'Matungo', 'Chinoca', 'Gaudério', 'Fronteiriço', 'Coxilheiro', 'Minuano',
+  'Pampeiro', 'Lindeiro', 'Andarengo', 'Charrua', 'Tapejara', 'Domador', 'Capataz', 'Posteiro'];
+const BOT_SIM_MS = Number(process.env.TOUR_BOT_MS) || 6000; // bot contra bot: partida "simulada"
+
 function createTournaments(accountStore, hooks = {}) {
   const usePg = accountStore && accountStore.kind === 'postgres' && accountStore.pool;
   const dir = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -118,6 +125,22 @@ function createTournaments(accountStore, hooks = {}) {
         }
       } catch (e) {
         console.error('Erro ao gravar campeonato:', e.message);
+      }
+    });
+    return writing;
+  }
+
+  function persistDelete(id) {
+    writing = writing.then(async () => {
+      try {
+        if (usePg) await accountStore.pool.query('DELETE FROM truco_tournaments WHERE id = $1', [id]);
+        else {
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(file + '.tmp', JSON.stringify({ secret, items }));
+          fs.renameSync(file + '.tmp', file);
+        }
+      } catch (e) {
+        console.error('Erro ao apagar campeonato:', e.message);
       }
     });
     return writing;
@@ -285,6 +308,79 @@ function createTournaments(accountStore, hooks = {}) {
     notifyAll(t, 'resumed', 'O campeonato voltou! Os prazos continuam de onde pararam.');
     changed(t, { list: true });
     return { ok: true };
+  }
+
+  // Apaga de vez (qualquer situação). Fecha as mesas que estiverem abertas.
+  function remove(id, admin) {
+    const t = items[id];
+    if (!t) return { error: 'Campeonato não encontrado.' };
+    if (!['finished', 'cancelled'].includes(t.status)) {
+      H('endRooms')(t);
+      notifyAll(t, 'cancelled', `O campeonato "${t.name}" foi apagado pela organização.`);
+    }
+    delete items[id];
+    persistDelete(id);
+    H('changed')(t, { list: true, deleted: true });
+    return { ok: true, message: 'Campeonato apagado.' };
+  }
+
+  // Bots para testar: entram como participantes enquanto as inscrições estão abertas
+  function addBots(id, count, admin) {
+    const t = items[id];
+    if (!t) return { error: 'Campeonato não encontrado.' };
+    if (!['registration', 'checkin'].includes(t.status)) return { error: 'Só dá para colocar bots antes de começar.' };
+    const free = t.maxPlayers - t.participants.length;
+    if (free <= 0) return { error: 'Não há mais vagas.' };
+    const n = Math.min(free, clampInt(count, 1, 64, 1));
+    const usedNames = new Set(t.participants.map(p => p.name));
+    let seq = t.participants.filter(p => isBotAcc(p.account)).reduce((mx, p) => Math.max(mx, Number(p.account.slice(4)) || 0), 0);
+    for (let i = 0; i < n; i++) {
+      seq++;
+      let name = BOT_NAMES.find(b => !usedNames.has(`Bot ${b}`));
+      name = name ? `Bot ${name}` : `Bot ${seq}`;
+      usedNames.add(name);
+      t.participants.push({ account: `bot:${seq}`, name, bot: true, registeredAt: now(), checkedIn: true, checkedInAt: now(), status: 'checked_in' });
+    }
+    audit(t, admin, 'bots', `+${n} bot(s)`);
+    changed(t, { list: true });
+    return { ok: true, message: `${n} bot${n > 1 ? 's' : ''} no campeonato.` };
+  }
+
+  function removeBots(id, admin) {
+    const t = items[id];
+    if (!t) return { error: 'Campeonato não encontrado.' };
+    if (!['registration', 'checkin'].includes(t.status)) return { error: 'Só dá para tirar bots antes de começar.' };
+    const before = t.participants.length;
+    t.participants = t.participants.filter(p => !isBotAcc(p.account));
+    audit(t, admin, 'bots', `-${before - t.participants.length} bot(s)`);
+    changed(t, { list: true });
+    return { ok: true, message: 'Bots removidos.' };
+  }
+
+  // Bot sempre confirma "Estou pronto" na hora
+  function botAutoReady(t, m) {
+    if (m.status !== 'ready_check' || isPaused(t)) return;
+    let any = false;
+    ['a', 'b'].forEach(s => { if (isBotAcc(m[s]) && !m.ready[s]) { m.ready[s] = true; any = true; } });
+    if (any && m.ready.a && m.ready.b) startGame(t, m);
+    if (any) changed(t);
+  }
+
+  // Bot contra bot: não abre mesa; o resultado sai depois de alguns segundos
+  function simulateBotGame(tid, matchId, n) {
+    setTimeout(() => {
+      const t = items[tid];
+      const m = t && t.matches[matchId];
+      const g = m && m.games.find(x => x.n === n);
+      if (!g || g.winner || m.status !== 'playing') return;
+      if (isPaused(t)) return simulateBotGame(tid, matchId, n);
+      const winner = Math.random() < 0.5 ? m.a : m.b;
+      const loserPts = Math.floor(Math.random() * t.maxPoints);
+      reportGame(tid, matchId, n, winner, {
+        reason: 'normal', durationMs: now() - g.startedAt, hands: 0,
+        score: winner === m.a ? { a: t.maxPoints, b: loserPts } : { a: loserPts, b: t.maxPoints }
+      });
+    }, BOT_SIM_MS);
   }
 
   function cancel(id, reason, admin) {
@@ -524,6 +620,7 @@ function createTournaments(accountStore, hooks = {}) {
       message: `${label}: seu confronto contra ${nameOf(t, acc === m.a ? m.b : m.a)} está liberado. Confirme que está pronto!`,
       deadline: m.readyDeadline
     }));
+    botAutoReady(t, m);
   }
 
   function matchLabel(t, m) {
@@ -533,10 +630,18 @@ function createTournaments(accountStore, hooks = {}) {
 
   function startGame(t, m) {
     const n = m.games.length + 1;
+    if (isBotAcc(m.a) && isBotAcc(m.b)) {
+      m.status = 'playing';
+      m.readyDeadline = null;
+      m.games.push({ n, roomId: null, startedAt: now(), endedAt: null, winner: null, reason: null, simulated: true });
+      event(t, 'game_start', { matchId: m.id, n });
+      simulateBotGame(t.id, m.id, n);
+      return;
+    }
     const roomId = H('startGame')(t, m, n);
     if (!roomId) {
       // Alguém não está conectado agora: volta a esperar a confirmação dele
-      ['a', 'b'].forEach(s => { if (!H('isOnline')(m[s])) m.ready[s] = false; });
+      ['a', 'b'].forEach(s => { if (!isBotAcc(m[s]) && !H('isOnline')(m[s])) m.ready[s] = false; });
       return;
     }
     m.status = 'playing';
@@ -737,6 +842,7 @@ function createTournaments(accountStore, hooks = {}) {
       }
     }
     Object.values(t.matches).forEach(m => {
+      botAutoReady(t, m);
       if (m.status === 'ready_check' && m.readyDeadline && nowMs >= m.readyDeadline) {
         const a = m.ready.a, b = m.ready.b;
         if (a && !b) { woDecision(t, m, m.a, m.b); }
@@ -964,6 +1070,10 @@ function createTournaments(accountStore, hooks = {}) {
       locked: !canSee
     };
     if (!canSee) return base;
+    // Depois que começa, a chave é só para quem joga (e para o admin)
+    if (!me && !opts.admin && !['registration', 'checkin'].includes(t.status)) {
+      return { ...base, restricted: true, maxPoints: t.maxPoints, serverNow: now() };
+    }
     const myMatch = me ? Object.values(t.matches || {}).find(m => (m.a === account || m.b === account) && !['done', 'void'].includes(m.status) && m.status !== 'waiting') : null;
     return {
       ...base,
@@ -982,7 +1092,7 @@ function createTournaments(accountStore, hooks = {}) {
       finishedAt: t.finishedAt || null,
       pause: t.pause ? { at: t.pause.at, message: t.pause.message } : null,
       cancelReason: t.cancelReason || null,
-      participants: t.participants.map(p => ({ account: p.account, name: p.name, checkedIn: p.checkedIn, status: p.status })),
+      participants: t.participants.map(p => ({ account: p.account, name: p.name, checkedIn: p.checkedIn, status: p.status, bot: isBotAcc(p.account) })),
       bracket: t.bracket,
       matches: Object.fromEntries(Object.values(t.matches || {}).map(m => [m.id, {
         id: m.id, round: m.round, slot: m.slot, key: m.key, third: !!m.third, bestOf: m.bestOf,
@@ -1016,7 +1126,7 @@ function createTournaments(accountStore, hooks = {}) {
     const unlocked = t.isPrivate && password ? checkPassword(password, t.pass) : false;
     if (t.isPrivate && password && !unlocked) return { error: 'Senha incorreta.' };
     const v = publicView(t, account, { admin, unlocked });
-    if (!v.locked) v.stats = statsOf(t);
+    if (!v.locked && !v.restricted) v.stats = statsOf(t);
     if (admin) { v.audit = t.audit.slice(-100); }
     return { ok: true, tournament: v };
   }
@@ -1039,7 +1149,7 @@ function createTournaments(accountStore, hooks = {}) {
     ready,
     get: id => items[id] || null,
     all: () => Object.values(items),
-    list, view, create, update, pause, resume, cancel, finishNow, extend, startEarly, disqualify, decide,
+    list, view, create, update, pause, resume, cancel, finishNow, extend, startEarly, disqualify, decide, remove, addBots, removeBots, isBotAcc,
     register, unregister, checkin, setReady, reportGame, recordGameAbort, noteDisconnect,
     multiAccountReport, globalStats, statsOf, tick,
     constants: { SIZES, BEST_OF, ROUND_NAMES, DEFAULT_TIMERS, DEADLINE_POLICIES }

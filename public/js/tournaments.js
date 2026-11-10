@@ -1,6 +1,9 @@
 // public/js/tournaments.js
-// Campeonatos: lista no menu, página do campeonato (inscrição, check-in,
-// "estou pronto", chave, participantes, estatísticas), avisos e painel do admin.
+// Campeonatos (por enquanto só para testes):
+// - o admin cria pelo painel e passa o código para os jogadores;
+// - o jogador digita o código em "Entrar em sala" e clica em "Participar";
+// - a tela do campeonato mostra a chave (todas as séries melhor de 3),
+//   o próximo confronto e o botão "Estou pronto".
 // Tudo é decidido pelo servidor; aqui só mostra e manda os pedidos.
 // Usa `socket`, `CLIENT_ID`, `escapeText`, `goHomeScreen` e `lastGameState` do app.js.
 
@@ -8,352 +11,226 @@
   const $ = id => document.getElementById(id);
   const modal = $('modal-tour');
   const body = $('tour-body');
+  const titleEl = $('tour-modal-title');
+  const subEl = $('tour-modal-sub');
   const toast = (html, opts) => window.trucoSocial && window.trucoSocial.toast(html, opts);
   const esc = v => escapeText(v == null ? '' : String(v));
+  const isAdmin = () => typeof isClientAdminAuthenticated !== 'undefined' && !!isClientAdminAuthenticated;
 
   const STATUS = {
     registration: ['Inscrições abertas', 'open'],
-    checkin: ['Check-in aberto', 'checkin'],
+    checkin: ['Inscrições abertas', 'open'],
     running: ['Em andamento', 'live'],
     paused: ['Pausado', 'paused'],
     finished: ['Encerrado', 'done'],
     cancelled: ['Cancelado', 'cancelled']
   };
-  const REASON = { normal: '', wo: 'W.O.', duplo_wo: 'Duplo W.O.', bye: 'BYE', vaga_vazia: 'Vaga vazia', vazio: 'Vazio', abandono: 'Abandono', desclassificacao: 'Desclassificação' };
   const fmtDate = ms => new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  const fmtDur = ms => {
-    if (ms == null) return '—';
-    const s = Math.round(ms / 1000);
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}min ${s % 60}s`;
-    return `${Math.floor(m / 60)}h ${m % 60}min`;
+  const fmtHour = ms => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const fmtLeft = ms => {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   };
 
-  let current = null;       // id aberto
-  let data = null;          // último detalhe recebido
-  let tab = 'bracket';
-  let password = '';
-  let clockSkew = 0;        // servidor - navegador
+  let current = null;  // código aberto
+  let data = null;     // último estado recebido
+  let clockSkew = 0;   // servidor - navegador
   let tick = null;
-  let listData = null;
 
-  // ---------------------------------------------------------------- lista
-  function openList() {
-    current = null;
-    data = null;
+  const sNow = () => Date.now() + clockSkew;
+  const left = ms => Math.max(0, ms - sNow());
+  const statusChip = st => { const [l, c] = STATUS[st] || [st, '']; return `<span class="tour-status ${c}">${l}</span>`; };
+
+  // ================================================================ TELA DO CAMPEONATO
+  function openTour(id) {
+    current = String(id || '').toUpperCase();
     modal.classList.remove('hide');
-    renderLoading();
-    socket.emit('tour:list', {}, res => {
-      listData = res && res.ok ? res : { items: [], global: null };
-      renderList();
-      paintHomeCount();
-    });
-  }
-
-  function renderLoading() { body.innerHTML = '<p class="tour-empty"><span class="wait-spin"></span> Carregando…</p>'; }
-
-  function statusChip(st) {
-    const [label, cls] = STATUS[st] || [st, ''];
-    return `<span class="tour-status ${cls}">${label}</span>`;
-  }
-
-  function renderList() {
-    const items = (listData && listData.items) || [];
-    const groups = [
-      ['Acontecendo agora', items.filter(t => ['running', 'paused'].includes(t.status))],
-      ['Próximos', items.filter(t => ['registration', 'checkin'].includes(t.status))],
-      ['Encerrados', items.filter(t => ['finished', 'cancelled'].includes(t.status)).slice(0, 10)]
-    ];
-    const card = t => `
-      <li class="tour-card ${t.mine ? 'mine' : ''}">
-        <div class="tour-card-head">
-          <b>${esc(t.name)}</b>${t.isPrivate ? ' <i class="fa-solid fa-lock" title="Privado"></i>' : ''}
-          ${statusChip(t.status)}
-        </div>
-        <div class="tour-card-meta">
-          <span><i class="fa-regular fa-calendar"></i> ${fmtDate(t.startAt)}</span>
-          <span><i class="fa-solid fa-users"></i> ${t.registered}/${t.maxPlayers}</span>
-          ${t.mine ? '<span class="tour-mine"><i class="fa-solid fa-check"></i> Você está inscrito</span>' : ''}
-        </div>
-        <button type="button" class="btn btn-sm btn-primary" data-tour-open="${esc(t.id)}">Ver campeonato</button>
-      </li>`;
-    const g = listData && listData.global;
-    const best = g && g.myBestPlace ? `<p class="tour-best"><i class="fa-solid fa-medal"></i> Sua melhor colocação: <b>${g.myBestPlace.place}º</b> em ${esc(g.myBestPlace.name)}</p>` : '';
-    const hist = g && g.myHistory && g.myHistory.length ? `
-      <h3 class="tour-sub">Seus campeonatos anteriores</h3>
-      <ul class="tour-hist">${g.myHistory.slice(0, 10).map(h => `<li><button type="button" class="link-btn" data-tour-open="${esc(h.id)}">${esc(h.name)}</button> <span>${h.place ? `${h.place}º lugar` : `chegou na fase ${h.reachedRound}/${h.totalRounds}`}</span></li>`).join('')}</ul>` : '';
-    body.innerHTML = `
-      ${groups.map(([title, list]) => list.length ? `<h3 class="tour-sub">${title}</h3><ul class="tour-list">${list.map(card).join('')}</ul>` : '').join('')}
-      ${items.length ? '' : '<p class="tour-empty"><i class="fa-solid fa-trophy"></i> Nenhum campeonato por enquanto. Fique de olho!</p>'}
-      <form class="tour-code" id="tour-code-form" autocomplete="off">
-        <input type="text" id="tour-code" maxlength="8" placeholder="Código do campeonato privado" aria-label="Código do campeonato">
-        <input type="password" id="tour-pass" maxlength="64" placeholder="Senha" aria-label="Senha do campeonato">
-        <button type="submit" class="btn btn-sm btn-secondary">Entrar</button>
-      </form>
-      <p class="form-msg" id="tour-code-msg"></p>
-      ${best}${hist}`;
-    $('tour-code-form').addEventListener('submit', e => {
-      e.preventDefault();
-      const code = $('tour-code').value.trim().toUpperCase();
-      password = $('tour-pass').value;
-      if (code) openTour(code);
-    });
-  }
-
-  // ---------------------------------------------------------------- detalhe
-  // Lista de campeonatos escondida por enquanto: só o admin vê (os demais entram pelo código)
-  const listOpen = () => typeof isClientAdminAuthenticated !== 'undefined' && !!isClientAdminAuthenticated;
-
-  function openTour(id, opts = {}) {
-    current = id;
-    if (opts.tab) tab = opts.tab;
-    modal.classList.remove('hide');
-    if (!data || data.id !== id) renderLoading();
+    if (!data || data.id !== current) {
+      titleEl.innerHTML = '<i class="fa-solid fa-trophy"></i> Campeonato';
+      subEl.textContent = '';
+      body.innerHTML = '<p class="tour-empty"><span class="wait-spin"></span> Carregando…</p>';
+    }
     load();
   }
 
   function load() {
     if (!current) return;
     const id = current;
-    socket.emit('tour:view', { id, password }, res => {
+    socket.emit('tour:view', { id }, res => {
       if (current !== id) return;
       if (!res || res.error) {
-        body.innerHTML = `<p class="tour-empty">${esc((res && res.error) || 'Não deu para abrir.')}</p><button type="button" class="link-btn" data-tour-back>← Voltar</button>`;
+        data = null;
+        subEl.textContent = '';
+        body.innerHTML = `<p class="tour-empty">${esc((res && res.error) || 'Não deu para abrir.')}</p>`;
         return;
       }
       data = res.tournament;
       clockSkew = (data.serverNow || Date.now()) - Date.now();
-      renderDetail();
+      render();
     });
   }
 
-  const sNow = () => Date.now() + clockSkew;
-  const left = ms => Math.max(0, ms - sNow());
-
-  function myMatch() {
-    if (!data || !data.me || !data.me.match) return null;
-    return data.matches[data.me.match] || null;
+  function render() {
+    const d = data;
+    titleEl.innerHTML = `<i class="fa-solid fa-trophy"></i> ${esc(d.name)}`;
+    subEl.innerHTML = `${statusChip(d.status)} <span>Mata-mata · todas as séries melhor de 3 · partidas até ${d.maxPoints || '?'} ${d.maxPoints === 1 ? 'ponto' : 'pontos'}</span>`;
+    if (d.locked || d.restricted) {
+      body.innerHTML = `<div class="tour-action"><p><i class="fa-solid fa-lock"></i> ${d.status === 'finished' || d.status === 'cancelled' ? 'Este campeonato já terminou.' : 'Este campeonato já começou.'} Só quem está jogando vê a chave.</p></div>`;
+      return;
+    }
+    const banners = [
+      d.pause ? `<div class="tour-pause"><i class="fa-solid fa-circle-pause"></i> <b>Campeonato pausado.</b> ${esc(d.pause.message)}</div>` : '',
+      d.status === 'cancelled' ? `<div class="tour-pause">Campeonato cancelado.${d.cancelReason ? ' ' + esc(d.cancelReason) : ''}</div>` : '',
+      d.results ? podium() : ''
+    ].join('');
+    const started = !!d.bracket;
+    body.innerHTML = `
+      ${banners}
+      ${actionCard()}
+      ${started ? bracketHtml() : playersHtml()}
+      ${rulesLine()}`;
+    startTick();
   }
 
+  // O que o jogador precisa fazer agora (um cartão só)
   function actionCard() {
     const d = data;
     const me = d.me;
     const logged = window.trucoSocial && window.trucoSocial.isLogged && window.trucoSocial.isLogged();
+    const open = ['registration', 'checkin'].includes(d.status);
     if (['finished', 'cancelled'].includes(d.status)) return '';
+
     if (!me) {
-      if (!['registration', 'checkin'].includes(d.status)) return '';
-      if (!logged) return `<div class="tour-action"><p>Entre na sua conta para participar.</p><button type="button" class="btn btn-primary" data-tour-act="login">Entrar</button></div>`;
+      if (!open) return '';
+      if (!logged) return `<div class="tour-action big"><p>Entre na sua conta para participar.</p><button type="button" class="btn btn-primary btn-large" data-tour-act="login">Entrar</button></div>`;
       const full = d.registered >= d.maxPlayers;
-      return `<div class="tour-action"><p>${full ? 'As vagas acabaram.' : `${d.maxPlayers - d.registered} vagas disponíveis.`}</p>
-        ${full ? '' : '<button type="button" class="btn btn-primary" data-tour-act="register"><i class="fa-solid fa-pen-to-square"></i> Inscrever-se</button>'}</div>`;
-    }
-    if (['registration', 'checkin'].includes(d.status)) {
-      const canCheck = d.checkinRequired && sNow() >= d.checkinOpensAt;
-      return `<div class="tour-action">
-        <p><i class="fa-solid fa-check"></i> Você está inscrito.${d.checkinRequired ? (me.checkedIn ? ' <b>Presença confirmada!</b>' : ` O check-in abre ${fmtDate(d.checkinOpensAt)} (15 min antes).`) : ''}</p>
-        <div class="tour-action-btns">
-          ${d.checkinRequired && !me.checkedIn ? `<button type="button" class="btn btn-primary" data-tour-act="checkin" ${canCheck ? '' : 'disabled'}><i class="fa-solid fa-circle-check"></i> Confirmar presença</button>` : ''}
-          <button type="button" class="btn btn-sm btn-secondary" data-tour-act="unregister">Cancelar inscrição</button>
-        </div></div>`;
-    }
-    const m = myMatch();
-    if (!m) {
-      const out = ['eliminated', 'absent', 'disqualified'].includes(me.status);
-      return `<div class="tour-action"><p>${out ? 'Você está fora do campeonato. Acompanhe a chave!' : me.status === 'champion' ? 'Você é o campeão!' : 'Aguardando o seu próximo confronto…'}</p></div>`;
-    }
-    const mine = m.a === me.account ? 'a' : 'b';
-    const opp = mine === 'a' ? m.bName : m.aName;
-    const series = m.bestOf > 1 ? `<span class="tour-series">MD${m.bestOf} · ${m.wins[mine]} x ${m.wins[mine === 'a' ? 'b' : 'a']}</span>` : '';
-    if (m.status === 'ready_check') {
-      const iReady = m.ready[mine];
-      return `<div class="tour-action next ${iReady ? 'ok' : 'urgent'}">
-        <small>Seu próximo confronto · ${esc(d.roundNames[m.key] || m.key)}</small>
-        <b class="tour-vs">Você × ${esc(opp)}</b>${series}
-        <p>${iReady ? 'Você confirmou. Esperando o adversário…' : 'Confirme que está pronto para entrar na partida.'} <b class="tour-countdown" data-deadline="${m.readyDeadline}">${fmtDur(left(m.readyDeadline))}</b></p>
-        ${iReady ? '' : '<button type="button" class="btn btn-primary btn-large" data-tour-act="ready"><i class="fa-solid fa-play"></i> Estou pronto</button>'}
-        <small class="tour-wo-note">Quem não confirmar no prazo perde por W.O.</small>
+      return `<div class="tour-action big">
+        <p><b>${d.registered} de ${d.maxPlayers}</b> jogadores · começa ${fmtDate(d.startAt)}</p>
+        ${full ? '<p>As vagas acabaram.</p>' : '<button type="button" class="btn btn-primary btn-large" data-tour-act="register"><i class="fa-solid fa-right-to-bracket"></i> Participar</button>'}
       </div>`;
     }
+    if (open) {
+      const needCheck = d.checkinRequired && !me.checkedIn;
+      return `<div class="tour-action big ok">
+        <p><i class="fa-solid fa-circle-check"></i> <b>Você está no campeonato!</b></p>
+        <p>Começa ${fmtDate(d.startAt)}. Quando o seu confronto abrir, aparece um aviso aqui no site para você clicar em <b>Estou pronto</b>.</p>
+        ${needCheck ? `<button type="button" class="btn btn-primary" data-tour-act="checkin" ${sNow() >= d.checkinOpensAt ? '' : 'disabled'}>Confirmar presença</button>` : ''}
+        <button type="button" class="link-btn tour-leave" data-tour-act="unregister">Sair do campeonato</button>
+      </div>`;
+    }
+    const m = d.me.match && d.matches[d.me.match];
+    if (!m) {
+      const msg = me.status === 'champion' ? '<i class="fa-solid fa-trophy"></i> Você é o campeão!'
+        : ['eliminated', 'absent', 'disqualified'].includes(me.status) ? 'Você foi eliminado. Acompanhe a chave!'
+          : 'Você passou! Espere o seu próximo adversário.';
+      return `<div class="tour-action"><p>${msg}</p></div>`;
+    }
+    const mine = m.a === me.account ? 'a' : 'b';
+    const other = mine === 'a' ? 'b' : 'a';
+    const opp = mine === 'a' ? m.bName : m.aName;
+    const series = `<span class="tour-series">Série ${m.wins[mine]} x ${m.wins[other]} · melhor de ${m.bestOf}</span>`;
+    const head = `<small>${esc(d.roundNames[m.key] || m.key)}</small><b class="tour-vs">Você × ${esc(opp)}</b>${series}`;
+    if (m.status === 'ready_check') {
+      const iReady = m.ready[mine];
+      return `<div class="tour-action next ${iReady ? 'ok' : 'urgent'}">${head}
+        <p>${iReady ? 'Pronto! Esperando o adversário…' : 'Sua partida vai começar. Clique para entrar.'} <b class="tour-countdown" data-deadline="${m.readyDeadline}">${fmtLeft(left(m.readyDeadline))}</b></p>
+        ${iReady ? '' : '<button type="button" class="btn btn-primary btn-large" data-tour-act="ready"><i class="fa-solid fa-play"></i> Estou pronto</button>'}
+        <small class="tour-wo-note">Quem não confirmar a tempo perde o confronto.</small></div>`;
+    }
     if (m.status === 'between') {
-      return `<div class="tour-action next"><small>Série em andamento</small><b class="tour-vs">Você × ${esc(opp)}</b>${series}
-        <p>Próxima partida em <b class="tour-countdown" data-deadline="${m.nextGameAt}">${fmtDur(left(m.nextGameAt))}</b></p></div>`;
+      return `<div class="tour-action next">${head}<p>Próxima partida da série em <b class="tour-countdown" data-deadline="${m.nextGameAt}">${fmtLeft(left(m.nextGameAt))}</b></p></div>`;
     }
-    if (m.status === 'playing') {
-      return `<div class="tour-action next"><small>Partida em andamento</small><b class="tour-vs">Você × ${esc(opp)}</b>${series}</div>`;
-    }
+    if (m.status === 'playing') return `<div class="tour-action next">${head}<p>Partida em andamento.</p></div>`;
     return '';
   }
 
-  function renderDetail() {
-    const d = data;
-    if (d.locked) {
-      body.innerHTML = `
-        ${listOpen() ? '<button type="button" class="link-btn" data-tour-back>← Campeonatos</button>' : ''}
-        <h2 class="tour-title">${esc(d.name)} <i class="fa-solid fa-lock"></i></h2>
-        <p>Este campeonato é privado. Digite a senha para ver e se inscrever.</p>
-        <form class="tour-code" id="tour-unlock" autocomplete="off">
-          <input type="password" id="tour-unlock-pass" maxlength="64" placeholder="Senha" aria-label="Senha">
-          <button type="submit" class="btn btn-sm btn-primary">Abrir</button>
-        </form>`;
-      $('tour-unlock').addEventListener('submit', e => { e.preventDefault(); password = $('tour-unlock-pass').value; load(); });
-      return;
-    }
-    const pause = d.pause ? `<div class="tour-pause"><i class="fa-solid fa-circle-pause"></i> <b>Campeonato pausado.</b> ${esc(d.pause.message)}</div>` : '';
-    const results = d.results ? resultsBox() : '';
-    body.innerHTML = `
-      ${listOpen() ? '<button type="button" class="link-btn" data-tour-back>← Campeonatos</button>' : ''}
-      <div class="tour-head">
-        <h2 class="tour-title">${esc(d.name)}</h2>
-        ${statusChip(d.status)}
-      </div>
-      <div class="tour-meta">
-        <span><i class="fa-regular fa-calendar"></i> Início: ${fmtDate(d.startAt)}</span>
-        <span><i class="fa-regular fa-clock"></i> Prazo: ${fmtDate(d.endAt)}</span>
-        <span><i class="fa-solid fa-users"></i> ${d.registered}/${d.maxPlayers}</span>
-        ${d.isPrivate ? '<span><i class="fa-solid fa-lock"></i> Privado</span>' : ''}
-      </div>
-      ${d.description ? `<p class="tour-desc">${esc(d.description)}</p>` : ''}
-      ${d.cancelReason ? `<div class="tour-pause">Cancelado: ${esc(d.cancelReason)}</div>` : ''}
-      ${pause}
-      ${actionCard()}
-      ${results}
-      <div class="tour-tabs" role="tablist">
-        ${[['bracket', 'Chave'], ['players', 'Participantes'], ['stats', 'Estatísticas'], ['rules', 'Regras']].map(([k, l]) => `<button type="button" class="tour-tab ${tab === k ? 'active' : ''}" data-tour-tab="${k}">${l}</button>`).join('')}
-      </div>
-      <div class="tour-pane">${tab === 'bracket' ? bracketHtml() : tab === 'players' ? playersHtml() : tab === 'stats' ? statsHtml() : rulesHtml()}</div>`;
-    startTick();
-  }
-
-  function resultsBox() {
+  function podium() {
     const r = data.results;
     const nm = acc => esc((data.participants.find(p => p.account === acc) || {}).name || acc);
-    if (!r.champion) return `<div class="tour-results"><b>Encerrado sem campeão</b> ${r.how === 'deadline' ? '(o prazo acabou antes da final)' : ''}</div>`;
-    return `<div class="tour-results">
-      <div class="tour-podium">
-        <div class="p2"><i class="fa-solid fa-medal"></i><b>${r.runnerUp ? nm(r.runnerUp) : '—'}</b><small>Vice</small></div>
-        <div class="p1"><i class="fa-solid fa-trophy"></i><b>${nm(r.champion)}</b><small>Campeão</small></div>
-        <div class="p3"><i class="fa-solid fa-medal"></i><b>${r.third.length ? r.third.map(nm).join(' / ') : '—'}</b><small>3º lugar</small></div>
-      </div>
-    </div>`;
+    if (!r.champion) return '<div class="tour-results"><b>Encerrado sem campeão.</b></div>';
+    return `<div class="tour-results"><div class="tour-podium">
+      <div class="p2"><i class="fa-solid fa-medal"></i><b>${r.runnerUp ? nm(r.runnerUp) : '—'}</b><small>Vice</small></div>
+      <div class="p1"><i class="fa-solid fa-trophy"></i><b>${nm(r.champion)}</b><small>Campeão</small></div>
+      <div class="p3"><i class="fa-solid fa-medal"></i><b>${r.third && r.third.length ? r.third.map(nm).join(' / ') : '—'}</b><small>3º lugar</small></div>
+    </div></div>`;
   }
 
-  // Chave: colunas por fase, confrontos em pares ligados por linhas
+  // Antes de começar: quem já entrou
+  function playersHtml() {
+    const d = data;
+    const list = d.participants || [];
+    return `<section class="tb-section">
+      <h3 class="tb-title">Jogadores (${list.length}/${d.maxPlayers})</h3>
+      ${list.length ? `<ul class="tb-players">${list.map(p => `<li class="${d.me && d.me.account === p.account ? 'me' : ''} ${p.bot ? 'bot' : ''}"><i class="fa-solid ${p.bot ? 'fa-robot' : 'fa-user'}"></i> ${esc(p.name)}</li>`).join('')}</ul>` : '<p class="tour-empty">Ninguém entrou ainda.</p>'}
+      <p class="tour-note">A chave é sorteada quando o campeonato começar.</p>
+    </section>`;
+  }
+
+  // Chave: colunas por fase; cada confronto mostra a série melhor de 3
   function bracketHtml() {
     const d = data;
-    if (!d.bracket) return `<p class="tour-empty">A chave é sorteada quando o campeonato começa (só entra quem ${d.checkinRequired ? 'confirmar presença' : 'estiver inscrito'}).</p>`;
     const meAcc = d.me && d.me.account;
-    const matchBox = m => {
+    const box = m => {
+      const need = Math.ceil((m.bestOf || 3) / 2);
       const side = s => {
         const acc = m[s];
-        const name = m[s + 'Name'];
-        const filled = m[s + 'Filled'];
         const win = m.winner && m.winner === acc;
         const lose = m.status === 'done' && acc && !win;
-        const label = acc ? esc(name) : filled ? (m.reason === 'bye' ? '<i>BYE</i>' : '<i>vaga vazia</i>') : '<i>a definir</i>';
-        return `<div class="bm-side ${win ? 'win' : ''} ${lose ? 'lose' : ''} ${acc && acc === meAcc ? 'me' : ''}"><span>${label}</span><b>${m.bestOf > 1 || m.status !== 'waiting' ? m.wins[s] : ''}</b></div>`;
+        const label = acc ? esc(m[s + 'Name']) : m[s + 'Filled'] ? (m.reason === 'bye' ? '<i>passa direto</i>' : '<i>vaga vazia</i>') : '<i>a definir</i>';
+        const dots = acc ? Array.from({ length: need }, (_, i) => `<span class="tm-dot ${i < m.wins[s] ? 'on' : ''}"></span>`).join('') : '';
+        return `<div class="tm-side ${win ? 'win' : ''} ${lose ? 'lose' : ''} ${acc && acc === meAcc ? 'me' : ''}">
+          <span class="tm-name">${win ? '<i class="fa-solid fa-crown"></i> ' : ''}${label}</span>
+          <span class="tm-dots">${dots}</span><b class="tm-score">${acc ? m.wins[s] : ''}</b></div>`;
       };
-      const reason = REASON[m.reason] ? `<em class="bm-reason">${REASON[m.reason]}</em>` : '';
       const live = m.games.find(g => g.roomId);
-      return `<div class="bm ${m.status} ${m.reason || ''}">
+      const n = m.games.length;
+      const tag = m.status === 'playing' ? `<span class="tm-tag live">Ao vivo · partida ${n}</span>`
+        : m.status === 'between' ? '<span class="tm-tag live">Entre partidas</span>'
+          : m.status === 'ready_check' ? '<span class="tm-tag wait">Esperando os jogadores</span>'
+            : m.reason === 'wo' ? '<span class="tm-tag">Venceu por W.O.</span>'
+              : m.reason === 'duplo_wo' ? '<span class="tm-tag">Ninguém apareceu</span>'
+                : m.reason === 'bye' ? '<span class="tm-tag">Passa direto</span>'
+                  : m.status === 'done' ? '<span class="tm-tag">Finalizado</span>'
+                    : '<span class="tm-tag">Melhor de 3</span>';
+      return `<div class="tm ${m.status}">
         ${side('a')}${side('b')}
-        <div class="bm-foot">${m.bestOf > 1 ? `MD${m.bestOf}` : ''}${reason}${live ? ` <button type="button" class="link-btn bm-watch" data-tour-watch="${esc(live.roomId)}"><i class="fa-solid fa-eye"></i> Assistir</button>` : m.status === 'ready_check' ? ' <span class="bm-wait">esperando</span>' : ''}</div>
+        <div class="tm-foot">${tag}${live ? `<button type="button" class="link-btn tm-watch" data-tour-watch="${esc(live.roomId)}"><i class="fa-solid fa-eye"></i> Assistir</button>` : ''}</div>
       </div>`;
     };
-    const cols = d.bracket.rounds.map((ids, r) => {
+    const cols = d.bracket.rounds.map(ids => {
       const key = d.matches[ids[0]].key;
       const pairs = [];
       for (let i = 0; i < ids.length; i += 2) pairs.push(ids.slice(i, i + 2));
       return `<div class="br-col">
         <div class="br-title">${esc(d.roundNames[key] || key)}</div>
-        <div class="br-body">${pairs.map(p => `<div class="br-pair ${p.length === 2 ? 'two' : 'one'}">${p.map(id => `<div class="br-slot">${matchBox(d.matches[id])}</div>`).join('')}</div>`).join('')}</div>
+        <div class="br-body">${pairs.map(p => `<div class="br-pair ${p.length === 2 ? 'two' : 'one'}">${p.map(id => `<div class="br-slot">${box(d.matches[id])}</div>`).join('')}</div>`).join('')}</div>
       </div>`;
     }).join('');
-    const third = d.matches['3P'] ? `<div class="br-third"><div class="br-title">${esc(d.roundNames['3P'])}</div>${matchBox(d.matches['3P'])}</div>` : '';
-    return `<div class="bracket-wrap"><div class="bracket">${cols}</div>${third}</div>
-      <div class="br-legend"><span class="lg live">Em andamento</span><span class="lg ready_check">Esperando confirmação</span><span class="lg done">Finalizado</span><span class="lg wo">W.O.</span><span class="lg bye">BYE</span></div>`;
+    const champ = d.results && d.results.champion ? (d.participants.find(p => p.account === d.results.champion) || {}).name : null;
+    const champCol = `<div class="br-col br-champ"><div class="br-title">Campeão</div>
+      <div class="br-body"><div class="tm-champ ${champ ? 'has' : ''}"><i class="fa-solid fa-trophy"></i><b>${champ ? esc(champ) : '?'}</b></div></div></div>`;
+    const third = d.matches['3P'] ? `<div class="br-third"><div class="br-title">${esc(d.roundNames['3P'])}</div>${box(d.matches['3P'])}</div>` : '';
+    return `<section class="tb-section">
+      <div class="bracket-wrap tb-bracket"><div class="bracket">${cols}${champCol}</div>${third}</div>
+      <p class="tour-note tb-hint"><span class="tm-dot on"></span> = partida vencida. Quem ganhar 2 partidas avança.</p>
+    </section>`;
   }
 
-  function playersHtml() {
-    const ST = { registered: 'Inscrito', checked_in: 'Confirmado', playing: 'Jogando', eliminated: 'Eliminado', absent: 'Não confirmou', disqualified: 'Desclassificado', champion: 'Campeão' };
-    const place = acc => { const p = data.results && data.results.placements.find(x => x.account === acc); return p && p.place ? `${p.place}º` : ''; };
-    return `<ul class="tour-players">${data.participants.map(p => `
-      <li class="${p.status}"><b>${esc(p.name)}</b><span>${place(p.account)} ${ST[p.status] || p.status}${data.checkinRequired && p.checkedIn && ['registration', 'checkin'].includes(data.status) ? ' ✓' : ''}</span></li>`).join('') || '<li class="tour-empty">Ninguém inscrito ainda.</li>'}</ul>`;
-  }
-
-  function statsHtml() {
-    const s = data.stats;
-    if (!s) return '<p class="tour-empty">Sem estatísticas ainda.</p>';
-    const g = s.general;
-    const r = s.records;
-    const row = (l, v) => `<div class="st-row"><span>${l}</span><b>${v}</b></div>`;
-    const rec = (l, x, fmt) => x ? row(l, fmt(x)) : '';
-    return `
-      <div class="st-grid">
-        <section><h4>Geral</h4>
-          ${row('Inscritos', g.registered)}${row('Confirmados', g.confirmed)}${row('Partidas disputadas', g.gamesPlayed)}
-          ${row('Confrontos concluídos', g.matchesDone)}${row('Tempo total (sem pausas)', fmtDur(g.totalMs))}
-          ${row('Tempo médio por partida', fmtDur(g.avgGameMs))}${row('Tempo médio por confronto', fmtDur(g.avgMatchMs))}
-          ${row('W.O.', g.wo)}${row('Duplo W.O.', g.doubleWo)}${row('Desconexões', g.disconnects)}
-          ${row('Partidas até o fim', g.normalGames)}${row('Partidas por abandono', g.abandonedGames)}
-          ${Object.entries(g.byPhase).map(([k, v]) => row(`Partidas · ${esc(k)}`, v)).join('')}
-        </section>
-        <section><h4>Recordes</h4>
-          ${rec('Partida mais longa', r.longestGame, x => `${fmtDur(x.ms)} · ${esc(x.players.join(' × '))}`)}
-          ${rec('Partida mais rápida', r.fastestGame, x => `${fmtDur(x.ms)} · ${esc(x.players.join(' × '))}`)}
-          ${rec('Confronto mais longo', r.longestMatch, x => `${fmtDur(x.ms)} · ${esc(x.players.join(' × '))}`)}
-          ${rec('Confronto mais rápido', r.fastestMatch, x => `${fmtDur(x.ms)} · ${esc(x.players.join(' × '))}`)}
-          ${rec('Maior sequência de vitórias', r.bestStreak, x => `${x.value} · ${esc(x.name)}`)}
-          ${rec('Mais partidas jogadas', r.mostGames, x => `${x.value} · ${esc(x.name)}`)}
-          ${rec('Mais tempo em partidas', r.mostTime, x => `${fmtDur(x.ms)} · ${esc(x.name)}`)}
-          ${rec('Maior virada', r.biggestComeback, x => `${esc(x.winner)} (${x.score}, estava ${x.deficit} atrás)`)}
-          ${Object.values(r).every(v => !v) ? '<p class="tour-empty">Os recordes aparecem conforme as partidas terminam.</p>' : ''}
-        </section>
-      </div>
-      <h4 class="tour-sub">Jogadores</h4>
-      <div class="st-table-wrap"><table class="st-table">
-        <thead><tr><th>Jogador</th><th>Partidas</th><th>V</th><th>D</th><th>%</th><th>Tempo médio</th><th>Mãos V/D</th><th>Truco pedido/aceito/recusado</th><th>W.O. V/D</th><th>Quedas</th></tr></thead>
-        <tbody>${s.individual.sort((a, b) => b.wins - a.wins || b.games - a.games).map(i => `<tr>
-          <td>${esc(i.name)}</td><td>${i.games}</td><td>${i.wins}</td><td>${i.losses}</td><td>${i.winRate == null ? '—' : i.winRate + '%'}</td>
-          <td>${fmtDur(i.avgGameMs)}</td><td>${i.handsWon}/${i.handsLost}</td><td>${i.trucoCalls}/${i.trucoAccepted}/${i.trucoRefused}</td><td>${i.woWins}/${i.woLosses}</td><td>${i.disconnects}</td></tr>`).join('')}</tbody>
-      </table></div>
-      <p class="tour-note">Tempos contam só o jogo (sem pausas da organização). Mãos e truco contam a partir das partidas de campeonato.</p>`;
-  }
-
-  function rulesHtml() {
-    const d = data;
-    const bo = Object.keys(d.roundNames).filter(k => d.bestOf.byRound[k]).map(k => `${d.roundNames[k]}: MD${d.bestOf.byRound[k]}`);
-    const t = d.timers;
-    const POL = { finish_running: 'as partidas em andamento terminam e não começam novas', extend: `o campeonato é prorrogado em ${d.extendMinutes} min`, end_no_champion: 'o campeonato encerra sem campeão' };
-    return `<ul class="tour-rules">
-      <li><b>Formato:</b> eliminatória simples (1v1), partidas até ${d.maxPoints} pontos.</li>
-      <li><b>Confrontos:</b> MD${d.bestOf.default}${bo.length ? ` (${bo.join(', ')})` : ''}. Vence quem ganhar a maioria das partidas.</li>
-      <li><b>3º lugar:</b> ${d.thirdPlace ? 'tem disputa entre os perdedores das semifinais' : 'os perdedores das semifinais dividem o 3º lugar'}.</li>
-      <li><b>Check-in:</b> ${d.checkinRequired ? 'obrigatório, abre 15 minutos antes; quem não confirmar fica fora da chave' : 'não precisa'}.</li>
-      <li><b>Entrar na partida:</b> ${fmtDur(t.readyMs)} para confirmar "Estou pronto"; quem não confirmar perde por W.O.${d.woEndsSeries ? ' (perde o confronto inteiro)' : ''}. Se nenhum dos dois confirmar, é duplo W.O.</li>
-      <li><b>Tempo de jogada:</b> ${fmtDur(t.turnMs)} · para responder apostas: ${fmtDur(t.trucoMs)}.</li>
-      <li><b>Queda de conexão:</b> ${fmtDur(t.reconnectMs)} para voltar, até ${fmtDur(t.disconnectTotalMs)} somados na partida. Depois disso, perde a partida.</li>
-      <li><b>Entre partidas da série:</b> ${fmtDur(t.betweenGamesMs)}.</li>
-      <li><b>Prazo final:</b> ${fmtDate(d.endAt)}; ao chegar nele ${POL[d.deadlinePolicy]}.</li>
-      <li>Cada conta participa uma vez. Multicontas podem ser desclassificadas.</li>
-    </ul>`;
+  function rulesLine() {
+    const t = data.timers || {};
+    return `<p class="tour-note tb-rules">Ao abrir o seu confronto você tem ${(t.readyMs || 180000) < 60000 ? `${Math.round((t.readyMs || 0) / 1000)} segundos` : `${Math.round((t.readyMs || 180000) / 60000)} min`} para clicar em <b>Estou pronto</b>; quem não clicar perde o confronto. Entre uma partida e outra da série há uma pausa curta.</p>`;
   }
 
   function startTick() {
     clearInterval(tick);
     tick = setInterval(() => {
       if (modal.classList.contains('hide')) { clearInterval(tick); return; }
-      body.querySelectorAll('[data-deadline]').forEach(el => { el.textContent = fmtDur(left(Number(el.dataset.deadline))); });
+      body.querySelectorAll('[data-deadline]').forEach(el => { el.textContent = fmtLeft(left(Number(el.dataset.deadline))); });
     }, 500);
   }
 
   // ---------------------------------------------------------------- ações
   body.addEventListener('click', e => {
-    const open = e.target.closest('[data-tour-open]');
-    if (open) return openTour(open.dataset.tourOpen);
-    if (e.target.closest('[data-tour-back]')) { if (listOpen()) return openList(); modal.classList.add('hide'); return; }
-    const t = e.target.closest('[data-tour-tab]');
-    if (t) { tab = t.dataset.tourTab; renderDetail(); return; }
     const w = e.target.closest('[data-tour-watch]');
     if (w) {
       socket.emit('spectate:join', { roomId: w.dataset.tourWatch, name: (typeof usernameInput !== 'undefined' && usernameInput.value) || '' }, res => {
@@ -368,14 +245,14 @@
     if (a === 'login') { window.trucoSocial.openAuth('login'); return; }
     const ev = { register: 'tour:register', unregister: 'tour:unregister', checkin: 'tour:checkin', ready: 'tour:ready' }[a];
     if (!ev) return;
-    if (a === 'unregister' && !confirm('Cancelar sua inscrição neste campeonato?')) return;
+    if (a === 'unregister' && !confirm('Sair deste campeonato?')) return;
     act.disabled = true;
-    const payload = { id: current, password, clientId: CLIENT_ID };
+    const payload = { id: current, clientId: CLIENT_ID };
     if (a === 'ready') payload.matchId = data.me && data.me.match;
     socket.emit(ev, payload, res => {
       act.disabled = false;
       if (res && res.error) toast(`<i class="fa-solid fa-circle-exclamation"></i> ${esc(res.error)}`);
-      else if (a === 'register') toast('<i class="fa-solid fa-check"></i> Inscrição feita! Fique de olho no horário do check-in.');
+      else if (a === 'register') toast('<i class="fa-solid fa-check"></i> Você entrou no campeonato!');
       load();
     });
   });
@@ -387,16 +264,13 @@
       clearTimeout(reloadTimer);
       reloadTimer = setTimeout(load, 200);
     }
-  });
-  socket.on('tour:list_changed', () => {
-    paintHomeCount();
-    if (!modal.classList.contains('hide') && !current) openList();
+    if (adminBox && !$('modal-admin-panel').classList.contains('hide')) adminLoadSoon();
   });
 
   // Avisos do campeonato
   socket.on('tour:notify', n => {
     if (window.soundManager && window.soundManager.playChatPing) window.soundManager.playChatPing();
-    const actions = [{ label: 'Abrir', primary: n.type !== 'match_ready', onClick: () => openTour(n.tid) }];
+    const actions = [{ label: 'Ver chave', primary: n.type !== 'match_ready', onClick: () => openTour(n.tid) }];
     if (n.type === 'match_ready') {
       actions.unshift({ label: 'Estou pronto', primary: true, onClick: () => socket.emit('tour:ready', { id: n.tid, matchId: n.matchId, clientId: CLIENT_ID }, res => { if (res && res.error) toast(esc(res.error)); }) });
     }
@@ -415,10 +289,12 @@
     if (window.trucoSocial && window.trucoSocial.openAuth) window.trucoSocial.openAuth('login');
   });
 
-  // Partida de campeonato acabou: volta para a página do campeonato
+  // Partida de campeonato acabou: volta para a chave
   socket.on('tour:back', ({ tid }) => {
+    bar.classList.add('hide');
+    inTourGame = null;
     if (typeof goHomeScreen === 'function') goHomeScreen();
-    if (tid) openTour(tid, { tab: 'bracket' });
+    if (tid) openTour(tid);
   });
 
   // Na mesa: barra com o confronto e o placar da série; pausa em destaque
@@ -430,131 +306,121 @@
     const info = s && s.tournament;
     document.body.classList.toggle('tour-game', !!info);
     if (!info || s.state === 'lobby') { bar.classList.add('hide'); inTourGame = null; return; }
-    // Entrou na mesa: fecha a página do campeonato e o aviso de "Estou pronto"
+    // Entrou na mesa: fecha a tela do campeonato e o aviso de "Estou pronto"
     const key = `${info.tid}:${info.matchId || info.label}:${info.n || ''}`;
     if (inTourGame !== key) {
       inTourGame = key;
       modal.classList.add('hide');
       if (window.trucoSocial && window.trucoSocial.dismissToast) window.trucoSocial.dismissToast(`tour-${info.tid}-match_ready`);
     }
-    const series = info.bestOf > 1 && info.series ? ` · série ${info.series.a} x ${info.series.b}` : '';
+    const series = info.series ? ` · série ${info.series.a} x ${info.series.b} (melhor de ${info.bestOf})` : '';
     bar.className = `tour-game-bar ${info.paused ? 'paused' : ''}`;
     bar.innerHTML = info.paused
       ? `<i class="fa-solid fa-circle-pause"></i> <b>Campeonato pausado.</b> ${esc(info.pauseMessage || '')}`
       : `<i class="fa-solid fa-trophy"></i> ${esc(info.name)} · ${esc(info.label)}${series}`;
   });
 
-  // ---------------------------------------------------------------- menu
-  function paintHomeCount() {
-    socket.emit('tour:list', {}, res => {
-      const items = (res && res.items) || [];
-      const open = items.filter(t => ['registration', 'checkin', 'running', 'paused'].includes(t.status)).length;
-      const badge = $('tour-count');
-      if (badge) { badge.textContent = open; badge.classList.toggle('hide', !open); }
-    });
-  }
-  $('open-tour-btn').addEventListener('click', openList);
   modal.querySelectorAll('[data-close-modal]').forEach(b => b.addEventListener('click', () => modal.classList.add('hide')));
-  modal.addEventListener('mousedown', e => { if (e.target === modal) modal.classList.add('hide'); });
-  socket.on('connect', paintHomeCount);
 
   // ================================================================ ADMIN
   const adminBox = $('admin-tour');
   let adminEditing = null;
+  let lastCreated = null;
+  let adminTimer = null;
+  const adminLoadSoon = () => { clearTimeout(adminTimer); adminTimer = setTimeout(adminLoad, 300); };
   const toLocalInput = ms => { const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
-  const PHASES = [['R64', '32-avos'], ['R32', '16-avos'], ['R16', 'Oitavas'], ['QF', 'Quartas'], ['SF', 'Semifinal'], ['F', 'Final'], ['3P', '3º lugar']];
 
   function adminLoad() {
     if (!adminBox) return;
     socket.emit('tour:list', {}, res => {
       const items = (res && res.items) || [];
+      const created = lastCreated ? `
+        <div class="tadm-created">
+          <p><i class="fa-solid fa-circle-check"></i> <b>Campeonato criado!</b> Passe este código para os jogadores:</p>
+          <div class="tadm-created-code"><b>${esc(lastCreated)}</b><button type="button" class="btn btn-sm btn-secondary" data-tadm="copy" data-id="${esc(lastCreated)}"><i class="fa-regular fa-copy"></i> Copiar</button></div>
+          <p class="tour-note">Eles digitam o código em <b>Entrar em sala</b> e clicam em <b>Participar</b> (precisa ter conta).</p>
+        </div>` : '';
       adminBox.innerHTML = `
-        <div class="admin-games-head"><span>Campeonatos</span><button type="button" class="btn btn-sm btn-primary" data-tadm="new"><i class="fa-solid fa-plus"></i> Novo</button></div>
+        <div class="admin-games-head"><span>Campeonatos</span><button type="button" class="btn btn-sm btn-primary" data-tadm="new"><i class="fa-solid fa-plus"></i> Criar campeonato</button></div>
         <div id="tadm-form-wrap"></div>
-        <ul class="tadm-list">${items.map(t => `
-          <li class="tadm-item">
-            <div><b>${esc(t.name)}</b> ${statusChip(t.status)} <small>Código <b class="tadm-code">${esc(t.id)}</b> · ${t.registered}/${t.maxPlayers} · ${fmtDate(t.startAt)}${t.isPrivate ? ' · privado' : ''}</small></div>
+        ${created}
+        <ul class="tadm-list">${items.map(t => {
+          const open = ['registration', 'checkin'].includes(t.status);
+          return `<li class="tadm-item">
+            <div class="tadm-item-head"><b>${esc(t.name)}</b> ${statusChip(t.status)}</div>
+            <div class="tadm-item-meta">
+              <span>Código <b class="tadm-code">${esc(t.id)}</b> <button type="button" class="link-btn" data-tadm="copy" data-id="${t.id}" aria-label="Copiar código"><i class="fa-regular fa-copy"></i></button></span>
+              <span><i class="fa-solid fa-users"></i> ${t.registered}/${t.maxPlayers}</span>
+              ${open ? `<span><i class="fa-regular fa-clock"></i> começa ${fmtDate(t.startAt)}</span>` : ''}
+            </div>
             <div class="tadm-actions">
-              ${['registration', 'checkin'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="edit" data-id="${t.id}">Editar</button><button type="button" class="btn btn-sm btn-secondary" data-tadm="start" data-id="${t.id}">Iniciar agora</button>` : ''}
+              <button type="button" class="btn btn-sm btn-primary" data-tadm="view" data-id="${t.id}"><i class="fa-solid fa-sitemap"></i> Ver chave</button>
+              ${open ? `<button type="button" class="btn btn-sm btn-success" data-tadm="start" data-id="${t.id}"><i class="fa-solid fa-play"></i> Começar agora</button>` : ''}
+              ${open && t.registered < t.maxPlayers ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="add_bot" data-id="${t.id}"><i class="fa-solid fa-robot"></i> +1 bot</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-tadm="fill_bots" data-id="${t.id}" data-free="${t.maxPlayers - t.registered}"><i class="fa-solid fa-robot"></i> Completar com bots</button>` : ''}
               ${t.status === 'running' ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="pause" data-id="${t.id}">Pausar</button>` : ''}
               ${t.status === 'paused' ? `<button type="button" class="btn btn-sm btn-primary" data-tadm="resume" data-id="${t.id}">Retomar</button>` : ''}
-              ${['running', 'paused', 'registration', 'checkin'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="extend" data-id="${t.id}">Prorrogar</button>` : ''}
-              ${['running', 'paused'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="finish" data-id="${t.id}">Encerrar</button>` : ''}
-              ${!['finished', 'cancelled'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-danger" data-tadm="cancel" data-id="${t.id}">Cancelar</button>` : ''}
-              <button type="button" class="btn btn-sm btn-secondary" data-tadm="multi" data-id="${t.id}">Multicontas</button>
-              <button type="button" class="btn btn-sm btn-secondary" data-tadm="view" data-id="${t.id}">Ver</button>
+              <details class="tadm-more"><summary>Mais</summary><div class="tadm-actions">
+                ${open ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="edit" data-id="${t.id}">Editar</button>
+                  <button type="button" class="btn btn-sm btn-secondary" data-tadm="remove_bots" data-id="${t.id}">Tirar os bots</button>` : ''}
+                ${['running', 'paused'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="finish" data-id="${t.id}">Encerrar agora</button>` : ''}
+                ${!['finished', 'cancelled'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="multi" data-id="${t.id}">Contas suspeitas</button>
+                  <button type="button" class="btn btn-sm btn-secondary" data-tadm="cancel" data-id="${t.id}">Cancelar campeonato</button>` : ''}
+                <button type="button" class="btn btn-sm btn-danger" data-tadm="delete" data-id="${t.id}"><i class="fa-solid fa-trash"></i> Apagar campeonato</button>
+              </div></details>
             </div>
             <div class="tadm-extra" id="tadm-extra-${t.id}"></div>
-          </li>`).join('') || '<li class="tour-empty">Nenhum campeonato ainda.</li>'}</ul>`;
+          </li>`;
+        }).join('') || '<li class="tour-empty">Nenhum campeonato ainda. Clique em "Criar campeonato".</li>'}</ul>`;
     });
   }
 
   function formHtml(t) {
-    const v = t || { name: '', description: '', maxPlayers: 8, startAt: Date.now() + 3600000, endAt: Date.now() + 4 * 3600000, allowEarlyStart: true, isPrivate: false, checkinRequired: true, thirdPlace: true, maxPoints: 24, bestOf: { default: 1, byRound: {} }, timers: { readyMs: 180000, turnMs: 30000, trucoMs: 30000, reconnectMs: 120000, disconnectTotalMs: 300000, betweenGamesMs: 30000 }, deadlinePolicy: 'finish_running', extendMinutes: 30, woEndsSeries: true };
-    const sec = ms => Math.round(ms / 1000);
-    const boSel = (name, val, withDefault) => `<select name="${name}">${withDefault ? '<option value="">Padrão</option>' : ''}${[1, 3, 5, 7].map(n => `<option value="${n}" ${Number(val) === n ? 'selected' : ''}>MD${n}</option>`).join('')}</select>`;
-    return `<form class="tadm-form" id="tadm-form" autocomplete="off">
+    const start = t ? t.startAt : Math.ceil((Date.now() + 30 * 60000) / 300000) * 300000;
+    const size = t ? t.maxPlayers : 8;
+    const pts = t ? t.maxPoints : 24;
+    return `<form class="tadm-form simple" id="tadm-form" autocomplete="off">
       <h4>${t ? 'Editar campeonato' : 'Novo campeonato'}</h4>
-      <label>Nome<input name="name" maxlength="60" value="${esc(v.name)}" required></label>
-      <label>Descrição<textarea name="description" maxlength="1000" rows="2">${esc(v.description || '')}</textarea></label>
-      <div class="tadm-row">
-        <label>Participantes<select name="maxPlayers">${[4, 8, 16, 32, 64].map(n => `<option ${v.maxPlayers === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <label>Pontos por partida<input name="maxPoints" type="number" min="1" max="40" value="${v.maxPoints}"></label>
+      <label>Nome do campeonato<input name="name" maxlength="60" value="${esc(t ? t.name : '')}" placeholder="Ex.: Copa do Galpão" required></label>
+      <div class="tadm-field"><span>Quantos jogadores?</span>
+        <div class="tadm-seg">${[4, 8, 16, 32].map(n => `<label><input type="radio" name="maxPlayers" value="${n}" ${size === n ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div>
       </div>
-      <div class="tadm-row">
-        <label>Início<input name="startAt" type="datetime-local" value="${toLocalInput(v.startAt)}" required></label>
-        <label>Prazo final<input name="endAt" type="datetime-local" value="${toLocalInput(v.endAt)}" required></label>
+      <div class="tadm-field"><span>Cada partida vai até</span>
+        <div class="tadm-seg">${[12, 24, 30].map(n => `<label><input type="radio" name="maxPoints" value="${n}" ${pts === n ? 'checked' : ''}><span>${n} pontos</span></label>`).join('')}</div>
       </div>
-      <div class="tadm-checks">
-        <label><input type="checkbox" name="allowEarlyStart" ${v.allowEarlyStart ? 'checked' : ''}> Permitir início antecipado</label>
-        <label><input type="checkbox" name="checkinRequired" ${v.checkinRequired ? 'checked' : ''}> Check-in obrigatório</label>
-        <label><input type="checkbox" name="thirdPlace" ${v.thirdPlace ? 'checked' : ''}> Disputa de 3º lugar</label>
-        <label><input type="checkbox" name="woEndsSeries" ${v.woEndsSeries ? 'checked' : ''}> W.O. encerra a série inteira</label>
-        <label><input type="checkbox" name="isPrivate" ${v.isPrivate ? 'checked' : ''}> Privado</label>
-      </div>
-      <label>Senha (privado)<input name="password" type="password" maxlength="64" placeholder="${t && t.isPrivate ? 'deixe em branco para manter' : ''}"></label>
-      <fieldset><legend>Partidas por confronto</legend>
-        <div class="tadm-row wrap"><label>Padrão ${boSel('bo_default', v.bestOf.default)}</label>
-        ${PHASES.map(([k, l]) => `<label>${l} ${boSel('bo_' + k, v.bestOf.byRound[k], true)}</label>`).join('')}</div>
-      </fieldset>
-      <fieldset><legend>Tempos (segundos)</legend>
-        <div class="tadm-row wrap">
-          <label>Confirmar presença<input name="readyMs" type="number" min="10" value="${sec(v.timers.readyMs)}"></label>
-          <label>Jogada<input name="turnMs" type="number" min="5" value="${sec(v.timers.turnMs)}"></label>
-          <label>Responder truco<input name="trucoMs" type="number" min="5" value="${sec(v.timers.trucoMs)}"></label>
-          <label>Reconexão<input name="reconnectMs" type="number" min="10" value="${sec(v.timers.reconnectMs)}"></label>
-          <label>Desconexão somada<input name="disconnectTotalMs" type="number" min="10" value="${sec(v.timers.disconnectTotalMs)}"></label>
-          <label>Entre partidas<input name="betweenGamesMs" type="number" min="1" value="${sec(v.timers.betweenGamesMs)}"></label>
-        </div>
-      </fieldset>
-      <div class="tadm-row">
-        <label>Ao chegar no prazo<select name="deadlinePolicy">
-          <option value="finish_running" ${v.deadlinePolicy === 'finish_running' ? 'selected' : ''}>Termina as em andamento, sem novas</option>
-          <option value="extend" ${v.deadlinePolicy === 'extend' ? 'selected' : ''}>Prorroga automaticamente</option>
-          <option value="end_no_champion" ${v.deadlinePolicy === 'end_no_champion' ? 'selected' : ''}>Encerra sem campeão</option>
-        </select></label>
-        <label>Prorrogação (min)<input name="extendMinutes" type="number" min="5" value="${v.extendMinutes}"></label>
-      </div>
+      <label>Começa em<input name="startAt" type="datetime-local" value="${toLocalInput(start)}" required>
+        <small>Se todo mundo entrar antes, você pode clicar em "Começar agora".</small></label>
+      <label class="tadm-check"><input type="checkbox" name="thirdPlace" ${!t || t.thirdPlace ? 'checked' : ''}> Ter disputa de 3º lugar</label>
+      <p class="tour-note"><i class="fa-solid fa-circle-info"></i> Todas as séries são <b>melhor de 3</b>: quem ganhar 2 partidas avança.</p>
       <p class="form-msg" id="tadm-msg"></p>
-      <div class="tadm-actions"><button type="submit" class="btn btn-primary btn-sm">${t ? 'Salvar' : 'Criar campeonato'}</button><button type="button" class="link-btn" data-tadm="close-form">Fechar</button></div>
+      <div class="tadm-actions"><button type="submit" class="btn btn-primary">${t ? 'Salvar' : 'Criar campeonato'}</button><button type="button" class="link-btn" data-tadm="close-form">Cancelar</button></div>
     </form>`;
   }
 
   function readForm(f) {
     const g = n => f.elements[n];
-    const byRound = {};
-    PHASES.forEach(([k]) => { if (g('bo_' + k).value) byRound[k] = Number(g('bo_' + k).value); });
+    const startAt = new Date(g('startAt').value).getTime();
     return {
-      name: g('name').value, description: g('description').value,
-      maxPlayers: Number(g('maxPlayers').value), maxPoints: Number(g('maxPoints').value),
-      startAt: new Date(g('startAt').value).getTime(), endAt: new Date(g('endAt').value).getTime(),
-      allowEarlyStart: g('allowEarlyStart').checked, checkinRequired: g('checkinRequired').checked,
-      thirdPlace: g('thirdPlace').checked, woEndsSeries: g('woEndsSeries').checked,
-      isPrivate: g('isPrivate').checked, password: g('password').value,
-      bestOf: { default: Number(g('bo_default').value), byRound },
-      timers: Object.fromEntries(['readyMs', 'turnMs', 'trucoMs', 'reconnectMs', 'disconnectTotalMs', 'betweenGamesMs'].map(k => [k, Number(g(k).value) * 1000])),
-      deadlinePolicy: g('deadlinePolicy').value, extendMinutes: Number(g('extendMinutes').value)
+      name: g('name').value,
+      description: '',
+      maxPlayers: Number(f.querySelector('[name="maxPlayers"]:checked').value),
+      maxPoints: Number(f.querySelector('[name="maxPoints"]:checked').value),
+      startAt,
+      endAt: startAt + 12 * 3600000,
+      allowEarlyStart: true,
+      isPrivate: false,
+      checkinRequired: false,
+      thirdPlace: g('thirdPlace').checked,
+      woEndsSeries: true,
+      bestOf: { default: 3, byRound: {} },
+      deadlinePolicy: 'finish_running'
     };
+  }
+
+  function copyCode(code) {
+    const done = () => toast(`Código <b>${esc(code)}</b> copiado.`);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, () => prompt('Copie o código:', code));
+    else prompt('Copie o código:', code);
   }
 
   if (adminBox) {
@@ -564,22 +430,28 @@
       const id = b.dataset.id;
       const act = b.dataset.tadm;
       const wrap = $('tadm-form-wrap');
-      if (act === 'new') { adminEditing = null; wrap.innerHTML = formHtml(null); return; }
+      if (act === 'new') { adminEditing = null; lastCreated = null; wrap.innerHTML = formHtml(null); wrap.querySelector('input[name="name"]').focus(); return; }
       if (act === 'close-form') { wrap.innerHTML = ''; return; }
+      if (act === 'copy') return copyCode(id);
       if (act === 'edit') {
         socket.emit('tour:view', { id }, res => { if (res && res.ok) { adminEditing = id; wrap.innerHTML = formHtml(res.tournament); wrap.scrollIntoView({ block: 'nearest' }); } });
         return;
       }
       if (act === 'view') { $('modal-admin-panel').classList.add('hide'); openTour(id); return; }
       if (act === 'multi') return showMulti(id);
-      let extra = {};
-      if (act === 'pause') { const m = prompt('Mensagem para os participantes:', 'Campeonato temporariamente pausado devido a problemas técnicos.'); if (m === null) return; extra.message = m; }
-      if (act === 'cancel') { const m = prompt('Motivo do cancelamento:'); if (m === null) return; extra.message = m; }
-      if (act === 'start' && !confirm('Começar o campeonato agora?')) return;
+      const extra = {};
+      let action = act;
+      if (act === 'add_bot') { action = 'add_bots'; extra.count = 1; }
+      if (act === 'fill_bots') { action = 'add_bots'; extra.count = Number(b.dataset.free) || 1; }
+      if (act === 'delete' && !confirm('Apagar este campeonato de vez? A chave e os resultados somem e as partidas abertas são encerradas.')) return;
+      if (act === 'remove_bots' && !confirm('Tirar todos os bots deste campeonato?')) return;
+      if (act === 'pause') { const m = prompt('Mensagem para os jogadores:', 'Campeonato pausado por um instante.'); if (m === null) return; extra.message = m; }
+      if (act === 'cancel') { const m = prompt('Cancelar o campeonato? Escreva o motivo:'); if (m === null) return; extra.message = m; }
+      if (act === 'start' && !confirm('Começar o campeonato agora com quem já entrou?')) return;
       if (act === 'finish' && !confirm('Encerrar agora? Se a final não terminou, fica sem campeão.')) return;
-      if (act === 'extend') { const m = prompt('Prorrogar por quantos minutos?', '30'); if (!m) return; extra.minutes = Number(m); }
-      socket.emit('tour:admin_action', { id, action: act, ...extra }, res => {
+      socket.emit('tour:admin_action', { id, action, ...extra }, res => {
         toast(esc(res && res.error ? res.error : (res && res.message) || 'Feito.'));
+        if (act === 'delete' && lastCreated === id) lastCreated = null;
         adminLoad();
       });
     });
@@ -592,7 +464,8 @@
       socket.emit(ev, payload, res => {
         const msg = $('tadm-msg');
         if (res && res.error) { msg.textContent = res.error; msg.className = 'form-msg error'; return; }
-        toast(adminEditing ? 'Campeonato salvo.' : `Campeonato criado! Código: ${esc(res.id)}`);
+        if (adminEditing) toast('Campeonato salvo.');
+        else lastCreated = res.id;
         adminEditing = null;
         adminLoad();
       });
@@ -605,23 +478,20 @@
       if (!res || res.error) { box.innerHTML = `<p>${esc((res && res.error) || 'Erro')}</p>`; return; }
       box.innerHTML = `
         <div class="tadm-multi">
-          <p class="tour-note">Sinais guardados por ${res.retentionDays} dias após o fim (rede e aparelho embaralhados, sem o endereço real). Dividir rede ou aparelho não prova fraude: analise antes de decidir.</p>
+          <p class="tour-note">Contas que jogaram da mesma rede ou do mesmo aparelho. Isso não prova fraude (pode ser a mesma casa): analise antes de decidir.</p>
           ${res.pairs.length ? `<ul>${res.pairs.map(p => `
             <li class="lvl-${p.level}"><b>${esc(p.names.join(' + '))}</b>
-              <span>${p.sameDevice ? `mesmo aparelho (${p.sameDevice}x)` : ''} ${p.sameIp ? `mesma rede (${p.sameIp}x)` : ''} · último: ${fmtDate(p.lastAt)}</span>
+              <span>${p.sameDevice ? `mesmo aparelho (${p.sameDevice}x)` : ''} ${p.sameIp ? `mesma rede (${p.sameIp}x)` : ''}</span>
               <span class="tadm-actions">
-                <button type="button" class="btn btn-sm btn-secondary" data-mdec="ok" data-acc="${esc(p.accounts.join(','))}">Normal</button>
-                <button type="button" class="btn btn-sm btn-secondary" data-mdec="suspeito" data-acc="${esc(p.accounts.join(','))}">Suspeito</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-mdec="ok" data-acc="${esc(p.accounts.join(','))}">Está tudo bem</button>
                 <button type="button" class="btn btn-sm btn-danger" data-mdq="${esc(p.accounts[1])}">Desclassificar ${esc(p.names[1])}</button>
-              </span></li>`).join('')}</ul>` : '<p>Nenhuma associação encontrada.</p>'}
-          ${res.deviceChanges.length ? `<p><b>Trocas de aparelho:</b> ${res.deviceChanges.map(d => `${esc(d.name)} (${d.devices})`).join(', ')}</p>` : ''}
-          ${res.decisions.length ? `<p><b>Decisões:</b></p><ul>${res.decisions.map(d => `<li>${fmtDate(d.at)} · ${esc(d.accounts.join(' + '))}: <b>${esc(d.decision)}</b> ${esc(d.note)}</li>`).join('')}</ul>` : ''}
+              </span></li>`).join('')}</ul>` : '<p>Nada suspeito.</p>'}
         </div>`;
       box.onclick = e => {
         const dec = e.target.closest('[data-mdec]');
         const dq = e.target.closest('[data-mdq]');
         if (dec) {
-          const note = prompt('Justificativa da decisão:');
+          const note = prompt('Anotação (opcional):', '');
           if (note === null) return;
           socket.emit('tour:admin_decide', { id, accounts: dec.dataset.acc.split(','), decision: dec.dataset.mdec, note }, () => showMulti(id));
         } else if (dq) {
@@ -633,5 +503,5 @@
     });
   }
 
-  window.trucoTournaments = { open: openList, openTour, adminLoad };
+  window.trucoTournaments = { openTour, adminLoad };
 })();
