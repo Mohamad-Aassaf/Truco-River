@@ -224,7 +224,8 @@ function createTournaments(accountStore, hooks = {}) {
       timers,
       deadlinePolicy: DEADLINE_POLICIES.includes(data.deadlinePolicy) ? data.deadlinePolicy : 'finish_running',
       extendMinutes: clampInt(data.extendMinutes, 5, 24 * 60, 30),
-      woEndsSeries: data.woEndsSeries !== false
+      woEndsSeries: data.woEndsSeries !== false,
+      manualRounds: !!data.manualRounds // cada fase (depois da 1ª) só começa quando o admin liberar
     };
     if (cfg.isPrivate && !existing && !str(data.password, 64)) errors.push('Campeonato privado precisa de senha.');
     return { cfg, errors };
@@ -597,12 +598,51 @@ function createTournaments(accountStore, hooks = {}) {
     tryOpen(t, m);
   }
 
+  // Fase do confronto para a liberação manual (3º lugar anda junto com a final)
+  const phaseOf = (t, m) => (m.third ? t.bracket.totalRounds - 1 : m.round);
+  const phaseReleased = (t, r) => !t.manualRounds || r === 0 || !!(t.released && t.released[r]);
+
   function tryOpen(t, m) {
     if (m.status !== 'waiting' || !m.aFilled || !m.bFilled) return;
     // BYE / vaga vazia
     if (!m.a && !m.b) return decideMatch(t, m, null, 'vazio');
     if (!m.a || !m.b) return decideMatch(t, m, m.a || m.b, m.round === 0 && !m.third ? 'bye' : 'vaga_vazia');
+    if (!phaseReleased(t, phaseOf(t, m))) {
+      // Esperando o admin liberar a fase
+      if (!m.held) {
+        m.held = true;
+        [m.a, m.b].forEach(acc => H('notify')(acc, { tid: t.id, type: 'held', matchId: m.id, message: `Você está na ${ROUND_NAMES[m.key] || m.key}! Ela começa quando a organização liberar.` }));
+      }
+      return;
+    }
+    m.held = false;
     openReadyCheck(t, m);
+  }
+
+  // Próxima fase que ainda não foi liberada
+  function nextHeldPhase(t) {
+    if (!t.manualRounds || !t.bracket) return null;
+    for (let r = 1; r < t.bracket.totalRounds; r++) {
+      if (phaseReleased(t, r)) continue;
+      const ms = Object.values(t.matches).filter(m => phaseOf(t, m) === r);
+      const key = ms.find(m => !m.third) ? ms.find(m => !m.third).key : null;
+      return { round: r, name: ROUND_NAMES[key] || key, ready: ms.filter(m => m.held).length, total: ms.filter(m => !['done', 'void'].includes(m.status)).length };
+    }
+    return null;
+  }
+
+  function releaseRound(id, admin) {
+    const t = items[id];
+    if (!t || !['running', 'paused'].includes(t.status)) return { error: 'O campeonato não está em andamento.' };
+    const next = nextHeldPhase(t);
+    if (!next) return { error: 'Não há fase esperando liberação.' };
+    t.released = t.released || {};
+    t.released[next.round] = true;
+    audit(t, admin, 'liberar fase', next.name);
+    Object.values(t.matches).filter(m => phaseOf(t, m) === next.round).forEach(m => { if (m.status === 'waiting') tryOpen(t, m); });
+    notifyAll(t, 'released', `${next.name} liberada! Fique de olho no seu confronto.`);
+    changed(t, { list: true });
+    return { ok: true, message: `${next.name} liberada.` };
   }
 
   function openReadyCheck(t, m) {
@@ -630,7 +670,7 @@ function createTournaments(accountStore, hooks = {}) {
 
   function startGame(t, m) {
     const n = m.games.length + 1;
-    if (isBotAcc(m.a) && isBotAcc(m.b)) {
+    if (isBotAcc(m.a) && isBotAcc(m.b) && process.env.TOUR_BOT_SIM === '1') {
       m.status = 'playing';
       m.readyDeadline = null;
       m.games.push({ n, roomId: null, startedAt: now(), endedAt: null, winner: null, reason: null, simulated: true });
@@ -1087,6 +1127,8 @@ function createTournaments(accountStore, hooks = {}) {
       deadlinePolicy: t.deadlinePolicy,
       extendMinutes: t.extendMinutes,
       woEndsSeries: t.woEndsSeries,
+      manualRounds: !!t.manualRounds,
+      nextHold: nextHeldPhase(t),
       checkinOpensAt: t.startAt - CHECKIN_WINDOW_MS,
       startedAt: t.startedAt || null,
       finishedAt: t.finishedAt || null,
@@ -1098,7 +1140,7 @@ function createTournaments(accountStore, hooks = {}) {
         id: m.id, round: m.round, slot: m.slot, key: m.key, third: !!m.third, bestOf: m.bestOf,
         a: m.a, b: m.b, aName: m.a ? nameOf(t, m.a) : null, bName: m.b ? nameOf(t, m.b) : null,
         aFilled: m.aFilled, bFilled: m.bFilled, status: m.status, wins: m.wins, winner: m.winner, reason: m.reason,
-        ready: m.ready, readyDeadline: m.readyDeadline, nextGameAt: m.nextGameAt || null,
+        ready: m.ready, readyDeadline: m.readyDeadline, nextGameAt: m.nextGameAt || null, held: !!m.held,
         games: m.games.map(g => ({ n: g.n, winner: g.winner, reason: g.reason, roomId: g.endedAt ? null : g.roomId, score: g.score, durationMs: g.durationMs ? Math.max(0, g.durationMs - (g.pausedMs || 0)) : null })),
         startedAt: m.startedAt, endedAt: m.endedAt
       }])),
@@ -1113,7 +1155,7 @@ function createTournaments(accountStore, hooks = {}) {
     return Object.values(items)
       .filter(t => admin || !t.isPrivate || (account && participant(t, account)))
       .map(t => publicView(t, account, { admin }))
-      .map(v => ({ id: v.id, name: v.name, isPrivate: v.isPrivate, status: v.status, maxPlayers: v.maxPlayers, registered: v.registered, startAt: v.startAt, endAt: v.endAt, mine: !!(v.me), description: v.description || '' }))
+      .map(v => ({ id: v.id, name: v.name, isPrivate: v.isPrivate, status: v.status, maxPlayers: v.maxPlayers, registered: v.registered, startAt: v.startAt, endAt: v.endAt, mine: !!(v.me), description: v.description || '', manualRounds: !!v.manualRounds, nextHold: admin ? v.nextHold || null : null }))
       .sort((a, b) => {
         const order = { running: 0, paused: 0, checkin: 1, registration: 2, finished: 3, cancelled: 4 };
         return (order[a.status] - order[b.status]) || (a.status === 'finished' ? b.startAt - a.startAt : a.startAt - b.startAt);
@@ -1129,6 +1171,25 @@ function createTournaments(accountStore, hooks = {}) {
     if (!v.locked && !v.restricted) v.stats = statsOf(t);
     if (admin) { v.audit = t.audit.slice(-100); }
     return { ok: true, tournament: v };
+  }
+
+  // Campeonatos em que a conta está (para a tela inicial)
+  function mine(account) {
+    const out = [];
+    Object.values(items).forEach(t => {
+      const me = participant(t, account);
+      if (!me) return;
+      const recent = t.finishedAt && now() - t.finishedAt < 6 * 3600000;
+      if (['finished', 'cancelled'].includes(t.status) && !recent) return;
+      const m = Object.values(t.matches || {}).find(x => (x.a === account || x.b === account) && ['ready_check', 'playing', 'between'].includes(x.status));
+      const side = m ? (m.a === account ? 'a' : 'b') : null;
+      out.push({
+        id: t.id, name: t.name, status: t.status, startAt: t.startAt, myStatus: me.status,
+        match: m ? { id: m.id, status: m.status, iReady: !!m.ready[side], opponent: nameOf(t, side === 'a' ? m.b : m.a), wins: m.wins[side], losses: m.wins[side === 'a' ? 'b' : 'a'], label: ROUND_NAMES[m.key] || m.key } : null,
+        champion: t.results && t.results.champion ? nameOf(t, t.results.champion) : null
+      });
+    });
+    return out.sort((x, y) => x.startAt - y.startAt);
   }
 
   function notifyAll(t, type, message) {
@@ -1149,7 +1210,7 @@ function createTournaments(accountStore, hooks = {}) {
     ready,
     get: id => items[id] || null,
     all: () => Object.values(items),
-    list, view, create, update, pause, resume, cancel, finishNow, extend, startEarly, disqualify, decide, remove, addBots, removeBots, isBotAcc,
+    list, view, create, update, pause, resume, cancel, finishNow, extend, startEarly, disqualify, decide, remove, addBots, removeBots, isBotAcc, mine, releaseRound,
     register, unregister, checkin, setReady, reportGame, recordGameAbort, noteDisconnect,
     multiAccountReport, globalStats, statsOf, tick,
     constants: { SIZES, BEST_OF, ROUND_NAMES, DEFAULT_TIMERS, DEADLINE_POLICIES }

@@ -936,11 +936,16 @@ function renderLobbyScreen(gameState) {
   const myPlayer = gameState.players.find(p => p.id === myPlayerId);
   const readyBtn = document.getElementById('ready-btn');
   if (myPlayer) {
-    readyBtn.innerHTML = myPlayer.ready ? '<i class="fa-solid fa-xmark"></i> Não Pronto' : '<i class="fa-solid fa-check"></i> Pronto';
-    if (myPlayer.ready) {
-      readyBtn.className = 'btn btn-danger';
+    // Pronto só com a sala cheia: antes disso dá para ajustar os bots e esperar a gurizada
+    const full = gameState.players.length >= gameState.maxPlayers;
+    readyBtn.disabled = !full && !myPlayer.ready;
+    if (!full && !myPlayer.ready) {
+      const missing = gameState.maxPlayers - gameState.players.length;
+      readyBtn.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Falta${missing > 1 ? 'm' : ''} ${missing} jogador${missing > 1 ? 'es' : ''}`;
+      readyBtn.className = 'btn btn-secondary';
     } else {
-      readyBtn.className = 'btn btn-success';
+      readyBtn.innerHTML = myPlayer.ready ? '<i class="fa-solid fa-xmark"></i> Não Pronto' : '<i class="fa-solid fa-check"></i> Pronto';
+      readyBtn.className = myPlayer.ready ? 'btn btn-danger' : 'btn btn-success';
     }
   }
 }
@@ -2695,7 +2700,11 @@ socket.on('receive_chat', ({ sender, senderId, msg, spectator }) => {
 
 // Sair da Partida
 gameLeaveBtn.addEventListener('click', () => {
-  if (confirm("Tens certeza que queres abandonar a partida e voltar ao lobby, jogador?")) {
+  const tourGame = lastGameState && lastGameState.tournament && lastGameState.state !== 'game_end';
+  const msg = tourGame
+    ? 'Sair agora conta como derrota NESTA partida do campeonato (a série continua). Quer mesmo sair?'
+    : 'Tens certeza que queres abandonar a partida e voltar ao lobby, jogador?';
+  if (confirm(msg)) {
     leaveRoomAndReload();
   }
 });

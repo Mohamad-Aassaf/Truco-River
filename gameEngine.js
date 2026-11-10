@@ -284,6 +284,8 @@ class TrucoGame { // TRUCO GURIZINHO
           p.isBot = true;
           p.name = `Bot ${p.name}`;
           p.socketId = null;
+          p.disconnected = false;
+          p.reconnectUntil = null;
           p.difficulty = 'medium';
           p.ready = true;
           this.log(`${p.name.replace('Bot ', '')} saiu. Um Bot Médio assumiu seu lugar na dupla.`);
@@ -355,6 +357,7 @@ class TrucoGame { // TRUCO GURIZINHO
   drawPick(playerIdx, index) {
     const d = this.dealDraw;
     if (this.state !== 'drawing' || !d || d.done) return { error: 'Não é hora de tirar carta.' };
+    if (d.tie) return { error: 'Deu empate: espere as cartas novas.' };
     if (!d.contenders.includes(playerIdx)) return { error: 'Você não está tirando agora.' };
     if (d.picks[playerIdx] !== undefined) return { error: 'Você já tirou a sua carta.' };
     index = Number(index);
@@ -369,7 +372,8 @@ class TrucoGame { // TRUCO GURIZINHO
     const tied = draws.filter(x => x.card.value === top).map(x => x.playerIdx);
     if (tied.length > 1 && d.round < 8) {
       this.log(`Sorteio: empate no ${top}. ${tied.map(i => this.players[i].name).join(' e ')} tiram de novo.`);
-      this.newDrawRound(tied);
+      // As cartas empatadas ficam na mesa um pouco (o servidor chama drawResolveTie depois)
+      d.tie = { value: top, players: tied };
       return { ok: true, resolved: true, tie: true };
     }
     const dealer = tied[0];
@@ -379,6 +383,16 @@ class TrucoGame { // TRUCO GURIZINHO
     this.dealerIndex = dealer;
     this.log(`Sorteio: ${this.players[dealer].name} tirou a maior carta e dá as cartas (é o pé).`);
     return { ok: true, resolved: true, done: true };
+  }
+
+  // Depois de mostrar o empate: cartas novas só para os empatados
+  drawResolveTie() {
+    const d = this.dealDraw;
+    if (!d || !d.tie) return false;
+    const tied = d.tie.players;
+    d.tie = null;
+    this.newDrawRound(tied);
+    return true;
   }
 
   // Tira por quem ainda não tirou (bot, tempo esgotado ou teste)
@@ -405,6 +419,7 @@ class TrucoGame { // TRUCO GURIZINHO
       dealerIdx: d.dealerIdx,
       mãoIdx: d.mãoIdx,
       done: d.done,
+      tie: d.tie ? { value: d.tie.value, players: d.tie.players } : null,
       endsIn: d.deadline ? Math.max(0, d.deadline - Date.now()) : null
     };
   }

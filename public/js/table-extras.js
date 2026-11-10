@@ -303,7 +303,7 @@
     const d = s.dealDraw;
     const me = s.spectating ? -1 : s.players.findIndex(p => p.id === myPlayerId);
     const myTeam = me >= 0 ? s.players[me].team : 0;
-    const iCanPick = !s.spectating && me >= 0 && !d.done && d.contenders.includes(me) && !d.spread.some(c => c.by === me);
+    const iCanPick = !s.spectating && me >= 0 && !d.done && !d.tie && d.contenders.includes(me) && !d.spread.some(c => c.by === me);
     const pending = d.contenders.filter(i => !d.spread.some(c => c.by === i));
     const lastTie = d.history.length && d.round > 1 ? d.history[d.history.length - 1] : null;
     const roundKey = `${s.id}:${d.id}:${d.round}`;
@@ -320,7 +320,8 @@
       drawSeen.add(key);
       const p = s.players[c.by] || {};
       const won = d.done && c.by === d.dealerIdx && d.history.length && d.history[d.history.length - 1].round === d.round;
-      return `<div class="draw-slot taken ${fresh ? 'fresh' : ''} ${p.team === myTeam ? 'us' : 'them'} ${won ? 'winner' : d.done ? 'loser' : ''}" style="--k:${i}">
+      const tied = d.tie && d.tie.players.includes(c.by);
+      return `<div class="draw-slot taken ${fresh ? 'fresh' : ''} ${p.team === myTeam ? 'us' : 'them'} ${won ? 'winner' : d.done ? 'loser' : ''} ${tied ? 'tied' : d.tie ? 'loser' : ''}" style="--k:${i}">
           <img src="${getCardImgSrc(c.card)}" alt="${c.card.value} de ${c.card.suit}" title="${escapeText(p.name || '')}">
         </div>`;
     }).join('');
@@ -341,7 +342,19 @@
 
     let status;
     let result = '';
-    if (d.done) {
+    if (d.tie) {
+      // Empate: aviso grande e as cartas empatadas ficam na mesa por uns segundos
+      const mineTied = d.tie.players.includes(me);
+      const tiedNames = d.tie.players.map(i => (i === me ? 'Você' : escapeText((s.players[i] || {}).name || ''))).join(' e ');
+      const others = d.tie.players.filter(i => i !== me);
+      result = `
+        <div class="draw-tie-box">
+          <b><i class="fa-solid fa-equals"></i> Empate!</b>
+          <span>${tiedNames} tiraram <b>${d.tie.value}</b>.</span>
+          <span class="draw-tie-next">${mineTied ? `Você e ${drawNames(s, others)} vão tirar de novo` : `${tiedNames} vão tirar de novo`}<span class="draw-dots"><i></i><i></i><i></i></span></span>
+        </div>`;
+      status = '';
+    } else if (d.done) {
       // Resultado em destaque: quem venceu, com a carta que tirou
       const lastRound = d.history[d.history.length - 1];
       const winDraw = lastRound && lastRound.draws.find(x => x.playerIdx === d.dealerIdx);
@@ -360,14 +373,14 @@
     } else {
       status = `<p class="draw-status">Esperando ${drawNames(s, pending)} tirar…</p>`;
     }
-    const tieNote = lastTie && !d.done
+    const tieNote = lastTie && !d.done && !d.tie
       ? `<p class="draw-tie"><i class="fa-solid fa-equals"></i> Empate no ${Math.max(...lastTie.draws.map(x => x.card.value))}: ${drawNames(s, d.contenders)} tiram de novo.</p>`
       : '';
 
     drawBox.innerHTML = `
       <div class="draw-panel">
         <span class="draw-kicker"><i class="fa-solid fa-layer-group"></i> Sorteio</span>
-        ${d.done ? '' : `<h3>Quem dá as cartas?</h3>
+        ${d.done || d.tie ? '' : `<h3>Quem dá as cartas?</h3>
         <p class="draw-sub">Cada um tira uma carta da mesa. Quem tirar o maior <b>número</b> dá as cartas
           (aqui vale só o número: 12 é a maior e 1 a menor).</p>`}
         ${tieNote}
@@ -375,7 +388,7 @@
         <div class="draw-spread ${iCanPick ? 'can-pick' : ''} ${entering ? 'entering' : ''} ${d.done ? 'done' : ''}">${spread}</div>
         ${status}
         ${!d.done && d.endsIn != null ? '<span class="draw-timer"><span></span></span>' : ''}
-        ${d.done ? '' : `<ul class="draw-players">${rows}</ul>`}
+        ${d.done || d.tie ? '' : `<ul class="draw-players">${rows}</ul>`}
       </div>`;
     drawBox.classList.remove('hide');
     clearInterval(drawTick);
@@ -536,18 +549,44 @@
       document.body.appendChild(waitBox);
     }
     const inTable = s && (s.state === 'playing' || s.state === 'hand_end' || s.state === 'lobby');
-    waitList = inTable ? s.players.filter(p => p.disconnected && p.reconnectIn != null && p.id !== socket.id)
-      .map(p => ({ name: p.name, until: Date.now() + p.reconnectIn })) : [];
+    waitInGame = !!(s && s.state !== 'lobby');
+    waitList = inTable ? s.players.map((p, idx) => ({ p, idx })).filter(({ p }) => p.disconnected && !p.isBot && p.reconnectIn != null && p.id !== socket.id)
+      .map(({ p, idx }) => ({ name: p.name, idx, until: Date.now() + p.reconnectIn })) : [];
     paintWait();
   }
+  let waitInGame = false;
   function paintWait() {
     if (!waitBox) return;
-    if (!waitList.length) { waitBox.classList.add('hide'); return; }
+    const live = waitList.filter(w => w.until > Date.now() - 1500);
+    // Na mesa: selo pequeno no lugar de quem caiu (não cobre as falas nem as cartas)
+    document.querySelectorAll('.seat-disc').forEach(el => {
+      if (!waitInGame || !live.some(w => el.dataset.idx === String(w.idx))) el.remove();
+    });
+    if (waitInGame) {
+      waitBox.classList.add('hide');
+      live.forEach(w => {
+        const seat = typeof seatOf === 'function' ? document.getElementById(`seat-${seatOf(w.idx)}`) : null;
+        if (!seat) return;
+        let b = seat.querySelector('.seat-disc');
+        if (!b) {
+          b = document.createElement('span');
+          b.className = 'seat-disc';
+          b.dataset.idx = String(w.idx);
+          b.title = 'Caiu a conexão. O jogo segue: se demorar na vez, uma carta qualquer é jogada por ele.';
+          seat.appendChild(b);
+        }
+        const left = Math.max(0, Math.ceil((w.until - Date.now()) / 1000));
+        b.innerHTML = `<i class="fa-solid fa-wifi"></i> caiu · ${left}s`;
+      });
+      return;
+    }
+    // Sala de espera: aviso normal
+    if (!live.length) { waitBox.classList.add('hide'); return; }
     waitBox.classList.remove('hide');
-    waitBox.innerHTML = waitList.map(w => {
+    waitBox.innerHTML = live.map(w => {
       const left = Math.max(0, Math.ceil((w.until - Date.now()) / 1000));
       return `<div><span class="wait-spin"></span> <b>${escapeText(w.name)}</b> caiu · esperando voltar <b>${left}s</b></div>`;
-    }).join('') + '<small>O jogo segue: se demorar na vez, uma carta qualquer é jogada por ele.</small>';
+    }).join('');
   }
   setInterval(paintWait, 500);
 

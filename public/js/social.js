@@ -213,6 +213,7 @@
     if (!user) socialState = null;
     renderAccount();
     renderFriends();
+    window.dispatchEvent(new CustomEvent('truco:auth', { detail: { logged: !!user } }));
   }
 
   function renderAccount() {

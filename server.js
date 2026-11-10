@@ -178,7 +178,7 @@ function sweepRooms() {
         changed = true;
       });
     const g = activeGames[roomId];
-    if (g && !g.players.some(p => !p.isBot)) {
+    if (g && !g.players.some(p => !p.isBot) && !g.tournamentBotsOnly) {
       deleteRoom(roomId);
       changed = true;
     }
@@ -195,6 +195,25 @@ function deleteRoom(roomId) {
   if (game.turnTimer) clearTimeout(game.turnTimer);
   clearDrawTimers(game);
   recordHistory(roomId, game);
+  if (game.tournament && !game.tournamentReported) {
+    if (game.state === 'game_end') {
+      reportTournamentGame(roomId);
+    } else if (['playing', 'hand_end', 'drawing'].includes(game.state)) {
+      // Todo mundo de verdade saiu no meio: o bot que ficou leva a partida;
+      // sem bot, a partida é jogada de novo
+      game.tournamentReported = true;
+      const bot = game.players.find(p => p.isBot && p.account);
+      const tt = game.tournament;
+      if (bot) {
+        tournaments.reportGame(tt.tid, tt.matchId, tt.n, bot.account, {
+          reason: 'abandono', durationMs: Date.now() - (game.gameStartedAt || Date.now()), pausedMs: game.pausedMs || 0,
+          hands: game.handNumber || 0, score: { a: game.score[0], b: game.score[1] }
+        });
+      } else {
+        tournaments.recordGameAbort(tt.tid, tt.matchId, tt.n, 'sala_fechada');
+      }
+    }
+  }
   endSpectating(game, 'A sala foi fechada.');
   delete activeGames[roomId];
   console.log(`Sala ${roomId} sem jogadores de verdade apagada.`);
@@ -386,6 +405,8 @@ function countsForStats(game, p) {
 // maior número dá as cartas. DRAW_MS=0 (testes) tira por todos na hora.
 const DRAW_MS = process.env.DRAW_MS !== undefined ? Number(process.env.DRAW_MS) : 2800; // mostra o resultado
 const DRAW_PICK_MS = Number(process.env.DRAW_PICK_MS) || 12000; // tempo para cada um tirar
+// Empate no sorteio: as cartas empatadas ficam na mesa antes das cartas novas
+const DRAW_TIE_MS = process.env.DRAW_TIE_MS !== undefined ? Number(process.env.DRAW_TIE_MS) : (DRAW_MS <= 0 ? 0 : 3500);
 function clearDrawTimers(game) {
   (game.drawTimers || []).forEach(clearTimeout);
   game.drawTimers = [];
@@ -409,6 +430,18 @@ function driveDraw(roomId) {
       broadcastState(roomId);
       runBotLogic(roomId);
     }, DRAW_MS);
+    return;
+  }
+  if (d.tie) {
+    // Mostra o empate com calma; depois cartas novas para os empatados
+    d.deadline = null;
+    game.drawTimer = setTimeout(() => {
+      game.drawTimer = null;
+      if (!alive() || !game.dealDraw.tie) return;
+      game.drawResolveTie();
+      broadcastState(roomId);
+      driveDraw(roomId);
+    }, DRAW_TIE_MS);
     return;
   }
   const round = d.round;
@@ -461,6 +494,7 @@ function startMatch(roomId) {
   if (DRAW_MS <= 0) {
     // Testes: tira por todos e já começa
     for (let guard = 0; guard < 50 && !game.dealDraw.done; guard++) {
+      if (game.dealDraw.tie) game.drawResolveTie();
       game.dealDraw.contenders.forEach(i => game.drawAutoPick(i));
     }
     game.startNewHand();
@@ -502,8 +536,9 @@ function startTournamentGame(t, m, n) {
   const roundName = (tournaments.constants.ROUND_NAMES[m.key] || m.key);
   game.roomName = `${t.name} · ${roundName}`;
   game.isPrivate = true;
-  game.allowSpectators = !t.isPrivate;
-  game.tournament = { tid: t.id, matchId: m.id, n, label: m.bestOf > 1 ? `${roundName} · partida ${n} (MD${m.bestOf})` : roundName };
+  game.allowSpectators = true; // a chave só aparece para participantes e admin: dá para assistir qualquer confronto
+  game.tournamentBotsOnly = !!(sa.bot && sb.bot);
+  game.tournament = { tid: t.id, matchId: m.id, n, label: m.bestOf > 1 ? `${roundName} · partida ${n}` : roundName };
   game.turnMs = t.timers.turnMs;
   game.trucoMs = t.timers.trucoMs;
   game.reconnectMs = t.timers.reconnectMs;
@@ -590,6 +625,8 @@ function setRoomPaused(roomId, paused) {
 }
 
 // Fim da partida de campeonato: manda o resultado e devolve os jogadores à tela do campeonato
+const tourName = (t, acc) => { const p = t && t.participants.find(x => x.account === acc); return p ? p.name : (acc || ''); };
+
 function reportTournamentGame(roomId) {
   const game = activeGames[roomId];
   if (!game || !game.tournament || game.tournamentReported || game.state !== 'game_end') return;
@@ -646,6 +683,12 @@ function broadcastState(roomId) {
   const game = activeGames[roomId];
   if (!game) return;
 
+  // Sala de espera sem estar cheia: ninguém de verdade fica "pronto"
+  // (só os bots, que estão sempre prontos)
+  if (game.state === 'lobby' && game.players.length < game.maxPlayers) {
+    game.players.forEach(p => { if (!p.isBot) p.ready = false; });
+  }
+
   // Partida de campeonato terminou: o resultado vai para a chave
   if (game.tournament && game.state === 'game_end' && !game.tournamentReported) reportTournamentGame(roomId);
 
@@ -701,7 +744,7 @@ function broadcastState(roomId) {
       name: t ? t.name : '',
       label: game.tournament.label,
       bestOf: m ? m.bestOf : 1,
-      series: m ? { a: m.wins.a, b: m.wins.b, aName: m.a, bName: m.b } : null,
+      series: m ? { a: m.wins.a, b: m.wins.b, aName: tourName(t, m.a), bName: tourName(t, m.b) } : null,
       paused: !!game.paused,
       pauseMessage: t && t.pause ? t.pause.message : null
     };
@@ -1015,7 +1058,7 @@ function runBotLogic(roomId) {
   if (activeBotIdx !== -1) {
     // Simula tempo de pensamento: responder aposta demora um pouco mais que jogar carta
     const h = game.hand;
-    const botDelay = (h.trucoResponsePending || h.envidoResponsePending || h.florResponsePending) ? 1300 : 900;
+    const botDelay = ((h.trucoResponsePending || h.envidoResponsePending || h.florResponsePending) ? 1300 : 900) * (game.tournamentBotsOnly ? 0.6 : 1); // bot contra bot: um pouco mais rápido
     botTimers[roomId] = setTimeout(() => {
       delete botTimers[roomId];
       const g = activeGames[roomId];
@@ -1347,6 +1390,12 @@ io.on('connection', (socket) => {
 
     const p = game.players.find(player => player.socketId === socket.id);
     if (p) {
+      // Só dá para ficar pronto com a sala cheia (antes disso dá para trocar
+      // a dificuldade dos bots, esperar amigos etc.). Desmarcar pode sempre.
+      if (!p.ready && game.players.length < game.maxPlayers) {
+        socket.emit('error_msg', 'Espere a sala encher para ficar pronto.');
+        return;
+      }
       p.ready = !p.ready;
 
       // Se todos estiverem prontos e a sala estiver cheia, inicia o jogo
@@ -1441,6 +1490,11 @@ io.on('connection', (socket) => {
     if (data && data.clientId) socket.data.clientId = cleanClientId(data.clientId) || socket.data.clientId;
     tourReply(cb, tournaments.checkin(String(data && data.id || '').toUpperCase(), myAccount(), tourSignal(data)));
   });
+  socket.on('tour:mine', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!myAccount()) return cb({ ok: true, items: [] });
+    tournaments.ready.then(() => cb({ ok: true, items: tournaments.mine(myAccount()) }));
+  });
   socket.on('tour:ready', (data, cb) => {
     if (!myAccount()) return tourReply(cb, { error: 'Entre na sua conta.' });
     if (data && data.clientId) socket.data.clientId = cleanClientId(data.clientId) || socket.data.clientId;
@@ -1466,6 +1520,7 @@ io.on('connection', (socket) => {
       case 'delete': return tournaments.remove(id, 'admin');
       case 'add_bots': return tournaments.addBots(id, d.count, 'admin');
       case 'remove_bots': return tournaments.removeBots(id, 'admin');
+      case 'release': return tournaments.releaseRound(id, 'admin');
       default: return { error: 'Ação desconhecida.' };
     }
   }));
@@ -1703,8 +1758,11 @@ io.on('connection', (socket) => {
       const game = activeGames[roomId];
       // Mesmo navegador: volta para o lugar. Se a conexão antiga ainda parecer
       // viva (o servidor ainda não percebeu a queda), ela é encerrada.
-      const p = game.players.find(pl => !pl.isBot && pl.clientId === clientId && pl.socketId !== socket.id);
+      const byAccount = pl => game.tournament && socket.data.account && pl.account === socket.data.account
+        && (pl.disconnected || !pl.socketId || !io.sockets.sockets.get(pl.socketId));
+      const p = game.players.find(pl => !pl.isBot && pl.socketId !== socket.id && (pl.clientId === clientId || byAccount(pl)));
       if (!p) continue;
+      if (p.clientId !== clientId && game.tournament) p.clientId = clientId;
 
       // O lugar passa para a conexão nova ANTES de derrubar a antiga: assim a
       // queda da antiga não marca o jogador como "caiu" de novo

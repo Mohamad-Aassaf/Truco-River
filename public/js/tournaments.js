@@ -84,8 +84,15 @@
       d.results ? podium() : ''
     ].join('');
     const started = !!d.bracket;
+    const nh = d.nextHold;
+    const adminRelease = isAdmin() && nh && ['running', 'paused'].includes(d.status) ? `
+      <div class="tour-action release">
+        <p><i class="fa-solid fa-lock"></i> <b>${esc(nh.name)}</b> esperando você liberar · ${nh.ready} de ${nh.total} confronto${nh.total === 1 ? '' : 's'} já definido${nh.total === 1 ? '' : 's'}</p>
+        <button type="button" class="btn btn-primary" data-tour-act="release"><i class="fa-solid fa-unlock"></i> Liberar ${esc(nh.name)}</button>
+      </div>` : '';
     body.innerHTML = `
       ${banners}
+      ${adminRelease}
       ${actionCard()}
       ${started ? bracketHtml() : playersHtml()}
       ${rulesLine()}`;
@@ -119,6 +126,12 @@
       </div>`;
     }
     const m = d.me.match && d.matches[d.me.match];
+    const held = !m && Object.values(d.matches).find(x => x.held && (x.a === me.account || x.b === me.account));
+    if (held) {
+      const opp = held.a === me.account ? held.bName : held.aName;
+      return `<div class="tour-action next"><small>${esc(d.roundNames[held.key] || held.key)}</small><b class="tour-vs">Você × ${esc(opp)}</b>
+        <p><i class="fa-solid fa-hourglass-half"></i> Esta fase começa quando a organização liberar. Você recebe um aviso.</p></div>`;
+    }
     if (!m) {
       const msg = me.status === 'champion' ? '<i class="fa-solid fa-trophy"></i> Você é o campeão!'
         : ['eliminated', 'absent', 'disqualified'].includes(me.status) ? 'Você foi eliminado. Acompanhe a chave!'
@@ -140,7 +153,11 @@
     if (m.status === 'between') {
       return `<div class="tour-action next">${head}<p>Próxima partida da série em <b class="tour-countdown" data-deadline="${m.nextGameAt}">${fmtLeft(left(m.nextGameAt))}</b></p></div>`;
     }
-    if (m.status === 'playing') return `<div class="tour-action next">${head}<p>Partida em andamento.</p></div>`;
+    if (m.status === 'playing') {
+      const inTable = typeof lastGameState !== 'undefined' && lastGameState && lastGameState.tournament && lastGameState.tournament.matchId === m.id && !lastGameState.spectating;
+      return `<div class="tour-action next">${head}<p>Partida em andamento.</p>
+        ${inTable ? '' : '<button type="button" class="btn btn-primary btn-large" data-tour-act="rejoin"><i class="fa-solid fa-right-to-bracket"></i> Voltar para a partida</button>'}</div>`;
+    }
     return '';
   }
 
@@ -190,6 +207,7 @@
             : m.reason === 'wo' ? '<span class="tm-tag">Venceu por W.O.</span>'
               : m.reason === 'duplo_wo' ? '<span class="tm-tag">Ninguém apareceu</span>'
                 : m.reason === 'bye' ? '<span class="tm-tag">Passa direto</span>'
+                  : m.held ? '<span class="tm-tag wait"><i class="fa-solid fa-lock"></i> Esperando liberar</span>'
                   : m.status === 'done' ? '<span class="tm-tag">Finalizado</span>'
                     : '<span class="tm-tag">Melhor de 3</span>';
       return `<div class="tm ${m.status}">
@@ -197,21 +215,39 @@
         <div class="tm-foot">${tag}${live ? `<button type="button" class="link-btn tm-watch" data-tour-watch="${esc(live.roomId)}"><i class="fa-solid fa-eye"></i> Assistir</button>` : ''}</div>
       </div>`;
     };
-    const cols = d.bracket.rounds.map(ids => {
+    // Chave espelhada: metade dos confrontos de cada lado, final e campeão no meio
+    const rounds = d.bracket.rounds;
+    const last = rounds.length - 1;
+    const sideCol = (ids, r, side) => {
       const key = d.matches[ids[0]].key;
       const pairs = [];
       for (let i = 0; i < ids.length; i += 2) pairs.push(ids.slice(i, i + 2));
-      return `<div class="br-col">
+      return `<div class="bx-col ${side} ${r === 0 ? 'first' : ''}">
         <div class="br-title">${esc(d.roundNames[key] || key)}</div>
-        <div class="br-body">${pairs.map(p => `<div class="br-pair ${p.length === 2 ? 'two' : 'one'}">${p.map(id => `<div class="br-slot">${box(d.matches[id])}</div>`).join('')}</div>`).join('')}</div>
+        <div class="bx-body">${pairs.map(pr => `<div class="bx-pair ${pr.length === 2 ? 'two' : 'one'}">${pr.map(id => `<div class="bx-slot">${box(d.matches[id])}</div>`).join('')}</div>`).join('')}</div>
       </div>`;
-    }).join('');
+    };
+    const left = [];
+    const right = [];
+    rounds.slice(0, last).forEach((ids, r) => {
+      const half = Math.ceil(ids.length / 2);
+      left.push(sideCol(ids.slice(0, half), r, 'l'));
+      right.unshift(sideCol(ids.slice(half), r, 'r'));
+    });
+    const finalId = rounds[last][0];
     const champ = d.results && d.results.champion ? (d.participants.find(p => p.account === d.results.champion) || {}).name : null;
-    const champCol = `<div class="br-col br-champ"><div class="br-title">Campeão</div>
-      <div class="br-body"><div class="tm-champ ${champ ? 'has' : ''}"><i class="fa-solid fa-trophy"></i><b>${champ ? esc(champ) : '?'}</b></div></div></div>`;
-    const third = d.matches['3P'] ? `<div class="br-third"><div class="br-title">${esc(d.roundNames['3P'])}</div>${box(d.matches['3P'])}</div>` : '';
+    const third = d.matches['3P'] ? `<div class="bx-third"><div class="br-title">${esc(d.roundNames['3P'])}</div>${box(d.matches['3P'])}</div>` : '';
+    const center = `<div class="bx-col c ${last === 0 ? 'solo' : ''}">
+        <div class="br-title">${esc(d.roundNames[d.matches[finalId].key] || 'Final')}</div>
+        <div class="bx-center">
+          <div class="bx-top br-champ"><div class="tm-champ ${champ ? 'has' : ''}"><i class="fa-solid fa-trophy"></i><small>Campeão</small><b>${champ ? esc(champ) : '?'}</b></div></div>
+          <div class="bx-slot final">${box(d.matches[finalId])}</div>
+          <div class="bx-bottom">${third}</div>
+        </div>
+      </div>`;
     return `<section class="tb-section">
-      <div class="bracket-wrap tb-bracket"><div class="bracket">${cols}${champCol}</div>${third}</div>
+      <p class="tb-swipe"><i class="fa-solid fa-arrows-left-right"></i> Deslize para o lado para ver a chave inteira</p>
+      <div class="bracket-wrap tb-bracket"><div class="bracket bx">${left.join('')}${center}${right.join('')}</div></div>
       <p class="tour-note tb-hint"><span class="tm-dot on"></span> = partida vencida. Quem ganhar 2 partidas avança.</p>
     </section>`;
   }
@@ -243,6 +279,20 @@
     if (!act) return;
     const a = act.dataset.tourAct;
     if (a === 'login') { window.trucoSocial.openAuth('login'); return; }
+    if (a === 'release') {
+      if (!confirm('Liberar a próxima fase agora? Os confrontos já definidos começam na hora.')) return;
+      act.disabled = true;
+      socket.emit('tour:admin_action', { id: current, action: 'release' }, res => { toast(esc(res && res.error ? res.error : (res && res.message) || 'Feito.')); load(); });
+      return;
+    }
+    if (a === 'rejoin') {
+      act.disabled = true;
+      socket.emit('rejoin', { clientId: CLIENT_ID }, res => {
+        act.disabled = false;
+        if (!res || !res.ok) { toast('Não deu para voltar: essa partida já terminou.'); load(); }
+      });
+      return;
+    }
     const ev = { register: 'tour:register', unregister: 'tour:unregister', checkin: 'tour:checkin', ready: 'tour:ready' }[a];
     if (!ev) return;
     if (a === 'unregister' && !confirm('Sair deste campeonato?')) return;
@@ -252,7 +302,8 @@
     socket.emit(ev, payload, res => {
       act.disabled = false;
       if (res && res.error) toast(`<i class="fa-solid fa-circle-exclamation"></i> ${esc(res.error)}`);
-      else if (a === 'register') toast('<i class="fa-solid fa-check"></i> Você entrou no campeonato!');
+      else if (a === 'register') toast('<i class="fa-solid fa-check"></i> Você entrou no campeonato! Ele aparece na tela inicial.');
+      paintMineSoon();
       load();
     });
   });
@@ -291,36 +342,129 @@
 
   // Partida de campeonato acabou: volta para a chave
   socket.on('tour:back', ({ tid }) => {
-    bar.classList.add('hide');
+    hideTourSlots();
     inTourGame = null;
     if (typeof goHomeScreen === 'function') goHomeScreen();
     if (tid) openTour(tid);
   });
 
-  // Na mesa: barra com o confronto e o placar da série; pausa em destaque
+  // Na mesa: o campeonato fica no painel lateral (computador) e num selo no topo
+  // (celular), sem cobrir nada do jogo. Só a pausa aparece no meio da tela.
   const bar = document.createElement('div');
   bar.className = 'tour-game-bar hide';
   document.body.appendChild(bar);
+  let sideCard = null;
+  let chip = null;
+  function tourSlots() {
+    if (!sideCard) {
+      const score = document.querySelector('#screen-game .scoreboard-card');
+      if (score) {
+        sideCard = document.createElement('div');
+        sideCard.className = 'tour-side-card hide';
+        score.insertAdjacentElement('afterend', sideCard);
+      }
+    }
+    if (!chip) {
+      const spacer = document.querySelector('#screen-game .mobile-header-spacer');
+      if (spacer) {
+        chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'tour-chip hide';
+        spacer.appendChild(chip);
+        chip.addEventListener('click', () => {
+          const s = typeof lastGameState !== 'undefined' ? lastGameState : null;
+          const i = s && s.tournament;
+          if (i) toast(`<i class="fa-solid fa-trophy"></i> <b>${esc(i.name)}</b><br>${esc(i.label)}${i.series ? `<br>Série: ${esc(i.series.aName)} <b>${i.series.a} x ${i.series.b}</b> ${esc(i.series.bName)} (melhor de ${i.bestOf})` : ''}`, { timeout: 5000 });
+        });
+      }
+    }
+  }
+  function hideTourSlots() {
+    bar.classList.add('hide');
+    if (sideCard) sideCard.classList.add('hide');
+    if (chip) chip.classList.add('hide');
+  }
   let inTourGame = null;
   socket.on('game_state', s => {
     const info = s && s.tournament;
     document.body.classList.toggle('tour-game', !!info);
-    if (!info || s.state === 'lobby') { bar.classList.add('hide'); inTourGame = null; return; }
+    if (!info || s.state === 'lobby') { hideTourSlots(); inTourGame = null; return; }
     // Entrou na mesa: fecha a tela do campeonato e o aviso de "Estou pronto"
     const key = `${info.tid}:${info.matchId || info.label}:${info.n || ''}`;
     if (inTourGame !== key) {
       inTourGame = key;
       modal.classList.add('hide');
-      if (window.trucoSocial && window.trucoSocial.dismissToast) window.trucoSocial.dismissToast(`tour-${info.tid}-match_ready`);
+      // Avisos do campeonato não ficam por cima da mesa
+      if (window.trucoSocial && window.trucoSocial.dismissToast) {
+        ['match_ready', 'started', 'series', 'match_end', 'checkin', 'early', 'resumed', 'extended', 'held', 'released'].forEach(t => window.trucoSocial.dismissToast(`tour-${info.tid}-${t}`));
+      }
     }
-    const series = info.series ? ` · série ${info.series.a} x ${info.series.b} (melhor de ${info.bestOf})` : '';
-    bar.className = `tour-game-bar ${info.paused ? 'paused' : ''}`;
-    bar.innerHTML = info.paused
-      ? `<i class="fa-solid fa-circle-pause"></i> <b>Campeonato pausado.</b> ${esc(info.pauseMessage || '')}`
-      : `<i class="fa-solid fa-trophy"></i> ${esc(info.name)} · ${esc(info.label)}${series}`;
+    tourSlots();
+    // Pausa: aviso no meio da tela (o jogo está parado)
+    bar.className = `tour-game-bar paused ${info.paused ? '' : 'hide'}`;
+    bar.innerHTML = info.paused ? `<i class="fa-solid fa-circle-pause"></i> <b>Campeonato pausado.</b> ${esc(info.pauseMessage || '')}` : '';
+    const ser = info.series;
+    if (sideCard) {
+      sideCard.classList.remove('hide');
+      sideCard.innerHTML = `
+        <div class="tsc-title"><i class="fa-solid fa-trophy"></i> ${esc(info.name)}</div>
+        <div class="tsc-phase">${esc(info.label)}</div>
+        ${ser ? `<div class="tsc-series"><span>${esc(ser.aName)}</span><b>${ser.a} x ${ser.b}</b><span>${esc(ser.bName)}</span></div>
+        <small class="tsc-note">Melhor de ${info.bestOf}: quem ganhar ${Math.ceil(info.bestOf / 2)} avança</small>` : ''}`;
+    }
+    if (chip) {
+      chip.classList.remove('hide');
+      chip.classList.toggle('paused', !!info.paused);
+      chip.title = `${info.name} · ${info.label}`;
+      chip.innerHTML = `<i class="fa-solid ${info.paused ? 'fa-circle-pause' : 'fa-trophy'}"></i>${ser ? ` <b>${ser.a}x${ser.b}</b>` : ''}`;
+    }
   });
 
-  modal.querySelectorAll('[data-close-modal]').forEach(b => b.addEventListener('click', () => modal.classList.add('hide')));
+  modal.querySelectorAll('[data-close-modal]').forEach(b => b.addEventListener('click', () => { modal.classList.add('hide'); paintMine(); }));
+
+  // ---------------------------------------------------------------- tela inicial
+  // Quem está inscrito vê os seus campeonatos na tela inicial (sem precisar do código)
+  const mineBox = $('my-tours');
+  let mineTimer = null;
+  function paintMine() {
+    if (!mineBox) return;
+    const logged = window.trucoSocial && window.trucoSocial.isLogged && window.trucoSocial.isLogged();
+    if (!logged) { mineBox.classList.add('hide'); mineBox.innerHTML = ''; return; }
+    socket.emit('tour:mine', {}, res => {
+      const list = (res && res.items) || [];
+      if (!list.length) { mineBox.classList.add('hide'); mineBox.innerHTML = ''; return; }
+      mineBox.classList.remove('hide');
+      mineBox.innerHTML = `<h3 class="my-tours-title"><i class="fa-solid fa-trophy"></i> Seus campeonatos</h3>` + list.map(t => {
+        const m = t.match;
+        let line = '';
+        let urgent = false;
+        if (['registration', 'checkin'].includes(t.status)) line = `Começa ${fmtDate(t.startAt)}`;
+        else if (t.status === 'paused') line = 'Pausado';
+        else if (t.status === 'cancelled') line = 'Cancelado';
+        else if (t.status === 'finished') line = t.champion ? `Encerrado · campeão: ${esc(t.champion)}` : 'Encerrado';
+        else if (m && m.status === 'ready_check' && !m.iReady) { line = `Seu confronto contra ${esc(m.opponent)} está esperando você!`; urgent = true; }
+        else if (m && m.status === 'playing') { line = `Jogando contra ${esc(m.opponent)} · série ${m.wins} x ${m.losses}`; urgent = true; }
+        else if (m) line = `${esc(m.label)} contra ${esc(m.opponent)} · série ${m.wins} x ${m.losses}`;
+        else if (['eliminated', 'absent', 'disqualified'].includes(t.myStatus)) line = 'Você foi eliminado';
+        else line = 'Esperando o próximo adversário';
+        return `<button type="button" class="my-tour ${urgent ? 'urgent' : ''}" data-my-tour="${esc(t.id)}">
+          <span class="my-tour-name">${esc(t.name)}</span>${statusChip(t.status)}
+          <span class="my-tour-line">${line}</span>
+          <span class="my-tour-go">Ver chave <i class="fa-solid fa-chevron-right"></i></span>
+        </button>`;
+      }).join('');
+    });
+  }
+  const paintMineSoon = () => { clearTimeout(mineTimer); mineTimer = setTimeout(paintMine, 400); };
+  if (mineBox) {
+    mineBox.addEventListener('click', e => { const b = e.target.closest('[data-my-tour]'); if (b) openTour(b.dataset.myTour); });
+    socket.on('connect', () => setTimeout(paintMine, 1500));
+    socket.on('tour:list_changed', paintMineSoon);
+    socket.on('tour:changed', paintMineSoon);
+    socket.on('tour:notify', paintMineSoon);
+    window.addEventListener('truco:auth', paintMineSoon);
+    setInterval(() => { if (!document.hidden && document.getElementById('screen-lobby') && document.getElementById('screen-lobby').classList.contains('active')) paintMine(); }, 20000);
+  }
 
   // ================================================================ ADMIN
   const adminBox = $('admin-tour');
@@ -358,6 +502,7 @@
               ${open ? `<button type="button" class="btn btn-sm btn-success" data-tadm="start" data-id="${t.id}"><i class="fa-solid fa-play"></i> Começar agora</button>` : ''}
               ${open && t.registered < t.maxPlayers ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="add_bot" data-id="${t.id}"><i class="fa-solid fa-robot"></i> +1 bot</button>
                 <button type="button" class="btn btn-sm btn-secondary" data-tadm="fill_bots" data-id="${t.id}" data-free="${t.maxPlayers - t.registered}"><i class="fa-solid fa-robot"></i> Completar com bots</button>` : ''}
+              ${t.nextHold && ['running', 'paused'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-success" data-tadm="release" data-id="${t.id}"><i class="fa-solid fa-unlock"></i> Liberar ${esc(t.nextHold.name)} (${t.nextHold.ready}/${t.nextHold.total})</button>` : ''}
               ${t.status === 'running' ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="pause" data-id="${t.id}">Pausar</button>` : ''}
               ${t.status === 'paused' ? `<button type="button" class="btn btn-sm btn-primary" data-tadm="resume" data-id="${t.id}">Retomar</button>` : ''}
               <details class="tadm-more"><summary>Mais</summary><div class="tadm-actions">
@@ -391,6 +536,7 @@
       <label>Começa em<input name="startAt" type="datetime-local" value="${toLocalInput(start)}" required>
         <small>Se todo mundo entrar antes, você pode clicar em "Começar agora".</small></label>
       <label class="tadm-check"><input type="checkbox" name="thirdPlace" ${!t || t.thirdPlace ? 'checked' : ''}> Ter disputa de 3º lugar</label>
+      <label class="tadm-check"><input type="checkbox" name="manualRounds" ${t && t.manualRounds ? 'checked' : ''}> Eu libero cada fase <small>(a próxima fase só começa quando eu clicar em "Liberar")</small></label>
       <p class="tour-note"><i class="fa-solid fa-circle-info"></i> Todas as séries são <b>melhor de 3</b>: quem ganhar 2 partidas avança.</p>
       <p class="form-msg" id="tadm-msg"></p>
       <div class="tadm-actions"><button type="submit" class="btn btn-primary">${t ? 'Salvar' : 'Criar campeonato'}</button><button type="button" class="link-btn" data-tadm="close-form">Cancelar</button></div>
@@ -411,6 +557,7 @@
       isPrivate: false,
       checkinRequired: false,
       thirdPlace: g('thirdPlace').checked,
+      manualRounds: g('manualRounds').checked,
       woEndsSeries: true,
       bestOf: { default: 3, byRound: {} },
       deadlinePolicy: 'finish_running'
@@ -448,6 +595,7 @@
       if (act === 'pause') { const m = prompt('Mensagem para os jogadores:', 'Campeonato pausado por um instante.'); if (m === null) return; extra.message = m; }
       if (act === 'cancel') { const m = prompt('Cancelar o campeonato? Escreva o motivo:'); if (m === null) return; extra.message = m; }
       if (act === 'start' && !confirm('Começar o campeonato agora com quem já entrou?')) return;
+      if (act === 'release' && !confirm('Liberar a próxima fase agora? Os confrontos já definidos começam na hora.')) return;
       if (act === 'finish' && !confirm('Encerrar agora? Se a final não terminou, fica sem campeão.')) return;
       socket.emit('tour:admin_action', { id, action, ...extra }, res => {
         toast(esc(res && res.error ? res.error : (res && res.message) || 'Feito.'));
