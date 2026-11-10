@@ -102,6 +102,9 @@
   }
 
   // ---------------------------------------------------------------- detalhe
+  // Lista de campeonatos escondida por enquanto: só o admin vê (os demais entram pelo código)
+  const listOpen = () => typeof isClientAdminAuthenticated !== 'undefined' && !!isClientAdminAuthenticated;
+
   function openTour(id, opts = {}) {
     current = id;
     if (opts.tab) tab = opts.tab;
@@ -186,7 +189,7 @@
     const d = data;
     if (d.locked) {
       body.innerHTML = `
-        <button type="button" class="link-btn" data-tour-back>← Campeonatos</button>
+        ${listOpen() ? '<button type="button" class="link-btn" data-tour-back>← Campeonatos</button>' : ''}
         <h2 class="tour-title">${esc(d.name)} <i class="fa-solid fa-lock"></i></h2>
         <p>Este campeonato é privado. Digite a senha para ver e se inscrever.</p>
         <form class="tour-code" id="tour-unlock" autocomplete="off">
@@ -199,7 +202,7 @@
     const pause = d.pause ? `<div class="tour-pause"><i class="fa-solid fa-circle-pause"></i> <b>Campeonato pausado.</b> ${esc(d.pause.message)}</div>` : '';
     const results = d.results ? resultsBox() : '';
     body.innerHTML = `
-      <button type="button" class="link-btn" data-tour-back>← Campeonatos</button>
+      ${listOpen() ? '<button type="button" class="link-btn" data-tour-back>← Campeonatos</button>' : ''}
       <div class="tour-head">
         <h2 class="tour-title">${esc(d.name)}</h2>
         ${statusChip(d.status)}
@@ -348,7 +351,7 @@
   body.addEventListener('click', e => {
     const open = e.target.closest('[data-tour-open]');
     if (open) return openTour(open.dataset.tourOpen);
-    if (e.target.closest('[data-tour-back]')) return openList();
+    if (e.target.closest('[data-tour-back]')) { if (listOpen()) return openList(); modal.classList.add('hide'); return; }
     const t = e.target.closest('[data-tour-tab]');
     if (t) { tab = t.dataset.tourTab; renderDetail(); return; }
     const w = e.target.closest('[data-tour-watch]');
@@ -399,6 +402,17 @@
     }
     toast(`<i class="fa-solid fa-trophy"></i> ${esc(n.message)}`, { key: `tour-${n.tid}-${n.type}`, timeout: n.type === 'match_ready' ? 0 : 9000, kind: n.type === 'match_ready' ? 'invite' : '', actions });
     if (n.type === 'match_ready' && current === n.tid) load();
+  });
+
+  // Código do campeonato digitado em "Entrar em sala"
+  socket.on('tour:open', ({ id }) => {
+    const input = $('join-room-id');
+    if (input) input.value = '';
+    openTour(id);
+  });
+  socket.on('tour:need_login', () => {
+    toast('<i class="fa-solid fa-trophy"></i> Para entrar no campeonato você precisa de uma conta. Entre ou crie a sua.');
+    if (window.trucoSocial && window.trucoSocial.openAuth) window.trucoSocial.openAuth('login');
   });
 
   // Partida de campeonato acabou: volta para a página do campeonato
@@ -459,7 +473,7 @@
         <div id="tadm-form-wrap"></div>
         <ul class="tadm-list">${items.map(t => `
           <li class="tadm-item">
-            <div><b>${esc(t.name)}</b> ${statusChip(t.status)} <small>${esc(t.id)} · ${t.registered}/${t.maxPlayers} · ${fmtDate(t.startAt)}${t.isPrivate ? ' · privado' : ''}</small></div>
+            <div><b>${esc(t.name)}</b> ${statusChip(t.status)} <small>Código <b class="tadm-code">${esc(t.id)}</b> · ${t.registered}/${t.maxPlayers} · ${fmtDate(t.startAt)}${t.isPrivate ? ' · privado' : ''}</small></div>
             <div class="tadm-actions">
               ${['registration', 'checkin'].includes(t.status) ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="edit" data-id="${t.id}">Editar</button><button type="button" class="btn btn-sm btn-secondary" data-tadm="start" data-id="${t.id}">Iniciar agora</button>` : ''}
               ${t.status === 'running' ? `<button type="button" class="btn btn-sm btn-secondary" data-tadm="pause" data-id="${t.id}">Pausar</button>` : ''}

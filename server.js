@@ -1196,6 +1196,16 @@ io.on('connection', (socket) => {
     const game = activeGames[cleanRoomId];
 
     if (!game) {
+      // Código de campeonato: leva para a página dele (só com conta)
+      const tour = tournaments.get(cleanRoomId);
+      if (tour) {
+        if (!socket.data.account) {
+          socket.emit('tour:need_login', { id: cleanRoomId });
+          return;
+        }
+        socket.emit('tour:open', { id: cleanRoomId });
+        return;
+      }
       socket.emit('error_msg', 'Sala não encontrada.');
       return;
     }

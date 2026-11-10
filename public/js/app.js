@@ -1902,30 +1902,111 @@ function pointsSummaryHtml(gameState, s, us) {
   return rows.length ? `<div class="hs-points">${rows.join('')}</div>` : '';
 }
 
-// Selo com os pontos de quem mostrou Envido/Flor, ao lado das cartas dele.
+// "Envido na mesa" / "Flor na mesa" no centro da mesa, com os pontos ao lado
+// e linhas ligando cada selo às cartas que formam aqueles pontos.
 // Com duas ou mais Flores, todas aparecem e a vencedora ganha a coroa.
+let proofState = { list: [], timers: [] };
 function renderProofBadges(list, gameState) {
-  document.querySelectorAll('.proof-badge').forEach(el => {
-    if (!list.some(p => el.dataset.key === `${p.playerIdx}-${p.kind}`)) el.remove();
-  });
-  list.forEach(p => {
-    const slot = document.getElementById(`arena-slot-${seatOf(p.playerIdx)}`);
-    if (!slot) return;
-    const key = `${p.playerIdx}-${p.kind}`;
-    let badge = slot.querySelector(`.proof-badge[data-key="${key}"]`);
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.dataset.key = key;
-      slot.appendChild(badge);
-    }
+  const arena = document.querySelector('.played-cards-arena');
+  if (!arena) return;
+  proofState.timers.forEach(clearTimeout);
+  proofState.timers = [];
+  let box = arena.querySelector('.proof-center');
+  let svg = arena.querySelector('.proof-lines');
+  document.querySelectorAll('.played-card.proof-target').forEach(el => el.classList.remove('proof-target', 'proof-envido-t', 'proof-flor-t', 'proof-dim'));
+  if (!list.length) {
+    proofState.list = [];
+    arena.classList.remove('has-proof', 'proof-spread');
+    if (box) box.remove();
+    if (svg) svg.remove();
+    return;
+  }
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'proof-center';
+    arena.appendChild(box);
+  }
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'proof-lines');
+    svg.setAttribute('aria-hidden', 'true');
+    arena.insertBefore(svg, arena.firstChild);
+  }
+  arena.classList.add('has-proof');
+  // De cima para baixo na ordem dos lugares: o selo de cima aponta para as cartas de cima
+  const order = { top: 0, left: 1, right: 2, bottom: 3 };
+  const sorted = list.slice().sort((x, y) => order[seatOf(x.playerIdx)] - order[seatOf(y.playerIdx)]);
+  const several = kind => list.filter(p => p.kind === kind).length > 1;
+  const html = sorted.map(p => {
     const name = gameState.players[p.playerIdx] ? gameState.players[p.playerIdx].name : '';
-    const label = p.kind === 'flor' ? 'Flor' : 'Envido';
-    const icon = p.win ? '<i class="fa-solid fa-crown"></i>' : (p.kind === 'flor' ? '<i class="fa-solid fa-spa"></i>' : '<i class="fa-solid fa-calculator"></i>');
-    badge.className = `proof-badge ${p.kind} ${p.win ? 'win' : 'lose'}`;
-    badge.title = `${name}: ${label} de ${p.score}${p.win ? ' (venceu)' : ''}`;
-    badge.innerHTML = `${icon}<span>${label}</span><b>${p.score}</b>${p.win ? '<em>venceu</em>' : ''}`;
-  });
+    const label = p.kind === 'flor' ? 'Flor na mesa' : 'Envido na mesa';
+    const icon = p.kind === 'flor' ? 'fa-spa' : 'fa-calculator';
+    const crown = p.win && several(p.kind) ? '<i class="fa-solid fa-crown proof-crown"></i>' : '';
+    return `<div class="proof-pill ${p.kind} ${p.win ? 'win' : 'lose'}" data-key="${p.playerIdx}-${p.kind}" title="${escapeText(name)}: ${p.kind === 'flor' ? 'Flor' : 'Envido'} de ${p.score}">
+      <i class="fa-solid ${icon}"></i><span>${label}</span><b>${p.score}</b>${crown}</div>`;
+  }).join('');
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+  proofState.list = sorted;
+  fitProofCenter(arena, box);
+  // As cartas ainda estão entrando na mesa: redesenha as linhas enquanto assentam
+  [0, 120, 300, 520, 800].forEach(ms => proofState.timers.push(setTimeout(drawProofLines, ms)));
 }
+
+// Mesa baixa (computador): pouco espaço entre as fileiras. As fileiras se afastam um
+// pouco e, se ainda não couber, os selos ficam lado a lado em vez de empilhados.
+function fitProofCenter(arena, box) {
+  const top = document.getElementById('arena-slot-top');
+  const bottom = document.getElementById('arena-slot-bottom');
+  arena.classList.remove('proof-spread');
+  box.classList.remove('row');
+  if (!top || !bottom) return;
+  const free = () => bottom.getBoundingClientRect().top - top.getBoundingClientRect().bottom;
+  const need = () => box.getBoundingClientRect().height + 24;
+  if (free() >= need()) return;
+  arena.classList.add('proof-spread');
+  const spread = top.getBoundingClientRect().height * 0.2; // o quanto as fileiras se afastam (CSS)
+  if (free() + spread < need() && box.children.length > 1) box.classList.add('row');
+}
+
+function drawProofLines() {
+  const arena = document.querySelector('.played-cards-arena');
+  const svg = arena && arena.querySelector('.proof-lines');
+  if (!svg || !proofState.list.length) return;
+  const base = arena.getBoundingClientRect();
+  const parts = [];
+  proofState.list.forEach(p => {
+    const pill = arena.querySelector(`.proof-pill[data-key="${p.playerIdx}-${p.kind}"]`);
+    if (!pill) return;
+    const pr = pill.getBoundingClientRect();
+    const cards = (p.cards || []).map(c => {
+      const sel = `.played-card[data-player="${p.playerIdx}"]:not(.leaving)`;
+      return [...document.querySelectorAll(sel)].find(el => el.dataset.key.endsWith(`-${c.value}-${c.suit}`));
+    }).filter(Boolean);
+    cards.forEach(el => el.classList.add('proof-target', `proof-${p.kind}-t`));
+    if (!p.win) cards.forEach(el => el.classList.add('proof-dim'));
+    cards.forEach(el => {
+      const cr = el.getBoundingClientRect();
+      const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
+      const px = pr.left + pr.width / 2, py = pr.top + pr.height / 2;
+      // Sai da borda do selo e chega na borda da carta (não por cima dela)
+      const edge = (r, fx, fy, tx, ty, pad) => {
+        const dx = tx - fx, dy = ty - fy;
+        const hw = r.width / 2 + pad, hh = r.height / 2 + pad;
+        const k = Math.min(dx ? hw / Math.abs(dx) : Infinity, dy ? hh / Math.abs(dy) : Infinity);
+        return [fx + dx * k, fy + dy * k];
+      };
+      const [x1, y1] = edge(pr, px, py, cx, cy, 2);
+      const [x2, y2] = edge(cr, cx, cy, px, py, 3);
+      const X1 = x1 - base.left, Y1 = y1 - base.top, X2 = x2 - base.left, Y2 = y2 - base.top;
+      const cls = `${p.kind} ${p.win ? 'win' : 'lose'}`;
+      parts.push(`<line class="${cls}" x1="${X1.toFixed(1)}" y1="${Y1.toFixed(1)}" x2="${X2.toFixed(1)}" y2="${Y2.toFixed(1)}"/>`);
+      parts.push(`<circle class="${cls}" cx="${X2.toFixed(1)}" cy="${Y2.toFixed(1)}" r="3.5"/>`);
+      parts.push(`<circle class="${cls} start" cx="${X1.toFixed(1)}" cy="${Y1.toFixed(1)}" r="2.5"/>`);
+    });
+  });
+  svg.innerHTML = parts.join('');
+}
+window.addEventListener('resize', () => { if (proofState.list.length) drawProofLines(); });
 
 function removePlayedCard(el) {
   el.classList.remove('entering');
@@ -1936,7 +2017,7 @@ function removePlayedCard(el) {
 }
 
 function clearPlayedCardSlots() {
-  document.querySelectorAll('.proof-badge').forEach(el => el.remove());
+  if (typeof renderProofBadges === 'function') renderProofBadges([], lastGameState || { players: [] });
   document.querySelectorAll('.played-card:not(.leaving)').forEach(removePlayedCard);
 }
 

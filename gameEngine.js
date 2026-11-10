@@ -178,7 +178,7 @@ class TrucoGame { // TRUCO GURIZINHO
 
   // Quem mostrou pontos na mesa (para o selo "Flor 33" / "Envido 31" ao lado das cartas)
   buildProofList() {
-    return (this.hand.proofs || []).map(p => ({ playerIdx: p.playerIdx, kind: p.kind, score: p.score, win: p.win !== false }));
+    return (this.hand.proofs || []).map(p => ({ playerIdx: p.playerIdx, kind: p.kind, score: p.score, win: p.win !== false, cards: p.cards }));
   }
 
   log(message, team = null) {

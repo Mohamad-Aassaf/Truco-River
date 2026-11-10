@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=3.3">
+  <link rel="stylesheet" href="/css/home.css?v=3.4">
 </head>
 
 <body data-screen="home">
@@ -90,7 +90,8 @@
           <button type="button" id="open-rules-btn" class="rules-cta">
             <i class="fa-solid fa-book-open"></i> Regras do Truco Gaúcho
           </button>
-          <button type="button" id="open-tour-btn" class="rules-cta tour-cta">
+          <!-- Campeonatos: escondido por enquanto (testers entram pelo código em "Entrar em sala") -->
+          <button type="button" id="open-tour-btn" class="rules-cta tour-cta hide" hidden>
             <i class="fa-solid fa-trophy"></i> Campeonatos
             <span class="news-count hide" id="tour-count" aria-label="Campeonatos abertos"></span>
           </button>
@@ -203,7 +204,7 @@
         <div class="lobby-action-box join-box">
           <h3>Entrar em Sala</h3>
           <div class="input-group">
-            <input type="text" id="join-room-id" placeholder="Código da Sala" maxlength="6">
+            <input type="text" id="join-room-id" placeholder="Código da Sala" maxlength="8">
           </div>
           <button id="join-room-btn" class="btn btn-secondary">Entrar na Sala</button>
 
@@ -1411,7 +1412,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=7"></script>
-  <script src="/js/app.js?v=26"></script>
+  <script src="/js/app.js?v=27"></script>
   <script src="/js/social.js?v=7"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
@@ -1421,7 +1422,7 @@
   <script src="/js/admin.js?v=3"></script>
   <script src="/js/table-extras.js?v=11"></script>
   <script src="/js/spectate.js?v=3"></script>
-  <script src="/js/tournaments.js?v=1"></script>
+  <script src="/js/tournaments.js?v=2"></script>
 </body>
 
 </html>
