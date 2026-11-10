@@ -1279,6 +1279,7 @@ function renderHandSummary(gameState) {
   let why = '';
   if (reason.type === 'refused') why = `${escapeText(reason.by)} correu do ${TRUCO_NAMES[reason.level] || 'Truco'}`;
   else if (reason.type === 'mazo') why = `${escapeText(reason.by)} foi ao mazo`;
+  else if (reason.type === 'florEscondida') why = `${escapeText(reason.by)} escondeu a Flor e ela apareceu`;
   else if (reason.level && TRUCO_NAMES[reason.level]) why = `${TRUCO_NAMES[reason.level]} aceito`;
 
   const rounds = (s.roundsWon || []).map(t => {
@@ -1288,11 +1289,13 @@ function renderHandSummary(gameState) {
   }).join('');
 
   // Pontos da mão (sem o Envido), do nosso time primeiro
-  const awards = (s.awards || []).filter(a => a.kind !== 'envido')
+  // (Envido e Flor aparecem logo abaixo, com os pontos de cada um)
+  const awards = (s.awards || []).filter(a => a.kind !== 'envido' && a.kind !== 'flor')
     .sort((a, b) => (b.team === us) - (a.team === us));
   const chips = awards.map(a => `
     <span class="hs-chip ${a.team === us ? 'us' : 'them'}">${escapeText(a.label)} <b>+${a.points}</b></span>`).join('');
 
+  const points = pointsSummaryHtml(gameState, s, us);
   const score = s.scoreAfter || gameState.score;
   handSummaryEl.innerHTML = `
     <div class="hs-head ${won ? 'win' : 'lose'}">
@@ -1304,6 +1307,7 @@ function renderHandSummary(gameState) {
       ${why ? `<span class="hs-why">${why}</span>` : ''}
       ${chips}
     </div>
+    ${points}
     <div class="hs-next">
       <div class="hs-bar"><span id="hs-bar-fill"></span></div>
       <span class="hs-next-text" id="hs-next-text">${gameOver ? 'Fim de jogo!' : 'Distribuindo cartas...'}</span>
@@ -1599,7 +1603,13 @@ function renderMyHand(cards, isMyTurn) {
 playerHand.addEventListener('click', (e) => {
   const wrapper = e.target.closest('.card-lift-wrapper');
   if (!wrapper || !playerHand.classList.contains('my-turn') || isAnimatingCardPlay) return;
+  const h = lastGameState && lastGameState.hand;
+  const card = h && h.hands[mySeatIndex] ? h.hands[mySeatIndex][Number(wrapper.dataset.idx)] : null;
+  guardHiddenFlor('card', () => playCardFromHand(wrapper), card);
+});
 
+function playCardFromHand(wrapper) {
+  if (!wrapper.isConnected || !playerHand.classList.contains('my-turn') || isAnimatingCardPlay) return;
   const idx = Number(wrapper.dataset.idx);
   const hand = lastGameState && lastGameState.hand;
   const card = hand && hand.hands[mySeatIndex] && hand.hands[mySeatIndex][idx];
@@ -1624,6 +1634,88 @@ playerHand.addEventListener('click', (e) => {
   setTimeout(() => {
     if (optimisticPlay && pendingHandRender) renderMyHand(...pendingHandRender);
   }, 3100);
+}
+
+// --- FLOR ESCONDIDA ---
+// Quem tem Flor pode não cantar e seguir jogando (até usar a Flor no Envido).
+// Antes da primeira carta ou do Envido aparece um aviso para confirmar; e na
+// última carta, outro aviso: jogar mostra a Flor (o outro time leva a mão + 3).
+let hiddenFlorOkHand = null;
+let floraModal = null;
+function myHiddenFlor() {
+  const s = lastGameState;
+  if (!s || !s.hand || s.spectating) return null;
+  const me = s.players[mySeatIndex];
+  if (!me || !me.hasFlor || s.hand.florState !== 'none') return null;
+  return { hand: s.hand, cards: (s.hand.hands[mySeatIndex] || []).length };
+}
+function guardHiddenFlor(kind, proceed, card) {
+  const f = myHiddenFlor();
+  if (!f) return proceed();
+  if (kind === 'card' && f.cards === 1) return askHiddenFlor('last', proceed);
+  // Ganhou o Envido com a Flor escondida: no fim mostra as duas cartas do Envido;
+  // jogar a terceira deixa a Flor inteira à mostra
+  const rv = f.hand.reveal;
+  if (kind === 'card' && card && rv && rv.kind === 'envido' && rv.winnerIdx === mySeatIndex) {
+    const mine = (f.hand.hands[mySeatIndex] || []).concat(f.hand.playedCards.filter(p => p.playerIdx === mySeatIndex).map(p => p.card));
+    const pair = mine.slice().sort((a, b) => (b.envidoPoints || 0) - (a.envidoPoints || 0)).slice(0, 2);
+    const inPair = pair.some(c => c.value === card.value && c.suit === card.suit);
+    if (!inPair) return askHiddenFlor('proof', proceed);
+  }
+  const canStillSing = f.hand.currentRound === 0 && f.cards === 3;
+  if (!canStillSing || hiddenFlorOkHand === f.hand.number) return proceed();
+  askHiddenFlor('first', proceed);
+}
+function askHiddenFlor(mode, proceed) {
+  if (!floraModal) {
+    floraModal = document.createElement('div');
+    floraModal.className = 'modal-overlay flor-warn hide';
+    floraModal.setAttribute('role', 'alertdialog');
+    floraModal.setAttribute('aria-modal', 'true');
+    document.body.appendChild(floraModal);
+  }
+  const last = mode === 'last' || mode === 'proof';
+  floraModal.innerHTML = `
+    <div class="modal-card flor-warn-card ${last ? 'danger' : ''}">
+      <div class="flor-warn-icon"><i class="fa-solid ${last ? 'fa-triangle-exclamation' : 'fa-spa'}"></i></div>
+      <h2>${last ? 'Cuidado: Flor escondida!' : 'Você tem Flor!'}</h2>
+      ${mode === 'proof'
+        ? `<p>Você ganhou o Envido com a Flor escondida: no fim da mão vai mostrar as duas cartas do Envido. <b>Jogando esta carta, as três cartas da Flor ficam à mostra</b> e o outro time leva os pontos da mão e mais 3.</p>
+           <p>Jogue outra carta ou vá ao mazo.</p>`
+        : last
+        ? `<p>Esta é a sua <b>última carta</b>. Se jogar, as três cartas da Flor ficam à mostra e o outro time leva <b>os pontos da mão e mais 3 da Flor</b>.</p>
+           <p>Indo ao mazo, você perde só os pontos da mão.</p>`
+        : `<p>Cante a Flor agora (vale 3, ou 6 se o parceiro também tiver) ou siga sem cantar.</p>
+           <p>Sem cantar, dá para jogar e usar a Flor no Envido (as duas maiores cartas). Mas se a Flor aparecer na mesa no fim da mão, o outro time leva <b>os pontos da mão e mais 3</b>. Se a mão chegar na sua última carta, vá ao mazo.</p>`}
+      <div class="flor-warn-actions">
+        ${last
+          ? `<button type="button" class="btn btn-primary" data-flor-act="mazo"><i class="fa-solid fa-person-walking-arrow-right"></i> Ir ao mazo</button>
+             <button type="button" class="btn btn-danger" data-flor-act="go">Jogar mesmo assim</button>`
+          : `<button type="button" class="btn btn-primary" data-flor-act="sing"><i class="fa-solid fa-spa"></i> Cantar Flor</button>
+             <button type="button" class="btn btn-secondary" data-flor-act="go">Seguir sem cantar</button>`}
+        <button type="button" class="link-btn" data-flor-act="back">${mode === 'proof' ? 'Escolher outra carta' : 'Voltar'}</button>
+      </div>
+    </div>`;
+  floraModal.classList.remove('hide');
+  if (window.soundManager && window.soundManager.playChatPing) window.soundManager.playChatPing();
+  if (navigator.vibrate) { try { navigator.vibrate([80, 60, 80]); } catch (e) { /* sem vibração */ } }
+  const handNumber = lastGameState && lastGameState.hand ? lastGameState.hand.number : null;
+  floraModal.onclick = e => {
+    const b = e.target.closest('[data-flor-act]');
+    if (!b && e.target !== floraModal) return;
+    const act = b ? b.dataset.florAct : 'back';
+    floraModal.classList.add('hide');
+    if (act === 'sing') socket.emit('game_action', { action: 'call_flor' });
+    else if (act === 'mazo') socket.emit('game_action', { action: 'fold' });
+    else if (act === 'go') {
+      if (!last) hiddenFlorOkHand = handNumber;
+      proceed();
+    }
+  };
+}
+// A mão mudou: fecha o aviso se ainda estiver aberto
+socket.on('game_state', s => {
+  if (floraModal && !floraModal.classList.contains('hide') && !myHiddenFlor()) floraModal.classList.add('hide');
 });
 
 // Coloca a carta na mesa na hora do clique, deslizando da mão até o lugar dela
@@ -1776,6 +1868,40 @@ function renderPlayedCards(playedCards, players, gameState, endRoundWinners) {
   }
 }
 
+// Envido e Flor da mão no resumo: quem cantou quanto, quem venceu e os tentos
+function pointsSummaryHtml(gameState, s, us) {
+  const nameOf = i => escapeText(gameState.players[i] ? gameState.players[i].name : '');
+  const teamCls = i => (gameState.players[i] && gameState.players[i].team === us ? 'us' : 'them');
+  const awards = (s.awards || []).filter(a => a.kind === 'envido' || a.kind === 'flor');
+  const rows = [];
+  ['envido', 'flor'].forEach(kind => {
+    const got = awards.filter(a => a.kind === kind);
+    if (!got.length) return;
+    const gain = got.map(a => `<b class="hs-pt-gain ${a.team === us ? 'us' : 'them'}">${escapeText(a.label)} +${a.points}</b>`).join('');
+    let lines = [];
+    const reveal = s.reveal && s.reveal.kind === kind ? s.reveal : null;
+    if (reveal) {
+      lines = reveal.lines.slice().sort((a, b) => (b.playerIdx === reveal.winnerIdx) - (a.playerIdx === reveal.winnerIdx))
+        .map(l => {
+          const win = l.playerIdx === reveal.winnerIdx;
+          return `<span class="hs-pt-line ${teamCls(l.playerIdx)} ${win ? 'win' : 'lose'}">${win ? '<i class="fa-solid fa-crown"></i>' : ''}${nameOf(l.playerIdx)} <b>${l.score === null || l.score === undefined ? 'são boas' : l.score}</b></span>`;
+        });
+    } else {
+      // Sem disputa (Flor sozinha ou Envido recusado): mostra quem levou
+      lines = (s.proofList || []).filter(p => p.kind === kind)
+        .map(p => `<span class="hs-pt-line ${teamCls(p.playerIdx)} win"><i class="fa-solid fa-crown"></i>${nameOf(p.playerIdx)} <b>${p.score}</b></span>`);
+    }
+    const icon = kind === 'flor' ? 'fa-spa' : 'fa-calculator';
+    rows.push(`
+      <div class="hs-pt ${kind}">
+        <span class="hs-pt-kind"><i class="fa-solid ${icon}"></i> ${kind === 'flor' ? 'Flor' : 'Envido'}</span>
+        <span class="hs-pt-lines">${lines.join('<span class="hs-pt-vs">×</span>')}</span>
+        ${gain}
+      </div>`);
+  });
+  return rows.length ? `<div class="hs-points">${rows.join('')}</div>` : '';
+}
+
 // Selo com os pontos de quem mostrou Envido/Flor, ao lado das cartas dele.
 // Com duas ou mais Flores, todas aparecem e a vencedora ganha a coroa.
 function renderProofBadges(list, gameState) {
@@ -1794,10 +1920,10 @@ function renderProofBadges(list, gameState) {
     }
     const name = gameState.players[p.playerIdx] ? gameState.players[p.playerIdx].name : '';
     const label = p.kind === 'flor' ? 'Flor' : 'Envido';
-    const icon = p.win ? '<i class="fa-solid fa-crown"></i>' : (p.kind === 'flor' ? '<i class="fa-solid fa-spa"></i>' : '');
+    const icon = p.win ? '<i class="fa-solid fa-crown"></i>' : (p.kind === 'flor' ? '<i class="fa-solid fa-spa"></i>' : '<i class="fa-solid fa-calculator"></i>');
     badge.className = `proof-badge ${p.kind} ${p.win ? 'win' : 'lose'}`;
     badge.title = `${name}: ${label} de ${p.score}${p.win ? ' (venceu)' : ''}`;
-    badge.innerHTML = `${icon}<span>${label}</span><b>${p.score}</b>`;
+    badge.innerHTML = `${icon}<span>${label}</span><b>${p.score}</b>${p.win ? '<em>venceu</em>' : ''}`;
   });
 }
 
@@ -1955,27 +2081,17 @@ function setupActionButtons(gameState) {
 
   // --- SE HOUVER APOSTA PENDENTE PARA O MEU TIME RESPONDER ---
 
-  // Envido pendente para o meu time e alguém do time tem Flor sem cantar:
-  // a Flor vem antes da resposta ("Flor sobre Envido")
-  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && hand.florState === 'none' && hand.currentRound === 0) {
-    const holder = gameState.players.findIndex((p, i) => p.team === myTeam && p.hasFlor
-      && !(hand.foldedPlayers || []).includes(i) && (hand.hands[i] || []).length === 3);
-    if (holder === mySeatIndex) {
-      if (statusEl) {
-        statusEl.textContent = 'Você tem Flor! Cante antes de responder o Envido.';
-        statusEl.classList.remove('hide');
-      }
-      groupFlor.classList.remove('hide');
-      showAndEnableButton(btnFlor);
-      return;
+  // Envido pendente para o meu time e eu tenho Flor (sem ser quem responde):
+  // posso cantar a Flor por cima do Envido, mas não sou obrigado
+  if (hand.envidoResponsePending && hand.envidoPendingTeam === myTeam && hand.envidoResponderIdx !== mySeatIndex
+    && myPlayer.hasFlor && hand.florState === 'none' && hand.currentRound === 0 && (hand.hands[mySeatIndex] || []).length === 3) {
+    if (statusEl) {
+      statusEl.textContent = 'Você tem Flor: pode cantar por cima do Envido (ou deixar o parceiro responder).';
+      statusEl.classList.remove('hide');
     }
-    if (holder !== -1) {
-      if (statusEl) {
-        statusEl.textContent = `${gameState.players[holder].name} tem Flor e vai cantar...`;
-        statusEl.classList.remove('hide');
-      }
-      return;
-    }
+    groupFlor.classList.remove('hide');
+    showAndEnableButton(btnFlor);
+    return;
   }
 
   // Só responde quem é o próximo depois de quem cantou; o parceiro espera
@@ -2013,7 +2129,7 @@ function setupActionButtons(gameState) {
     const myCards = hand.hands[mySeatIndex] || [];
     const hasNotPlayedYet = myCards.length === 3;
     if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && hand.trucoState === 'truco') {
-      if (!myPlayer.hasFlor && hand.envidoState === 'none') {
+      if (hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
         showAndEnableButton(btnRealEnvido);
@@ -2100,7 +2216,7 @@ function setupActionButtons(gameState) {
     // Envido e Flor: só na primeira vaza, na minha vez (não pode "atravessado")
     if (hand.currentRound === 0 && hasNotPlayedYet && hand.canCallEnvido && isMyTurn) {
       // 2. Botão de Envido / Real / Falta (só o pé da dupla)
-      if (isPe && !myPlayer.hasFlor && hand.envidoState === 'none') {
+      if (isPe && hand.envidoState === 'none') {
         groupEnvido.classList.remove('hide');
         showAndEnableButton(btnEnvido);
         showAndEnableButton(btnRealEnvido);
@@ -2249,9 +2365,9 @@ btnVale4.addEventListener('click', () => {
 });
 
 // Botoes Envido
-btnEnvido.addEventListener('click', () => socket.emit('game_action', { action: 'call_envido', value: 'envido' }));
-btnRealEnvido.addEventListener('click', () => socket.emit('game_action', { action: 'call_envido', value: 'real_envido' }));
-btnFaltaEnvido.addEventListener('click', () => socket.emit('game_action', { action: 'call_envido', value: 'falta_envido' }));
+btnEnvido.addEventListener('click', () => guardHiddenFlor('envido', () => socket.emit('game_action', { action: 'call_envido', value: 'envido' })));
+btnRealEnvido.addEventListener('click', () => guardHiddenFlor('envido', () => socket.emit('game_action', { action: 'call_envido', value: 'real_envido' })));
+btnFaltaEnvido.addEventListener('click', () => guardHiddenFlor('envido', () => socket.emit('game_action', { action: 'call_envido', value: 'falta_envido' })));
 
 // Flor
 btnFlor.addEventListener('click', () => socket.emit('game_action', { action: 'call_flor' }));
@@ -2263,7 +2379,7 @@ btnQuero.addEventListener('click', () => {
   if (lastGameState.hand.trucoResponsePending && lastGameState.hand.trucoPendingTeam === myTeam) {
     socket.emit('game_action', { action: 'truco_response', value: 'quero' });
   } else if (lastGameState.hand.envidoResponsePending && lastGameState.hand.envidoPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'envido_response', value: 'quero' });
+    guardHiddenFlor('envido', () => socket.emit('game_action', { action: 'envido_response', value: 'quero' }));
   } else if (lastGameState.hand.florResponsePending && lastGameState.hand.florPendingTeam === myTeam) {
     socket.emit('game_action', { action: 'flor_response', value: 'quero' });
   }
@@ -2574,6 +2690,7 @@ document.querySelectorAll('[data-admin-tab]').forEach(tab => {
     document.querySelectorAll('[data-admin-pane]').forEach(pane => {
       pane.classList.toggle('hide', pane.dataset.adminPane !== tab.dataset.adminTab);
     });
+    if (tab.dataset.adminTab === 'tours' && window.trucoTournaments) window.trucoTournaments.adminLoad();
   });
 });
 

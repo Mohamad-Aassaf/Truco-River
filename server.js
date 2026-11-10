@@ -48,6 +48,34 @@ const news = createNews(accounts.store);
 
 // Relatos de bugs e sugestões (só o admin vê)
 const reports = createReports(accounts.store);
+
+// Campeonatos (mesmo armazenamento das contas). Os ganchos ligam o módulo às
+// salas e aos sockets daqui.
+const { createTournaments } = require('./tournaments');
+const tournaments = createTournaments(accounts.store, {
+  notify: (account, payload) => socketsOfAccount(account).forEach(s => s.emit('tour:notify', payload)),
+  changed: (t, opts = {}) => {
+    io.to(`tour:${t.id}`).emit('tour:changed', { id: t.id });
+    t.participants.forEach(p => socketsOfAccount(p.account).forEach(s => s.emit('tour:changed', { id: t.id })));
+    if (opts.list) io.emit('tour:list_changed');
+    // Salas das partidas deste campeonato mostram a pausa/placar da série
+    Object.keys(activeGames).forEach(rid => { const g = activeGames[rid]; if (g.tournament && g.tournament.tid === t.id) broadcastState(rid); });
+  },
+  isOnline: account => socketsOfAccount(account).length > 0,
+  startGame: (t, m, n) => startTournamentGame(t, m, n),
+  pauseRooms: (t, paused) => Object.keys(activeGames).forEach(rid => {
+    const g = activeGames[rid];
+    if (g.tournament && g.tournament.tid === t.id) setRoomPaused(rid, paused);
+  }),
+  endRooms: t => Object.keys(activeGames).forEach(rid => {
+    const g = activeGames[rid];
+    if (g.tournament && g.tournament.tid === t.id) closeTournamentRoom(rid, false);
+  }),
+  endMatchRoom: (t, m) => Object.keys(activeGames).forEach(rid => {
+    const g = activeGames[rid];
+    if (g.tournament && g.tournament.tid === t.id && g.tournament.matchId === m.id) closeTournamentRoom(rid, false);
+  })
+});
 const reportAttempts = new Map(); // IP -> horários dos últimos envios
 
 function adminSockets() {
@@ -278,6 +306,14 @@ function removeFromRoom(roomId, socketId) {
   if (!leaving) return;
   if (leaving.reconnectTimer) clearTimeout(leaving.reconnectTimer);
 
+  // Partida de campeonato: quem sai perde esta partida (abandono)
+  if (game.tournament && ['playing', 'hand_end', 'drawing'].includes(game.state)) {
+    game.endReason = 'abandono';
+    game.leftStats = game.leftStats || {};
+    if (leaving.account && leaving.tStats) game.leftStats[leaving.account] = leaving.tStats;
+    game.leftDisc = (game.leftDisc || 0) + (leaving.discTotal || 0);
+    if (game.state === 'drawing') { game.state = 'playing'; game.hand = game.hand || null; }
+  }
   // Quem abandona uma partida em andamento leva a derrota (só vale contra gente de verdade)
   if (leaving.account && countsForStats(game, leaving) && (game.state === 'playing' || game.state === 'hand_end')) {
     accounts.recordResult(leaving.account, false);
@@ -383,6 +419,154 @@ function startMatch(roomId) {
   driveDraw(roomId);
 }
 
+// --------------------------------------------------------------------------
+// Partidas de campeonato
+// --------------------------------------------------------------------------
+function socketsOfAccount(account) {
+  if (!account) return [];
+  return [...io.sockets.sockets.values()].filter(s => s.data.account === account);
+}
+
+// Abre a sala de uma partida do confronto e põe os dois jogadores dentro
+function startTournamentGame(t, m, n) {
+  const pick = side => {
+    const acc = m[side];
+    const pref = m.readySocket && m.readySocket[side] && io.sockets.sockets.get(m.readySocket[side]);
+    if (pref && pref.data.account === acc) return pref;
+    return socketsOfAccount(acc)[0] || null;
+  };
+  const sa = pick('a');
+  const sb = pick('b');
+  if (!sa || !sb) return null;
+  [sa, sb].forEach(s => {
+    const r = roomOfSocket(s.id);
+    if (r) removeFromRoom(r.roomId, s.id); // estava em outra sala: sai dela
+    if (s.data.spectating) removeSpectator(s);
+  });
+  const roomId = generateUniqueRoomId();
+  const game = new TrucoGame(roomId, '1v1', t.maxPoints);
+  const roundName = (tournaments.constants.ROUND_NAMES[m.key] || m.key);
+  game.roomName = `${t.name} · ${roundName}`;
+  game.isPrivate = true;
+  game.allowSpectators = !t.isPrivate;
+  game.tournament = { tid: t.id, matchId: m.id, n, label: m.bestOf > 1 ? `${roundName} · partida ${n} (MD${m.bestOf})` : roundName };
+  game.turnMs = t.timers.turnMs;
+  game.trucoMs = t.timers.trucoMs;
+  game.reconnectMs = t.timers.reconnectMs;
+  game.disconnectTotalMs = t.timers.disconnectTotalMs;
+  game.pausedMs = 0;
+  activeGames[roomId] = game;
+  [sa, sb].forEach((s, i) => {
+    game.addPlayer(s.id, accounts.displayName(s.data.account), s.id);
+    const p = game.players[game.players.length - 1];
+    p.team = i;
+    p.account = s.data.account;
+    p.clientId = s.data.clientId || null;
+    p.ready = true;
+    if (s.data.setRoom) s.data.setRoom(roomId);
+    s.join(roomId);
+    s.leave('lobby');
+  });
+  startMatch(roomId);
+  broadcastState(roomId);
+  return roomId;
+}
+
+// Pausa (ou retoma) uma sala de campeonato: congela relógios e prazos
+function setRoomPaused(roomId, paused) {
+  const game = activeGames[roomId];
+  if (!game || !!game.paused === paused) return;
+  const nowMs = Date.now();
+  if (paused) {
+    game.paused = true;
+    game.pausedAt = nowMs;
+    if (game.turnTimer) { clearTimeout(game.turnTimer); game.turnTimer = null; }
+    if (game.turn) game.turn.frozen = Math.max(0, game.turn.deadline - nowMs);
+    if (nextHandTimers[roomId]) {
+      clearTimeout(nextHandTimers[roomId]);
+      delete nextHandTimers[roomId];
+      game.nextHandFrozen = Math.max(0, (game.nextHandAt || nowMs) - nowMs);
+    }
+    if (botTimers[roomId]) { clearTimeout(botTimers[roomId]); delete botTimers[roomId]; }
+    clearDrawTimers(game);
+    game.players.forEach(p => {
+      if (p.reconnectTimer) { clearTimeout(p.reconnectTimer); p.reconnectTimer = null; p.reconnectFrozen = Math.max(0, p.reconnectUntil - nowMs); }
+    });
+    game.log('Campeonato pausado: o jogo está parado.');
+  } else {
+    game.paused = false;
+    game.pausedMs = (game.pausedMs || 0) + (nowMs - (game.pausedAt || nowMs));
+    if (game.turn && game.turn.frozen !== undefined) {
+      game.turn.deadline = nowMs + game.turn.frozen;
+      const key = game.turn.key;
+      delete game.turn.frozen;
+      game.turnTimer = setTimeout(() => turnTimeout(roomId, key), game.turn.deadline - nowMs);
+    }
+    if (game.state === 'hand_end') {
+      game.nextHandAt = nowMs + (game.nextHandFrozen || 3000);
+      nextHandTimers[roomId] = setTimeout(() => {
+        delete nextHandTimers[roomId];
+        const g = activeGames[roomId];
+        if (g && g.state === 'hand_end' && !g.paused) { g.nextHandAt = null; g.startNewHand(); broadcastState(roomId); runBotLogic(roomId); }
+      }, game.nextHandAt - nowMs);
+    }
+    if (game.state === 'drawing') driveDraw(roomId);
+    game.players.forEach(p => {
+      if (p.disconnected && p.reconnectFrozen !== undefined) {
+        p.reconnectUntil = nowMs + p.reconnectFrozen;
+        delete p.reconnectFrozen;
+        p.reconnectTimer = setTimeout(() => {
+          p.reconnectTimer = null;
+          if (p.disconnected && activeGames[roomId] && !io.sockets.sockets.has(p.socketId)) removeFromRoom(roomId, p.socketId);
+        }, p.reconnectUntil - nowMs);
+      }
+    });
+    game.log('Campeonato retomado!');
+    runBotLogic(roomId);
+  }
+  broadcastState(roomId);
+}
+
+// Fim da partida de campeonato: manda o resultado e devolve os jogadores à tela do campeonato
+function reportTournamentGame(roomId) {
+  const game = activeGames[roomId];
+  if (!game || !game.tournament || game.tournamentReported || game.state !== 'game_end') return;
+  game.tournamentReported = true;
+  const winnerPlayer = game.players.find(p => p.team === game.winner && p.account);
+  const stats = {};
+  game.players.forEach(p => { if (p.account && p.tStats) stats[p.account] = p.tStats; });
+  Object.assign(stats, game.leftStats || {});
+  const disconnectMs = game.players.reduce((s, p) => s + (p.discTotal || 0), 0) + (game.leftDisc || 0);
+  if (winnerPlayer) {
+    tournaments.reportGame(game.tournament.tid, game.tournament.matchId, game.tournament.n, winnerPlayer.account, {
+      reason: game.endReason || 'normal',
+      durationMs: (game.gameEndedAt || Date.now()) - (game.gameStartedAt || Date.now()),
+      pausedMs: game.pausedMs || 0,
+      disconnectMs,
+      hands: game.handNumber || 0,
+      score: { a: game.score[0], b: game.score[1] },
+      stats
+    });
+  }
+  setTimeout(() => closeTournamentRoom(roomId, true), 10000);
+}
+
+function closeTournamentRoom(roomId, finished) {
+  const game = activeGames[roomId];
+  if (!game) return;
+  game.tournamentReported = true;
+  const tid = game.tournament && game.tournament.tid;
+  game.players.forEach(p => {
+    const s = p.socketId && io.sockets.sockets.get(p.socketId);
+    if (!s) return;
+    s.emit('tour:back', { tid, finished });
+    if (s.data.setRoom) s.data.setRoom(null);
+    s.leave(roomId);
+    s.join('lobby');
+  });
+  deleteRoom(roomId);
+}
+
 function generateUniqueRoomId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -399,6 +583,9 @@ function generateUniqueRoomId() {
 function broadcastState(roomId) {
   const game = activeGames[roomId];
   if (!game) return;
+
+  // Partida de campeonato terminou: o resultado vai para a chave
+  if (game.tournament && game.state === 'game_end' && !game.tournamentReported) reportTournamentGame(roomId);
 
   // Fim de partida: registra vitórias/derrotas de quem tem conta
   if (game.state === 'game_end' && !game.statsRecorded) {
@@ -431,7 +618,30 @@ function broadcastState(roomId) {
 
   // Tempo para quem precisa agir agora (15s; acabou, o servidor joga por ele)
   updateTurnTimer(roomId, game);
-  const turn = game.turn ? { playerIdx: game.turn.idx, kind: game.turn.kind, endsIn: Math.max(0, game.turn.deadline - Date.now()), total: TURN_MS } : null;
+  const turn = game.turn ? {
+    playerIdx: game.turn.idx,
+    kind: game.turn.kind,
+    endsIn: game.paused && game.turn.frozen !== undefined ? game.turn.frozen : Math.max(0, game.turn.deadline - Date.now()),
+    total: game.turn.total || TURN_MS,
+    paused: !!game.paused
+  } : null;
+  // Dados do campeonato para a mesa (placar da série, pausa)
+  let tourInfo = null;
+  if (game.tournament) {
+    const t = tournaments.get(game.tournament.tid);
+    const m = t && t.matches[game.tournament.matchId];
+    tourInfo = {
+      tid: game.tournament.tid,
+      matchId: game.tournament.matchId,
+      n: game.tournament.n,
+      name: t ? t.name : '',
+      label: game.tournament.label,
+      bestOf: m ? m.bestOf : 1,
+      series: m ? { a: m.wins.a, b: m.wins.b, aName: m.a, bName: m.b } : null,
+      paused: !!game.paused,
+      pauseMessage: t && t.pause ? t.pause.message : null
+    };
+  }
 
   const nextHandIn = game.state === 'hand_end' && game.nextHandAt ? Math.max(0, game.nextHandAt - Date.now()) : null;
   const withLogs = (target, state) => {
@@ -446,6 +656,7 @@ function broadcastState(roomId) {
     state.turn = turn;
     state.turnTimerOff = !!game.noTurnTimer;
     state.allowSpectators = game.allowSpectators !== false;
+    state.tournament = tourInfo;
     state.spectatorCount = publicSpectators(game);
     return state;
   };
@@ -485,7 +696,7 @@ function actorOf(game) {
   }
   if (h.envidoResponsePending) {
     const singer = game.pendingFlorSinger(h.envidoPendingTeam);
-    if (singer !== -1) return { idx: singer, kind: 'sing' };
+    if (singer !== -1 && game.players[singer].isBot) return { idx: singer, kind: 'sing' };
     return { idx: h.envidoResponderIdx, kind: 'envido' };
   }
   if (h.trucoResponsePending) return { idx: h.trucoResponderIdx, kind: 'truco' };
@@ -500,6 +711,7 @@ function updateTurnTimer(roomId, game) {
     game.turn = null;
     return;
   }
+  if (game.paused) return; // campeonato pausado: o relógio fica parado
   const actor = actorOf(game);
   const p = actor && game.players[actor.idx];
   if (!p || p.isBot) {
@@ -515,8 +727,10 @@ function updateTurnTimer(roomId, game) {
   if (game.turnTimer) clearTimeout(game.turnTimer);
   // Enquanto todos leem os pontos do Envido/Flor o relógio não corre
   const extra = game.revealPause ? Math.max(0, game.revealPause.until - Date.now()) : 0;
-  const deadline = Date.now() + TURN_MS + extra;
-  game.turn = { key, idx: actor.idx, kind: actor.kind, deadline };
+  // Campeonato: tempo próprio para jogar e para responder apostas
+  const total = actor.kind === 'play' ? (game.turnMs || TURN_MS) : (game.trucoMs || game.turnMs || TURN_MS);
+  const deadline = Date.now() + total + extra;
+  game.turn = { key, idx: actor.idx, kind: actor.kind, deadline, total };
   game.turnTimer = setTimeout(() => turnTimeout(roomId, key), deadline - Date.now());
 }
 
@@ -531,7 +745,10 @@ function turnTimeout(roomId, key) {
   game.turn = null;
 
   let decision;
-  if (kind === 'play') {
+  if (kind === 'play' && (h.hands[idx] || []).length === 1 && game.isHiddenFlor(idx)) {
+    decision = { action: 'fold' };
+    game.log(`${p.name} demorou com a Flor escondida: foi ao mazo para a Flor não aparecer.`, p.team);
+  } else if (kind === 'play') {
     const cards = h.hands[idx] || [];
     decision = { action: 'play_card', value: Math.floor(Math.random() * Math.max(1, cards.length)) };
     game.log(`${p.name} demorou: uma carta qualquer foi jogada automaticamente.`, p.team);
@@ -585,6 +802,7 @@ function revealPaused(game) {
 const nextHandTimers = {};
 function scheduleNextHand(roomId) {
   if (nextHandTimers[roomId]) return;
+  if (activeGames[roomId] && activeGames[roomId].paused) return; // volta ao retomar
   const ended = activeGames[roomId];
   // Com cartas para provar o envido/flor, a mesa fica um pouco mais
   const proofs = ended && ended.lastHandSummary && ended.lastHandSummary.proofCards;
@@ -717,7 +935,7 @@ function runBotLogic(roomId) {
   } else if (game.hand.envidoResponsePending) {
     // Quem tem Flor no time canta antes da resposta; senão responde o próximo de quem cantou
     const florSinger = game.pendingFlorSinger(game.hand.envidoPendingTeam);
-    const r = florSinger !== -1 ? florSinger : game.hand.envidoResponderIdx;
+    const r = florSinger !== -1 && game.players[florSinger].isBot ? florSinger : game.hand.envidoResponderIdx;
     if (game.players[r] && game.players[r].isBot) activeBotIdx = r;
   } else if (game.hand.trucoResponsePending) {
     const r = game.hand.trucoResponderIdx;
@@ -758,6 +976,7 @@ io.on('connection', (socket) => {
   console.log(`Cliente conectado: ${socket.id}`);
 
   let currentRoomId = null;
+  socket.data.setRoom = id => { currentRoomId = id; };
   socket.join('lobby');
 
   social.attach(socket);
@@ -1096,6 +1315,73 @@ io.on('connection', (socket) => {
     broadcastState(currentRoomId);
   });
 
+  // ------------------------------------------------------------------ campeonatos
+  const tourSignal = (data) => {
+    const fwd = socket.handshake.headers['x-forwarded-for'];
+    return {
+      ip: (fwd ? String(fwd).split(',')[0] : socket.handshake.address || '').trim(),
+      device: cleanClientId(data && data.clientId) || socket.data.clientId || null,
+      ua: String(socket.handshake.headers['user-agent'] || '').slice(0, 200),
+      socketId: socket.id
+    };
+  };
+  const tourReply = (cb, res) => { if (typeof cb === 'function') cb(res); };
+  const myAccount = () => socket.data.account || null;
+  const myName = () => (socket.data.account ? accounts.displayName(socket.data.account) : '');
+
+  socket.on('tour:list', async (data, cb) => {
+    await tournaments.ready;
+    tourReply(cb, { ok: true, items: tournaments.list(myAccount(), !!socket.isAdmin), global: tournaments.globalStats(myAccount()) });
+  });
+  socket.on('tour:view', async (data, cb) => {
+    await tournaments.ready;
+    const id = data && String(data.id || '').toUpperCase();
+    const res = tournaments.view(id, myAccount(), data && data.password, !!socket.isAdmin);
+    if (res.ok) {
+      [...socket.rooms].filter(r => r.startsWith('tour:')).forEach(r => socket.leave(r));
+      socket.join(`tour:${id}`);
+    }
+    tourReply(cb, res);
+  });
+  socket.on('tour:register', (data, cb) => {
+    if (!myAccount()) return tourReply(cb, { error: 'Entre na sua conta para participar de campeonatos.' });
+    if (data && data.clientId) socket.data.clientId = cleanClientId(data.clientId) || socket.data.clientId;
+    tourReply(cb, tournaments.register(String(data && data.id || '').toUpperCase(), myAccount(), myName(), data && data.password, tourSignal(data)));
+  });
+  socket.on('tour:unregister', (data, cb) => tourReply(cb, tournaments.unregister(String(data && data.id || '').toUpperCase(), myAccount())));
+  socket.on('tour:checkin', (data, cb) => {
+    if (data && data.clientId) socket.data.clientId = cleanClientId(data.clientId) || socket.data.clientId;
+    tourReply(cb, tournaments.checkin(String(data && data.id || '').toUpperCase(), myAccount(), tourSignal(data)));
+  });
+  socket.on('tour:ready', (data, cb) => {
+    if (!myAccount()) return tourReply(cb, { error: 'Entre na sua conta.' });
+    if (data && data.clientId) socket.data.clientId = cleanClientId(data.clientId) || socket.data.clientId;
+    tourReply(cb, tournaments.setReady(String(data && data.id || '').toUpperCase(), String(data && data.matchId || ''), myAccount(), tourSignal(data)));
+  });
+
+  // Admin
+  const tourAdmin = handler => (data, cb) => {
+    if (!socket.isAdmin) return tourReply(cb, { error: 'Só o admin pode gerenciar campeonatos.' });
+    tourReply(cb, handler(data || {}));
+  };
+  socket.on('tour:admin_create', tourAdmin(d => tournaments.create(d, 'admin')));
+  socket.on('tour:admin_update', tourAdmin(d => tournaments.update(String(d.id || ''), d, 'admin')));
+  socket.on('tour:admin_action', tourAdmin(d => {
+    const id = String(d.id || '');
+    switch (d.action) {
+      case 'pause': return tournaments.pause(id, d.message, 'admin');
+      case 'resume': return tournaments.resume(id, 'admin');
+      case 'cancel': return tournaments.cancel(id, d.message, 'admin');
+      case 'finish': return tournaments.finishNow(id, 'admin');
+      case 'extend': return tournaments.extend(id, d.minutes, 'admin');
+      case 'start': return tournaments.startEarly(id, 'admin');
+      default: return { error: 'Ação desconhecida.' };
+    }
+  }));
+  socket.on('tour:admin_multi', tourAdmin(d => tournaments.multiAccountReport(String(d.id || ''))));
+  socket.on('tour:admin_decide', tourAdmin(d => tournaments.decide(String(d.id || ''), d.accounts, d.decision, d.note, 'admin')));
+  socket.on('tour:admin_disqualify', tourAdmin(d => tournaments.disqualify(String(d.id || ''), d.account, d.note, 'admin')));
+
   // Admin liga/desliga o tempo de jogada só na partida em que está jogando
   socket.on('admin:turn_timer', (data, cb) => {
     const reply = r => { if (typeof cb === 'function') cb(r); };
@@ -1224,6 +1510,7 @@ io.on('connection', (socket) => {
 
     const playerIdx = game.players.findIndex(p => p.socketId === socket.id);
     if (playerIdx === -1) return;
+    if (game.paused) { socket.emit('error_msg', 'O campeonato está pausado: espere a organização retomar.'); return; }
 
     // Proteger ação de administrador
     if (decision && decision.action === 'admin_set_cards' && !socket.isAdmin) {
@@ -1284,7 +1571,7 @@ io.on('connection', (socket) => {
   // Reiniciar jogo completo
   socket.on('restart_game', () => {
     const game = activeGames[currentRoomId];
-    if (!game || game.state !== 'game_end') return;
+    if (!game || game.state !== 'game_end' || game.tournament) return;
 
     // Reinicia scores
     game.resetMatch();
@@ -1339,6 +1626,8 @@ io.on('connection', (socket) => {
       p.reconnectTimer = null;
       p.disconnected = false;
       p.reconnectUntil = null;
+      if (p.discStart) { p.discTotal = (p.discTotal || 0) + (Date.now() - p.discStart); p.discStart = null; }
+      delete p.reconnectFrozen;
       p.logSentSeq = 0;
       if (game.revealPause && game.revealPause.pending.delete(oldSocketId)) game.revealPause.pending.add(socket.id);
 
@@ -1372,15 +1661,31 @@ io.on('connection', (socket) => {
     }
 
     if (p.disconnected) return;
+    // Campeonato: tempo de reconexão próprio, limitado pelo total já desconectado na partida
+    let waitMs = RECONNECT_MS;
+    if (game.tournament) {
+      tournaments.noteDisconnect(game.tournament.tid, p.account);
+      waitMs = Math.min(game.reconnectMs || RECONNECT_MS, (game.disconnectTotalMs || Infinity) - (p.discTotal || 0));
+      if (waitMs <= 0 && ['playing', 'hand_end', 'drawing'].includes(game.state)) {
+        game.log(`${p.name} passou do limite de desconexão da partida.`, p.team);
+        removeFromRoom(roomId, socket.id);
+        return;
+      }
+    }
     p.disconnected = true;
-    p.reconnectUntil = Date.now() + RECONNECT_MS;
+    p.discStart = Date.now();
+    p.reconnectUntil = Date.now() + waitMs;
     if (!game.isPrivate) io.to('lobby').emit('available_rooms', listRooms());
-    game.log(`${p.name} caiu. Esperando ${RECONNECT_MS / 1000}s para voltar...`, p.team);
+    game.log(`${p.name} caiu. Esperando ${Math.round(waitMs / 1000)}s para voltar...`, p.team);
     clearTimeout(p.reconnectTimer);
-    p.reconnectTimer = setTimeout(() => {
-      p.reconnectTimer = null;
-      if (p.disconnected && activeGames[roomId] && !io.sockets.sockets.has(p.socketId)) removeFromRoom(roomId, p.socketId);
-    }, RECONNECT_MS);
+    if (game.paused) {
+      p.reconnectFrozen = waitMs; // pausado: o prazo só corre quando voltar
+    } else {
+      p.reconnectTimer = setTimeout(() => {
+        p.reconnectTimer = null;
+        if (p.disconnected && activeGames[roomId] && !io.sockets.sockets.has(p.socketId)) removeFromRoom(roomId, p.socketId);
+      }, waitMs);
+    }
     broadcastState(roomId);
   });
 });

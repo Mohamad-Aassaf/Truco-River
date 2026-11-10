@@ -83,7 +83,8 @@ const cardsFlor = [
   { value: 3, suit: 'espadas', envidoPoints: 3 }
 ];
 const envido4 = calculateEnvidoScore(cardsFlor);
-assert(envido4 === 0, "Mão com Flor deve retornar Envido = 0.");
+// Flor escondida: o Envido usa as duas maiores cartas da Flor (3 + 2 + 20)
+assert(envido4 === 25, "Mão com Flor deve contar o Envido com as duas maiores cartas (25).");
 
 // 4. Teste de Cálculo de Flor
 const flor1 = calculateFlorScore(cardsFlor);

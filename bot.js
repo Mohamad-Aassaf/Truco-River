@@ -111,10 +111,10 @@ function opponentEvidence(game, i) {
   if (reveal && reveal.lines) {
     const line = reveal.lines.find(l => l.playerIdx === i);
     if (reveal.kind === 'envido') {
-      if (line && line.score !== null && line.score !== undefined) { ev.envidoExact = line.score; ev.mustNotFlor = true; }
+      if (line && line.score !== null && line.score !== undefined) ev.envidoExact = line.score;
       else if (line) {
         const win = reveal.lines.find(l => l.playerIdx === reveal.winnerIdx);
-        if (win && win.score !== null) { ev.envidoMax = win.score; ev.mustNotFlor = true; }
+        if (win && win.score !== null) ev.envidoMax = win.score;
       }
     } else if (reveal.kind === 'flor' && line && line.score !== null && line.score !== undefined) {
       ev.florExact = line.score;
@@ -122,7 +122,6 @@ function opponentEvidence(game, i) {
     }
   }
   if ((h.florCallers || []).includes(i)) ev.mustFlor = true;
-  else if (h.florState === 'none' && (h.currentRound > 0 || game.hasPlayerPlayedCard(i))) ev.mustNotFlor = true;
   // Cantou Envido e ainda não mostrou: tende a ter pontos
   if (h.envidoCallerIdx === i && ev.envidoExact === null) ev.envidoCall = h.envidoState === 'falta_envido' ? 2 : 1;
   // Trucou (o último a trucar): tende a ter carta boa. Nas duplas, o parceiro de
@@ -152,13 +151,13 @@ function buildCandidates(game, botIdx, i, pool, inference, faltaCalls) {
       if (ev.mustFlor && !flor) continue;
       if (ev.mustNotFlor && flor) continue;
       if (ev.florExact !== null && flor !== ev.florExact) continue;
-      if (!flor && (ev.envidoExact !== null || ev.envidoMax !== null)) {
+      if (ev.envidoExact !== null || ev.envidoMax !== null) {
         const env = calculateEnvidoScore(hand);
         if (ev.envidoExact !== null && env !== ev.envidoExact) continue;
         if (ev.envidoMax !== null && env > ev.envidoMax) continue;
       }
       if (inference) {
-        if (ev.envidoCall && !flor) {
+        if (ev.envidoCall) {
           // Quem canta Envido quase sempre tem ponto (blefe é raro)
           const env = calculateEnvidoScore(hand);
           const mid = ev.envidoCall === 2 ? 28 : 26.5;
@@ -535,10 +534,9 @@ function envidoWorlds(game, idx, worlds, T) {
       if (T.folded(i)) continue;
       const p = game.players[i];
       if (T.team[i] === T.myTeam) {
-        if (!p.hasFlor) scores[i] = p.envidoScore;
+        scores[i] = p.envidoScore; // com Flor escondida também entra (duas maiores da Flor)
       } else {
         const orig = (w.played[i] || []).concat(w.hands[i] || []);
-        if (orig.length === 3 && calculateFlorScore(orig) > 0) continue;
         if (orig.length === 3) scores[i] = calculateEnvidoScore(orig);
       }
     }

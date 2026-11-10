@@ -57,9 +57,11 @@ function shuffle(deck) {
 const DRAW_SPREAD = 10;
 
 function calculateEnvidoScore(cards) {
-  // Se houver Flor (3 cartas do mesmo naipe), não se calcula Envido aqui
+  // Flor (3 do mesmo naipe): quem não canta a Flor pode jogar o Envido com as
+  // duas maiores cartas dela
   if (cards[0].suit === cards[1].suit && cards[1].suit === cards[2].suit) {
-    return 0; // É Flor
+    const pts = cards.map(c => c.envidoPoints).sort((a, b) => b - a);
+    return 20 + pts[0] + pts[1];
   }
 
   // Verificar se há duas cartas do mesmo naipe
@@ -330,6 +332,7 @@ class TrucoGame { // TRUCO GURIZINHO
     this.state = 'drawing';
     this.gameStartedAt = Date.now();
     this.handNumber = 0;
+    this.players.forEach(p => { p.tStats = { handsWon: 0, handsLost: 0, trucoCalls: 0, trucoAccepted: 0, trucoRefused: 0 }; });
     return this.dealDraw;
   }
 
@@ -638,6 +641,7 @@ class TrucoGame { // TRUCO GURIZINHO
     this.hand.trucoResponderIdx = this.responderAfter(playerIdx);
     this.hand.trucoChant = chant;
     this.say(playerIdx, chant);
+    if (this.players[playerIdx].tStats) this.players[playerIdx].tStats.trucoCalls++;
 
     this.log(`${this.players[playerIdx].name} gritou ${chant}`, this.players[playerIdx].team);
     return true;
@@ -664,6 +668,7 @@ class TrucoGame { // TRUCO GURIZINHO
       else if (this.hand.trucoState === 'vale4') this.hand.trucoPoints = 4;
 
       this.say(playerIdx, '¡QUERO!');
+      if (player.tStats) player.tStats.trucoAccepted++;
       this.log(`Time ${team + 1} aceitou o Truco. A mão vale ${this.hand.trucoPoints} pontos.`, team);
       // Truco aceito: não dá mais para cantar Envido nesta mão
       this.hand.canCallEnvido = false;
@@ -677,6 +682,7 @@ class TrucoGame { // TRUCO GURIZINHO
       else if (this.hand.trucoState === 'vale4') pointsWon = 3;
 
       this.say(playerIdx, '¡NÃO QUERO!');
+      if (player.tStats) player.tStats.trucoRefused++;
       this.log(`Time ${team + 1} não aceitou. Time ${winnerTeam + 1} ganha ${pointsWon} ponto(s).`, winnerTeam);
       this.endHand(winnerTeam, pointsWon, { type: 'refused', level: this.hand.trucoState, by: player.name });
     } else if (response === 'retruco' || response === 'vale4') {
@@ -731,8 +737,8 @@ class TrucoGame { // TRUCO GURIZINHO
     const player = this.players[playerIdx];
     const team = player.team;
 
-    // Se o jogador tiver Flor, ele não pode cantar Envido no truco tradicional gaúcho! Ele deve cantar Flor.
-    if (player.hasFlor) return false;
+    // Quem tem Flor pode não cantar e jogar o Envido com ela ("Flor escondida"),
+    // correndo o risco de a Flor aparecer na mesa no fim da mão
 
     let pointsToAdd = 0;
     let chant = '';
@@ -779,7 +785,7 @@ class TrucoGame { // TRUCO GURIZINHO
 
   // O aumento do Envido é permitido? (mesmas regras do callEnvido)
   canRaiseEnvido(type, player) {
-    if (player.hasFlor || this.hand.currentRound !== 0) return false;
+    if (this.hand.currentRound !== 0) return false;
     const history = this.hand.envidoHistory;
     const lastCall = history[history.length - 1];
     if (type === 'envido') return lastCall === 'envido' && history.filter(c => c === 'envido').length < 2;
@@ -799,8 +805,7 @@ class TrucoGame { // TRUCO GURIZINHO
   respondEnvido(playerIdx, response) {
     if (!this.hand || !this.hand.envidoResponsePending) return false;
     if (this.isFolded(playerIdx)) return false;
-    // Alguém do time tem Flor: a Flor vem antes ("Flor sobre Envido")
-    if (this.pendingFlorSinger(this.players[playerIdx].team) !== -1) return false;
+    // (Quem tem Flor pode cantá-la por cima do Envido, mas não é obrigado)
 
     const player = this.players[playerIdx];
     const team = player.team;
@@ -854,7 +859,7 @@ class TrucoGame { // TRUCO GURIZINHO
   resolveEnvido() {
     // Cada um canta os pontos em ordem a partir do Mão (quem tem Flor não participa)
     const { winnerIdx, lines } = this.declarePoints(
-      idx => !this.players[idx].hasFlor && !this.isFolded(idx),
+      idx => !this.isFolded(idx),
       idx => this.players[idx].envidoScore
     );
     const bestPlayerIdx = winnerIdx;
@@ -948,18 +953,19 @@ class TrucoGame { // TRUCO GURIZINHO
       this.log(`${player.name} cantou Flor! Time adversário possui Flor e deve responder.`);
     } else {
       // Ninguém do outro time tem flor.
-      // O time que cantou ganha 3 pontos diretamente (ou 4 se o companheiro também tiver flor)
+      // O time que cantou ganha 3 pontos (6 se o parceiro também tem Flor)
       let points = 3;
       const partnerIdx = (playerIdx + 2) % 4;
-      if (this.maxPlayers === 4 && this.players[partnerIdx].hasFlor) {
-        points = 4; // Flor e Flor
-        this.log(`Ambos os parceiros têm Flor! Ganham 4 pontos.`);
+      const flowerPair = this.maxPlayers === 4 && this.players[partnerIdx].hasFlor && !this.isFolded(partnerIdx);
+      if (flowerPair) {
+        points = 6; // Flor e Flor
+        this.log(`Os dois da dupla têm Flor! Flor e Flor: ganham 6 pontos.`);
       }
 
-      this.award(team, points, 'flor', points === 4 ? 'Flor e Flor' : 'Flor');
-      this.log(`Flor não contestada. Time ${team} ganha ${points} ponto(s).`);
+      this.award(team, points, 'flor', flowerPair ? 'Flor e Flor' : 'Flor');
+      this.log(`Flor não contestada. Time ${team + 1} ganha ${points} ponto(s).`);
       this.addFlorProof(playerIdx);
-      if (points === 4) this.addFlorProof(partnerIdx);
+      if (flowerPair) this.addFlorProof(partnerIdx);
       this.hand.florState = 'resolved';
       this.hand.canCallEnvido = false;
       this.checkGameWinner();
@@ -1314,9 +1320,40 @@ class TrucoGame { // TRUCO GURIZINHO
     return null; // Jogo continua
   }
 
+  // Quem tem Flor e não cantou ("Flor escondida"): se as três cartas da Flor
+  // ficaram à mostra na mesa (jogadas + as que provam o Envido), a Flor apareceu
+  isHiddenFlor(playerIdx) {
+    const p = this.players[playerIdx];
+    return !!(this.hand && p && p.hasFlor && this.hand.florHistory.length === 0);
+  }
+
+  exposedHiddenFlor() {
+    const h = this.hand;
+    if (!h || h.florHistory.length) return [];
+    const key = c => `${c.value}-${c.suit}`;
+    return this.players.map((_, i) => i).filter(i => {
+      if (!this.isHiddenFlor(i)) return false;
+      const seen = new Set(h.playedCards.filter(pc => pc.playerIdx === i).map(pc => key(pc.card)));
+      (h.proofs || []).filter(pr => pr.playerIdx === i).forEach(pr => pr.cards.forEach(c => seen.add(key(c))));
+      return (h.originalHands[i] || []).every(c => seen.has(key(c)));
+    });
+  }
+
   endHand(winnerTeam, points, reason = { type: 'rounds' }) {
+    // Flor escondida que apareceu: o outro time leva os pontos da mão e mais 3
+    this.exposedHiddenFlor().forEach(i => {
+      const t = this.players[i].team;
+      const o = t === 0 ? 1 : 0;
+      if (winnerTeam === t) {
+        winnerTeam = o;
+        reason = { type: 'florEscondida', by: this.players[i].name };
+      }
+      this.award(o, 3, 'flor', 'Flor escondida');
+      this.log(`${this.players[i].name} tinha Flor e não cantou: a Flor apareceu na mesa! O outro time leva os pontos da mão e mais 3 da Flor.`, o);
+    });
     // O motivo (correu, mazo, truco aceito) vai no resumo; aqui só "Mão"
     this.award(winnerTeam, points, 'mao', 'Mão');
+    this.players.forEach(p => { if (p.tStats) p.tStats[p.team === winnerTeam ? 'handsWon' : 'handsLost']++; });
     this.log(`Fim da mão. Time ${winnerTeam + 1} ganha ${points} ponto(s). Placar: Time 1 [${this.score[0]}] x [${this.score[1]}] Time 2`);
 
     // Guardar dados da última mão para histórico do cliente
