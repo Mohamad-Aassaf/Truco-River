@@ -1667,9 +1667,21 @@ function guardHiddenFlor(kind, proceed, card) {
     const inPair = pair.some(c => c.value === card.value && c.suit === card.suit);
     if (!inPair) return askHiddenFlor('proof', proceed);
   }
-  const canStillSing = f.hand.currentRound === 0 && f.cards === 3;
-  if (!canStillSing || hiddenFlorOkHand === f.hand.number) return proceed();
-  askHiddenFlor('first', proceed);
+  if (hiddenFlorOkHand === f.hand.number) return proceed();
+  const firstCard = f.hand.currentRound === 0 && f.cards === 3;
+  if (canSingFlorNow(f)) return askHiddenFlor('first', proceed);
+  // Não dá mais para cantar (o Envido já foi decidido): só avisa uma vez, sem oferecer "Cantar Flor"
+  if (firstCard && kind === 'card') return askHiddenFlor('lost', proceed);
+  proceed();
+}
+// O servidor só aceita Flor na 1ª rodada, antes de jogar carta e antes do Envido ser decidido
+// (ou por cima de um Envido que o meu time ainda está respondendo)
+function canSingFlorNow(f) {
+  const h = f.hand;
+  const myTeam = lastGameState.players[mySeatIndex].team;
+  if (h.currentRound !== 0 || f.cards !== 3 || h.florResponsePending) return false;
+  if (h.envidoResponsePending) return h.envidoPendingTeam === myTeam;
+  return h.envidoState === 'none';
 }
 function askHiddenFlor(mode, proceed) {
   if (!floraModal) {
@@ -1680,11 +1692,15 @@ function askHiddenFlor(mode, proceed) {
     document.body.appendChild(floraModal);
   }
   const last = mode === 'last' || mode === 'proof';
+  const lost = mode === 'lost';
   floraModal.innerHTML = `
     <div class="modal-card flor-warn-card ${last ? 'danger' : ''}">
       <div class="flor-warn-icon"><i class="fa-solid ${last ? 'fa-triangle-exclamation' : 'fa-spa'}"></i></div>
-      <h2>${last ? 'Cuidado: Flor escondida!' : 'Você tem Flor!'}</h2>
-      ${mode === 'proof'
+      <h2>${last ? 'Cuidado: Flor escondida!' : lost ? 'Sua Flor ficou escondida' : 'Você tem Flor!'}</h2>
+      ${lost
+        ? `<p>O Envido já foi decidido, então <b>não dá mais para cantar a Flor</b> nesta mão.</p>
+           <p>Pode jogar normalmente. Só cuidado: se as três cartas da Flor aparecerem na mesa no fim da mão, o outro time leva <b>os pontos da mão e mais 3</b>. Se chegar na sua última carta, vá ao mazo.</p>`
+        : mode === 'proof'
         ? `<p>Você ganhou o Envido com a Flor escondida: no fim da mão vai mostrar as duas cartas do Envido. <b>Jogando esta carta, as três cartas da Flor ficam à mostra</b> e o outro time leva os pontos da mão e mais 3.</p>
            <p>Jogue outra carta ou vá ao mazo.</p>`
         : last
@@ -1693,7 +1709,9 @@ function askHiddenFlor(mode, proceed) {
         : `<p>Cante a Flor agora (vale 3, ou 6 se o parceiro também tiver) ou siga sem cantar.</p>
            <p>Sem cantar, dá para jogar e usar a Flor no Envido (as duas maiores cartas). Mas se a Flor aparecer na mesa no fim da mão, o outro time leva <b>os pontos da mão e mais 3</b>. Se a mão chegar na sua última carta, vá ao mazo.</p>`}
       <div class="flor-warn-actions">
-        ${last
+        ${lost
+          ? '<button type="button" class="btn btn-primary" data-flor-act="go">Entendi, jogar</button>'
+          : last
           ? `<button type="button" class="btn btn-primary" data-flor-act="mazo"><i class="fa-solid fa-person-walking-arrow-right"></i> Ir ao mazo</button>
              <button type="button" class="btn btn-danger" data-flor-act="go">Jogar mesmo assim</button>`
           : `<button type="button" class="btn btn-primary" data-flor-act="sing"><i class="fa-solid fa-spa"></i> Cantar Flor</button>
@@ -1710,7 +1728,12 @@ function askHiddenFlor(mode, proceed) {
     if (!b && e.target !== floraModal) return;
     const act = b ? b.dataset.florAct : 'back';
     floraModal.classList.add('hide');
-    if (act === 'sing') socket.emit('game_action', { action: 'call_flor' });
+    if (act === 'sing') {
+      // O jogo pode ter andado enquanto a janela estava aberta
+      const f = myHiddenFlor();
+      if (f && canSingFlorNow(f)) socket.emit('game_action', { action: 'call_flor' });
+      else askHiddenFlor('lost', proceed);
+    }
     else if (act === 'mazo') socket.emit('game_action', { action: 'fold' });
     else if (act === 'go') {
       if (!last) hiddenFlorOkHand = handNumber;
@@ -2477,7 +2500,7 @@ btnNaoQuero.addEventListener('click', () => {
   if (lastGameState.hand.trucoResponsePending && lastGameState.hand.trucoPendingTeam === myTeam) {
     socket.emit('game_action', { action: 'truco_response', value: 'nao_quero' });
   } else if (lastGameState.hand.envidoResponsePending && lastGameState.hand.envidoPendingTeam === myTeam) {
-    socket.emit('game_action', { action: 'envido_response', value: 'nao_quero' });
+    guardHiddenFlor('envido', () => socket.emit('game_action', { action: 'envido_response', value: 'nao_quero' }));
   } else if (lastGameState.hand.florResponsePending && lastGameState.hand.florPendingTeam === myTeam) {
     socket.emit('game_action', { action: 'flor_response', value: 'nao_quero' });
   }

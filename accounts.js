@@ -371,6 +371,36 @@ function createAccounts(options = {}) {
     persist(key(u.username));
   }
 
+  // Confronto direto entre contas: vitórias/derrotas CONTRA cada um (vw/vl)
+  // e JUNTOS na mesma dupla (tw/tl). Fica para sempre (não expira como o histórico).
+  function recordHeadToHead(winners, losers) {
+    const changed = new Set();
+    const bump = (a, b, field) => {
+      const u = get(a);
+      if (!u || key(a) === key(b)) return;
+      u.h2h = u.h2h || {};
+      const r = u.h2h[key(b)] = u.h2h[key(b)] || { vw: 0, vl: 0, tw: 0, tl: 0 };
+      r[field] += 1;
+      changed.add(key(a));
+    };
+    winners.forEach(w => losers.forEach(l => { bump(w, l, 'vw'); bump(l, w, 'vl'); }));
+    winners.forEach(a => winners.forEach(b => { if (a !== b) bump(a, b, 'tw'); }));
+    losers.forEach(a => losers.forEach(b => { if (a !== b) bump(a, b, 'tl'); }));
+    if (changed.size) persist(...changed);
+  }
+
+  // Resumo da conta para a tela de estatísticas (amigos com o confronto direto)
+  function profile(name) {
+    const u = get(name);
+    if (!u) return null;
+    const h = u.h2h || {};
+    const friends = u.friends.map(k => {
+      const r = h[k] || { vw: 0, vl: 0, tw: 0, tl: 0 };
+      return { name: displayName(k), ...r };
+    }).sort((a, b) => (b.vw + b.vl + b.tw + b.tl) - (a.vw + a.vl + a.tw + a.tl) || a.name.localeCompare(b.name));
+    return { username: u.username, createdAt: u.createdAt, stats: { played: u.stats.played, won: u.stats.won }, friends };
+  }
+
   function displayName(k) {
     const u = users[k];
     return u ? u.username : k;
@@ -397,7 +427,9 @@ function createAccounts(options = {}) {
     findUser,
     searchUsers,
     relationOf,
-    recordResult
+    recordResult,
+    recordHeadToHead,
+    profile
   };
 }
 

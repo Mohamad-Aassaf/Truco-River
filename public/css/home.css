@@ -3987,3 +3987,55 @@ body.tour-game #restart-game-btn { display: none !important; }
 .seat-disc i { margin-right: 3px; font-size: 0.9em; }
 @keyframes discBlink { 50% { opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) { .seat-disc { animation: none; } }
+
+/* ==========================================================================
+   Suas estatísticas (conta logada)
+   ========================================================================== */
+#account-strip.is-user .account-info { cursor: pointer; }
+@media (max-width: 480px) { .stats-btn-label { display: none; } }
+.stats-card { max-width: 720px; width: min(720px, 96vw); }
+.st-sec { margin-bottom: 18px; text-align: left; }
+.st-title { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; color: var(--gold); font-size: 0.8rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.st-title small { color: var(--text-dim); font-size: 0.68rem; letter-spacing: 0; text-transform: none; font-weight: 600; }
+.st-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.st-tiles.small { grid-template-columns: repeat(3, 1fr); margin-bottom: 10px; }
+.st-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.3); border: 1px solid var(--hairline); text-align: center; }
+.st-tile b { font-size: 1.4rem; color: var(--cream); line-height: 1.1; }
+.st-tiles.small .st-tile b { font-size: 1.05rem; }
+.st-tile span { font-size: 0.68rem; color: var(--text-muted); font-weight: 700; }
+.st-tile.w b { color: #7ee2a8; }
+.st-tile.l b { color: #ff9a8b; }
+.wl b.w { color: #7ee2a8; }
+.wl b.l { color: #ff9a8b; }
+.st-friends { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.st-friends li { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--hairline); }
+.st-friend-name { color: var(--cream); font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-friend-name i { color: var(--text-dim); margin-right: 4px; }
+.st-friend-col { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; }
+.st-friend-col small { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; }
+.st-friend-col em { font-size: 0.72rem; color: var(--text-dim); font-style: normal; }
+.st-bar { display: block; height: 4px; border-radius: 4px; background: rgba(255, 154, 139, 0.45); overflow: hidden; }
+.st-bar i { display: block; height: 100%; background: #2ecc71; }
+.st-games { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.st-game { padding: 8px 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--hairline); border-left-width: 3px; }
+.st-game.win { border-left-color: #2ecc71; }
+.st-game.loss { border-left-color: #e74c3c; }
+.st-game-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.72rem; }
+.st-res { font-weight: 800; padding: 1px 8px; border-radius: var(--radius-pill); }
+.st-res.win { background: rgba(46, 204, 113, 0.18); color: #8fe3b0; }
+.st-res.loss { background: rgba(231, 76, 60, 0.18); color: #ffb3a7; }
+.st-res.none { background: rgba(255, 255, 255, 0.08); color: var(--text-dim); }
+.st-game-date { color: var(--cream); font-weight: 700; }
+.st-game-tag { color: var(--text-muted); }
+.st-game-tag.tour { color: var(--gold-bright); }
+.st-game-mid { margin: 6px 0 4px; font-size: 0.85rem; color: var(--cream); }
+.st-score { color: var(--gold-bright); margin: 0 4px; }
+.st-game-foot { display: flex; justify-content: space-between; align-items: center; }
+.st-game-foot small { color: var(--text-dim); font-size: 0.72rem; }
+.st-log { margin-top: 8px; max-height: 300px; overflow-y: auto; border-top: 1px solid var(--hairline); padding-top: 6px; }
+@media (max-width: 560px) {
+  .st-tiles { grid-template-columns: repeat(2, 1fr); }
+  .st-tiles.small { grid-template-columns: repeat(2, 1fr); }
+  .st-friends li { grid-template-columns: 1fr 1fr; }
+  .st-friend-name { grid-column: 1 / -1; }
+}

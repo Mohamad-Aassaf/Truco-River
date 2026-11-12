@@ -369,10 +369,16 @@ function recordHistory(roomId, game) {
   const startedAt = game.histMeta.startedAt;
   const left = new Set(game.histMeta.leaves.map(l => l.name));
   // Quem começou + quem entrou depois (bot que assumiu um lugar, por exemplo)
-  const players = game.histMeta.players.map(p => ({ ...p, left: left.has(p.name) }));
+  const statsOf = name => { const gp = game.players.find(x => x.name === name || x.name === `Bot ${name}`); return gp && gp.tStats ? { ...gp.tStats } : null; };
+  const players = game.histMeta.players.map(p => ({ ...p, left: left.has(p.name), stats: statsOf(p.name) }));
   game.players.forEach(p => {
     if (!players.some(x => x.name === p.name)) players.push({ name: p.name, team: p.team, bot: !!p.isBot, account: p.account || null, joinedLater: true });
   });
+  // Vitórias e derrotas contra (e junto com) cada conta da mesa
+  if (winner !== null) {
+    const accs = team => [...new Set(game.histMeta.players.filter(p => p.team === team && !p.bot && p.account).map(p => p.account))];
+    accounts.recordHeadToHead(accs(winner), accs(1 - winner));
+  }
   matchHistory.add({
     id: `${roomId}-${startedAt}`,
     roomId,
@@ -1146,6 +1152,30 @@ io.on('connection', (socket) => {
   });
 
   // Admin: assistir qualquer partida (vê todas as cartas, não joga)
+  // Minhas estatísticas (conta logada): totais, amigos e últimas partidas
+  socket.on('me:stats', async (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const acc = socket.data.account;
+    if (!acc) return cb({ error: 'Entre na sua conta para ver suas estatísticas.' });
+    await matchHistory.ready;
+    const prof = accounts.profile(acc);
+    if (!prof) return cb({ error: 'Conta não encontrada.' });
+    const games = matchHistory.listForAccount(acc, 200);
+    cb({ ok: true, profile: prof, games, keepDays: matchHistory.list({}).keepDays });
+  });
+  socket.on('me:game', async (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const acc = socket.data.account;
+    if (!acc) return cb({ error: 'Entre na sua conta.' });
+    await matchHistory.ready;
+    try {
+      const res = await matchHistory.get(data && data.id);
+      if (!res.ok) return cb(res);
+      if (!(res.item.players || []).some(p => p.account === acc)) return cb({ error: 'Essa partida não é sua.' });
+      cb(res);
+    } catch (e) { cb({ error: 'Não deu para abrir essa partida.' }); }
+  });
+
   // Histórico de partidas (só o admin)
   socket.on('history:list', async (data, cb) => {
     if (typeof cb !== 'function') return;

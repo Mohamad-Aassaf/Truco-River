@@ -137,7 +137,12 @@ function createHistory(accountStore) {
     return h ? { ok: true, item: h } : { error: 'Essa partida não está mais no histórico.' };
   }
 
-  return { ready, add, list, get, flush: () => writing };
+  // Partidas de uma conta (as mais novas primeiro)
+  function listForAccount(account, limit = 200) {
+    return items.filter(h => (h.players || []).some(p => p.account === account)).slice(0, limit);
+  }
+
+  return { ready, add, list, get, listForAccount, flush: () => writing };
 }
 
 module.exports = { createHistory };

@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=3.15">
+  <link rel="stylesheet" href="/css/home.css?v=3.16">
 </head>
 
 <body data-screen="home">
@@ -114,6 +114,9 @@
           <button type="button" id="open-register-btn" class="btn btn-sm btn-primary">Criar conta</button>
         </div>
         <div class="account-actions user-only">
+          <button type="button" id="open-stats-btn" class="btn btn-sm btn-secondary stats-btn" title="Suas estatísticas e partidas">
+            <i class="fa-solid fa-chart-column"></i> <span class="stats-btn-label">Estatísticas</span>
+          </button>
           <button type="button" id="open-friends-btn" class="btn btn-sm btn-secondary friends-btn">
             <i class="fa-solid fa-user-group"></i> Amigos
             <span class="notif-badge hide" id="friends-badge">0</span>
@@ -1414,7 +1417,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=7"></script>
-  <script src="/js/app.js?v=29"></script>
+  <script src="/js/app.js?v=30"></script>
   <script src="/js/social.js?v=8"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
@@ -1423,6 +1426,7 @@
   <script src="/js/reports.js?v=1"></script>
   <script src="/js/admin.js?v=3"></script>
   <script src="/js/match-history.js?v=1"></script>
+  <script src="/js/my-stats.js?v=1"></script>
   <script src="/js/table-extras.js?v=14"></script>
   <script src="/js/spectate.js?v=3"></script>
   <script src="/js/tournaments.js?v=9"></script>
