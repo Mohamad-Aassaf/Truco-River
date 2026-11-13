@@ -916,10 +916,42 @@ class TrucoGame { // TRUCO GURIZINHO
     this.hand.canCallEnvido = false;
   }
 
+  // Duplas: o parceiro de quem cantou Flor (sem Flor do outro lado) pode cantar a
+  // dele também, valendo mais 3 ("Flor e Flor"). Na vez dele ou respondendo um Truco,
+  // antes de jogar carta, na 1ª rodada.
+  canSingSecondFlor(playerIdx) {
+    const h = this.hand;
+    const s = h && h.florSecond;
+    if (!s || s.idx !== playerIdx || h.currentRound !== 0) return false;
+    const p = this.players[playerIdx];
+    if (!p || !p.hasFlor || this.isFolded(playerIdx) || this.hasPlayerPlayedCard(playerIdx)) return false;
+    if (h.florResponsePending || h.envidoResponsePending) return false;
+    if (h.trucoResponsePending) {
+      return h.trucoPendingTeam === p.team && h.trucoState === 'truco'
+        && (h.trucoResponderIdx === undefined || h.trucoResponderIdx === playerIdx);
+    }
+    return h.currentPlayer === playerIdx;
+  }
+
+  singSecondFlor(playerIdx) {
+    if (!this.canSingSecondFlor(playerIdx)) return false;
+    const h = this.hand;
+    const p = this.players[playerIdx];
+    if (h.trucoResponsePending) this.cancelPendingTruco(playerIdx);
+    h.florSecond = null;
+    h.florCallers.push(playerIdx);
+    this.say(playerIdx, '¡FLOR!');
+    this.award(p.team, 3, 'flor', 'Flor e Flor');
+    this.addFlorProof(playerIdx);
+    this.log(`${p.name} também cantou Flor! Flor e Flor: mais 3 pontos para o Time ${p.team + 1}.`, p.team);
+    this.checkGameWinner();
+    return true;
+  }
+
   callFlor(playerIdx) {
     if (!this.hand || this.hand.florResponsePending) return false;
     if (this.isFolded(playerIdx)) return false;
-    if (this.hand.florState !== 'none') return false; // a dupla já cantou
+    if (this.hand.florState !== 'none') return this.singSecondFlor(playerIdx); // a dupla já cantou
 
     const callingTeam = this.players[playerIdx].team;
     if (this.hand.trucoResponsePending) {
@@ -972,20 +1004,16 @@ class TrucoGame { // TRUCO GURIZINHO
       this.hand.florPendingTeam = opponentTeam;
       this.log(`${player.name} cantou Flor! Time adversário possui Flor e deve responder.`);
     } else {
-      // Ninguém do outro time tem flor.
-      // O time que cantou ganha 3 pontos (6 se o parceiro também tem Flor)
-      let points = 3;
-      const partnerIdx = (playerIdx + 2) % 4;
-      const flowerPair = this.maxPlayers === 4 && this.players[partnerIdx].hasFlor && !this.isFolded(partnerIdx);
-      if (flowerPair) {
-        points = 6; // Flor e Flor
-        this.log(`Os dois da dupla têm Flor! Flor e Flor: ganham 6 pontos.`);
-      }
-
-      this.award(team, points, 'flor', flowerPair ? 'Flor e Flor' : 'Flor');
-      this.log(`Flor não contestada. Time ${team + 1} ganha ${points} ponto(s).`);
+      // Ninguém do outro time tem flor: o time que cantou ganha 3 pontos.
+      // Se o parceiro também tiver Flor, ele canta a dele (mais 3) — não entra sozinha.
+      this.award(team, 3, 'flor', 'Flor');
+      this.log(`Flor não contestada. Time ${team + 1} ganha 3 pontos.`);
       this.addFlorProof(playerIdx);
-      if (flowerPair) this.addFlorProof(partnerIdx);
+      const partnerIdx = (playerIdx + 2) % 4;
+      const partner = this.maxPlayers === 4 ? this.players[partnerIdx] : null;
+      if (partner && partner.hasFlor && !this.isFolded(partnerIdx) && !this.hasPlayerPlayedCard(partnerIdx)) {
+        this.hand.florSecond = { team, idx: partnerIdx };
+      }
       this.hand.florState = 'resolved';
       this.hand.canCallEnvido = false;
       this.checkGameWinner();
@@ -1589,6 +1617,7 @@ class TrucoGame { // TRUCO GURIZINHO
         florState: this.hand.florState,
         florPointsAtStake: this.hand.florPointsAtStake,
         florCallers: this.hand.florCallers,
+        florSecond: this.hand.florSecond || null,
         florResponsePending: this.hand.florResponsePending,
         florPendingTeam: this.hand.florPendingTeam,
         florChant: this.hand.florChant,

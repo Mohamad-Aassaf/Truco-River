@@ -217,6 +217,8 @@
         const b = e.target.closest('button[data-seat-act]');
         if (!b) return;
         if (b.dataset.seatAct === 'login') { closeSeatMenu(); window.trucoSocial.openAuth('login'); return; }
+        if (b.dataset.seatAct === 'block') { window.trucoSocial.blockPlayer(seatMenu.dataset.name).then(() => openSeatMenuFor(seatMenu.dataset.name, null)); return; }
+        if (b.dataset.seatAct === 'unblock') { window.trucoSocial.openFriends(); closeSeatMenu(); return; }
         b.disabled = true;
         window.trucoSocial.requestFriend(seatMenu.dataset.name).then(() => openSeatMenuFor(seatMenu.dataset.name, null));
       });
@@ -232,10 +234,13 @@
       friend: '<p class="ok"><i class="fa-solid fa-user-check"></i> Vocês já são amigos.</p>',
       sent: '<p><i class="fa-solid fa-paper-plane"></i> Pedido de amizade enviado.</p>',
       received: '<button type="button" class="btn btn-sm btn-primary" data-seat-act="add"><i class="fa-solid fa-user-check"></i> Aceitar pedido de amizade</button>',
-      none: '<button type="button" class="btn btn-sm btn-primary" data-seat-act="add"><i class="fa-solid fa-user-plus"></i> Adicionar amigo</button>'
+      none: '<button type="button" class="btn btn-sm btn-primary" data-seat-act="add"><i class="fa-solid fa-user-plus"></i> Adicionar amigo</button>',
+      blocked: '<p><i class="fa-solid fa-ban"></i> Você bloqueou este jogador.</p><button type="button" class="btn btn-sm btn-secondary" data-seat-act="unblock">Ver bloqueados</button>'
     }[rel] || '';
+    const canBlock = ['none', 'sent', 'received', 'friend'].includes(rel);
+    const blockBtn = canBlock ? '<button type="button" class="link-btn seat-block" data-seat-act="block"><i class="fa-solid fa-ban"></i> Bloquear</button>' : '';
     seatMenu.dataset.name = p.name;
-    seatMenu.innerHTML = `<b class="seat-menu-name">${escapeText(p.name)}</b>${body}`;
+    seatMenu.innerHTML = `<b class="seat-menu-name">${escapeText(p.name)}</b>${body}${blockBtn}`;
     seatMenu.classList.remove('hide');
     const a = seatMenuAnchor && seatMenuAnchor.getBoundingClientRect();
     if (a) {

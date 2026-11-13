@@ -1152,6 +1152,24 @@ io.on('connection', (socket) => {
   });
 
   // Admin: assistir qualquer partida (vê todas as cartas, não joga)
+  // Pessoas com conta que jogaram na mesma mesa recentemente (para adicionar)
+  socket.on('friends:recent', async (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const acc = socket.data.account;
+    if (!acc) return cb({ ok: true, items: [] });
+    await matchHistory.ready;
+    const seen = new Map();
+    matchHistory.listForAccount(acc, 60).forEach(h => {
+      (h.players || []).forEach(p => {
+        if (p.bot || !p.account || p.account === acc || seen.has(p.account)) return;
+        const rel = accounts.relationOf(acc, p.account);
+        if (rel === 'self' || (rel !== 'blocked' && accounts.isBlocked(acc, p.account)) || !accounts.get(p.account)) return;
+        seen.set(p.account, { username: accounts.displayName(p.account), relation: rel, at: h.endedAt, mode: h.mode });
+      });
+    });
+    cb({ ok: true, items: [...seen.values()].slice(0, 12) });
+  });
+
   // Minhas estatísticas (conta logada): totais, amigos e últimas partidas
   socket.on('me:stats', async (data, cb) => {
     if (typeof cb !== 'function') return;

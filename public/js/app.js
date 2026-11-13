@@ -3,7 +3,13 @@
 
 // WebSocket direto (sem começar por long-polling): as jogadas chegam mais rápido.
 // Se a rede bloquear WebSocket, a próxima tentativa usa polling.
-const socket = io(window.location.hostname.includes('vercel.app') ? 'https://truco-river.onrender.com' : undefined, {
+// Onde fica o servidor das partidas: no próprio endereço quando a página vem dele
+// (Render ou teste local); em qualquer outro (Vercel, domínio próprio), no Render.
+const GAME_SERVER = (() => {
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h.endsWith('onrender.com') ? '' : 'https://truco-river.onrender.com';
+})();
+const socket = io(GAME_SERVER || undefined, {
   transports: ['websocket', 'polling']
 });
 socket.on('connect_error', () => {
@@ -1654,7 +1660,13 @@ function myHiddenFlor() {
   if (!me || !me.hasFlor || s.hand.florState !== 'none') return null;
   return { hand: s.hand, cards: (s.hand.hands[mySeatIndex] || []).length };
 }
+// O parceiro cantou Flor e eu também tenho: posso cantar a minha (+3)
+function mySecondFlor(hand) {
+  return !!(hand && hand.florSecond && hand.florSecond.idx === mySeatIndex && hand.currentRound === 0 && (hand.hands[mySeatIndex] || []).length === 3);
+}
 function guardHiddenFlor(kind, proceed, card) {
+  const s0 = lastGameState;
+  if (kind === 'card' && s0 && s0.hand && mySecondFlor(s0.hand) && hiddenFlorOkHand !== s0.hand.number) return askHiddenFlor('second', proceed);
   const f = myHiddenFlor();
   if (!f) return proceed();
   if (kind === 'card' && f.cards === 1) return askHiddenFlor('last', proceed);
@@ -1693,11 +1705,15 @@ function askHiddenFlor(mode, proceed) {
   }
   const last = mode === 'last' || mode === 'proof';
   const lost = mode === 'lost';
+  const second = mode === 'second';
   floraModal.innerHTML = `
     <div class="modal-card flor-warn-card ${last ? 'danger' : ''}">
       <div class="flor-warn-icon"><i class="fa-solid ${last ? 'fa-triangle-exclamation' : 'fa-spa'}"></i></div>
-      <h2>${last ? 'Cuidado: Flor escondida!' : lost ? 'Sua Flor ficou escondida' : 'Você tem Flor!'}</h2>
-      ${lost
+      <h2>${last ? 'Cuidado: Flor escondida!' : lost ? 'Sua Flor ficou escondida' : second ? 'Você também tem Flor!' : 'Você tem Flor!'}</h2>
+      ${second
+        ? `<p>Seu parceiro já cantou a Flor dele. Cante a sua também: <b>Flor e Flor</b>, mais 3 pontos para a dupla.</p>
+           <p>Se jogar a carta sem cantar, a dupla fica só com os 3 da Flor do parceiro.</p>`
+        : lost
         ? `<p>O Envido já foi decidido, então <b>não dá mais para cantar a Flor</b> nesta mão.</p>
            <p>Pode jogar normalmente. Só cuidado: se as três cartas da Flor aparecerem na mesa no fim da mão, o outro time leva <b>os pontos da mão e mais 3</b>. Se chegar na sua última carta, vá ao mazo.</p>`
         : mode === 'proof'
@@ -1731,7 +1747,8 @@ function askHiddenFlor(mode, proceed) {
     if (act === 'sing') {
       // O jogo pode ter andado enquanto a janela estava aberta
       const f = myHiddenFlor();
-      if (f && canSingFlorNow(f)) socket.emit('game_action', { action: 'call_flor' });
+      const s1 = lastGameState;
+      if ((f && canSingFlorNow(f)) || (s1 && s1.hand && mySecondFlor(s1.hand))) socket.emit('game_action', { action: 'call_flor' });
       else askHiddenFlor('lost', proceed);
     }
     else if (act === 'mazo') socket.emit('game_action', { action: 'fold' });
@@ -2250,6 +2267,11 @@ function setupActionButtons(gameState) {
         showAndEnableButton(btnFlor);
       }
     }
+    // 2ª Flor da dupla respondendo um Truco simples
+    if (myPlayer.hasFlor && mySecondFlor(hand) && hand.trucoState === 'truco' && (hand.trucoResponderIdx === undefined || hand.trucoResponderIdx === mySeatIndex)) {
+      groupFlor.classList.remove('hide');
+      showAndEnableButton(btnFlor);
+    }
     return; // Impede outras ações simultâneas
   }
 
@@ -2337,6 +2359,11 @@ function setupActionButtons(gameState) {
         groupFlor.classList.remove('hide');
         showAndEnableButton(btnFlor);
       }
+    }
+    // 2ª Flor da dupla: o parceiro já cantou (o Envido já não vale mais, mas a Flor sim)
+    if (isMyTurn && myPlayer.hasFlor && mySecondFlor(hand)) {
+      groupFlor.classList.remove('hide');
+      showAndEnableButton(btnFlor);
     }
   }
 

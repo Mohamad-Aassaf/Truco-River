@@ -282,6 +282,7 @@ function createAccounts(options = {}) {
     const k = key(otherName);
     if (!me) return 'none';
     if (key(me.username) === k) return 'self';
+    if ((me.blocked || []).includes(k)) return 'blocked';
     if (me.friends.includes(k)) return 'friend';
     if (me.requestsOut.includes(k)) return 'sent';
     if (me.requestsIn.includes(k)) return 'received';
@@ -295,6 +296,8 @@ function createAccounts(options = {}) {
     if (!b) return { error: 'Não existe jogador com esse usuário.' };
     const ka = key(a.username), kb = key(b.username);
     if (ka === kb) return { error: 'Você não pode adicionar a si mesmo.' };
+    if ((a.blocked || []).includes(kb)) return { error: `Você bloqueou ${b.username}. Desbloqueie para adicionar.` };
+    if ((b.blocked || []).includes(ka)) return { error: 'Não foi possível enviar o pedido.' };
     if (a.friends.includes(kb)) return { error: `${b.username} já é seu amigo.` };
     if (a.requestsOut.includes(kb)) return { error: `Você já enviou um pedido para ${b.username}.` };
 
@@ -356,6 +359,71 @@ function createAccounts(options = {}) {
     other.friends = without(other.friends, km);
     persist(km, ko);
     return { ok: true, message: `${other.username} foi removido dos amigos.`, affected: [km, ko] };
+  }
+
+  // Código de amigo ("Mateus#4821"): quem tem o código (ou o link) vira amigo na hora
+  function friendCodeOf(name) {
+    const u = get(name);
+    if (!u) return null;
+    if (!u.friendCode) { u.friendCode = String(crypto.randomInt(1000, 10000)); persist(key(u.username)); }
+    return `${u.username}#${u.friendCode}`;
+  }
+  function resetFriendCode(name) {
+    const u = get(name);
+    if (!u) return { error: 'Conta não encontrada.' };
+    let code;
+    do { code = String(crypto.randomInt(1000, 10000)); } while (code === u.friendCode);
+    u.friendCode = code;
+    persist(key(u.username));
+    return { ok: true, code: `${u.username}#${code}`, message: 'Código novo gerado. O link antigo não funciona mais.', affected: [key(u.username)] };
+  }
+  function addByCode(meName, codeText) {
+    const me = get(meName);
+    if (!me) return { error: 'Entre na sua conta primeiro.' };
+    const m = String(codeText || '').trim().match(/^(.+?)[#\-\s](\d{4})$/);
+    if (!m) return { error: 'Código inválido. Ele tem o formato Nome#1234.' };
+    const other = findUser(m[1]);
+    if (!other || !other.friendCode || other.friendCode !== m[2]) return { error: 'Código de amigo não encontrado (ou já foi trocado).' };
+    const km = key(me.username), ko = key(other.username);
+    if (km === ko) return { error: 'Esse é o seu próprio código.' };
+    if ((me.blocked || []).includes(ko)) return { error: `Você bloqueou ${other.username}. Desbloqueie para adicionar.` };
+    if ((other.blocked || []).includes(km)) return { error: 'Não foi possível adicionar.' };
+    if (me.friends.includes(ko)) return { ok: true, message: `Você e ${other.username} já são amigos.`, affected: [] };
+    if (me.friends.length >= MAX_FRIENDS || other.friends.length >= MAX_FRIENDS) return { error: 'Lista de amigos cheia.' };
+    me.friends.push(ko);
+    other.friends.push(km);
+    me.requestsIn = without(me.requestsIn, ko); me.requestsOut = without(me.requestsOut, ko);
+    other.requestsIn = without(other.requestsIn, km); other.requestsOut = without(other.requestsOut, km);
+    persist(km, ko);
+    return { ok: true, message: `Agora você e ${other.username} são amigos!`, friend: other.username, affected: [km, ko] };
+  }
+  // Bloquear: desfaz a amizade e os pedidos; a pessoa não consegue mais pedir nem convidar
+  function blockUser(meName, otherName) {
+    const me = get(meName);
+    const other = findUser(otherName);
+    if (!me || !other) return { error: 'Jogador não encontrado.' };
+    const km = key(me.username), ko = key(other.username);
+    if (km === ko) return { error: 'Você não pode bloquear a si mesmo.' };
+    me.blocked = me.blocked || [];
+    if (!me.blocked.includes(ko)) me.blocked.push(ko);
+    me.friends = without(me.friends, ko); other.friends = without(other.friends, km);
+    me.requestsIn = without(me.requestsIn, ko); me.requestsOut = without(me.requestsOut, ko);
+    other.requestsIn = without(other.requestsIn, km); other.requestsOut = without(other.requestsOut, km);
+    persist(km, ko);
+    return { ok: true, message: `${other.username} foi bloqueado.`, affected: [km, ko] };
+  }
+  function unblockUser(meName, otherName) {
+    const me = get(meName);
+    const other = findUser(otherName);
+    if (!me || !other) return { error: 'Jogador não encontrado.' };
+    me.blocked = without(me.blocked || [], key(other.username));
+    persist(key(me.username));
+    return { ok: true, message: `${other.username} foi desbloqueado.`, affected: [key(me.username)] };
+  }
+  function isBlocked(aName, bName) {
+    const a = get(aName), b = get(bName);
+    if (!a || !b) return false;
+    return (a.blocked || []).includes(key(b.username)) || (b.blocked || []).includes(key(a.username));
   }
 
   function areFriends(aName, bName) {
@@ -429,7 +497,13 @@ function createAccounts(options = {}) {
     relationOf,
     recordResult,
     recordHeadToHead,
-    profile
+    profile,
+    friendCodeOf,
+    resetFriendCode,
+    addByCode,
+    blockUser,
+    unblockUser,
+    isBlocked
   };
 }
 

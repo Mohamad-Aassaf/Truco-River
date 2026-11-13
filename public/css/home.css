@@ -4039,3 +4039,17 @@ body.tour-game #restart-game-btn { display: none !important; }
   .st-friends li { grid-template-columns: 1fr 1fr; }
   .st-friend-name { grid-column: 1 / -1; }
 }
+
+/* Amigos: código, link de convite, recentes, bloqueados, fim de partida */
+.friend-code-box { margin-bottom: 14px; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(223, 177, 91, 0.45); background: linear-gradient(135deg, rgba(223, 177, 91, 0.14), rgba(0, 0, 0, 0.3)); text-align: left; display: flex; flex-direction: column; gap: 8px; }
+.friend-code-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.friend-code-label { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.friend-code { font-size: 1.25rem; color: var(--gold-bright); letter-spacing: 0.04em; user-select: all; }
+.friend-code-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.friend-code-hint { color: var(--text-dim); font-size: 0.72rem; }
+.friend-code-hint .link-btn { font-size: 0.72rem; }
+.seat-menu .seat-block { display: block; margin-top: 6px; font-size: 0.75rem; color: #ff9a8b; }
+.end-add-friends { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 12px; margin: 10px auto 4px; max-width: 520px; padding: 10px 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--hairline); }
+.end-add-friends.hide { display: none; }
+.end-add-title { width: 100%; text-align: center; font-size: 0.78rem; font-weight: 800; color: var(--gold); }
+.end-add-item { display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.05); color: var(--cream); font-size: 0.85rem; }

@@ -34,7 +34,7 @@
   const fmtDate = ts => new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // As imagens ficam no servidor do jogo (no site da Vercel, o servidor é outro endereço)
-  const MEDIA_BASE = window.location.hostname.includes('vercel.app') ? 'https://truco-river.onrender.com' : '';
+  const MEDIA_BASE = typeof GAME_SERVER !== 'undefined' ? GAME_SERVER : '';
   const mediaUrl = id => `${MEDIA_BASE}/news-media/${encodeURIComponent(id)}`;
 
   function mediaHtml(images) {

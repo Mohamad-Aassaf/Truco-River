@@ -63,7 +63,9 @@ function createSocial(io, accounts, roomOfSocket) {
       user: accounts.publicUser(u),
       friends,
       requestsIn: u.requestsIn.map(accounts.displayName),
-      requestsOut: u.requestsOut.map(accounts.displayName)
+      requestsOut: u.requestsOut.map(accounts.displayName),
+      blocked: (u.blocked || []).map(accounts.displayName),
+      friendCode: accounts.friendCodeOf(u.username)
     };
   }
 
@@ -172,15 +174,32 @@ function createSocial(io, accounts, roomOfSocket) {
       const query = data && typeof data.query === 'string' ? data.query.slice(0, 40) : '';
       const results = accounts.searchUsers(query)
         .map(name => ({ username: name, relation: accounts.relationOf(me, name), online: statusOf(accounts.key(name)).online }))
-        .filter(r => r.relation !== 'self');
+        .filter(r => r.relation !== 'self' && !(r.relation !== 'blocked' && accounts.isBlocked(me, r.username)));
       reply(cb, { ok: true, results });
     }));
     friendAction('friends:respond', (me, other, data) => accounts.respondRequest(me, other, !!data.accept));
     friendAction('friends:cancel', (me, other) => accounts.cancelRequest(me, other));
     friendAction('friends:remove', (me, other) => accounts.removeFriend(me, other));
+    friendAction('friends:block', (me, other) => accounts.blockUser(me, other));
+    friendAction('friends:unblock', (me, other) => accounts.unblockUser(me, other));
+    // Código ou link de amigo: vira amizade na hora
+    socket.on('friends:code', safe((data, cb) => {
+      const me = socket.data.account;
+      if (!me) return reply(cb, { error: 'Entre na sua conta para adicionar amigos.' });
+      const res = accounts.addByCode(me, data && typeof data.code === 'string' ? data.code.slice(0, 40) : '');
+      (res.affected || []).forEach(pushState);
+      reply(cb, { ok: !!res.ok, error: res.error, message: res.message, friend: res.friend });
+    }));
+    socket.on('friends:reset_code', safe((data, cb) => {
+      const me = socket.data.account;
+      if (!me) return reply(cb, { error: 'Entre na sua conta.' });
+      const res = accounts.resetFriendCode(me);
+      (res.affected || []).forEach(pushState);
+      reply(cb, res);
+    }));
 
     friendAction('friends:invite', (me, other) => {
-      if (!accounts.areFriends(me, other)) return { error: 'Vocês ainda não são amigos.' };
+      if (!accounts.areFriends(me, other) || accounts.isBlocked(me, other)) return { error: 'Vocês ainda não são amigos.' };
       const room = roomOfSocket(socket.id);
       if (!room || room.game.state !== 'lobby') return { error: 'Entre numa sala de espera para convidar.' };
       if (room.game.players.length >= room.game.maxPlayers) return { error: 'Sua sala já está cheia.' };

@@ -324,6 +324,20 @@
         </div>
       </li>`).join('');
 
+    // Código de amigo
+    $('friend-code').textContent = state.friendCode || '—';
+    $('friend-share-btn').classList.toggle('hide', !navigator.share);
+
+    // Bloqueados
+    const blocked = state.blocked || [];
+    $('friends-blocked').classList.toggle('hide', blocked.length === 0);
+    $('friends-blocked-list').innerHTML = blocked.map(name => `
+      <li class="friend-item pending">
+        ${avatarHtml(name, 'muted')}
+        <div class="friend-info"><b>${escapeHtml(name)}</b><small>não pode te pedir nem convidar</small></div>
+        <div class="friend-actions"><button class="btn btn-sm btn-secondary" data-act="unblock" data-user="${escapeHtml(name)}">Desbloquear</button></div>
+      </li>`).join('');
+
     // Amigos
     const onlineCount = state.friends.filter(f => f.online).length;
     $('friends-count').textContent = state.friends.length ? `${onlineCount}/${state.friends.length} online` : '';
@@ -352,6 +366,7 @@
         buttons.push(`<button class="btn btn-sm btn-primary" data-act="invite" data-user="${escapeHtml(f.username)}"><i class="fa-solid fa-envelope"></i> Convidar</button>`);
       }
       buttons.push(`<button class="icon-btn small" data-act="remove" data-user="${escapeHtml(f.username)}" title="Remover amigo" aria-label="Remover ${escapeHtml(f.username)}"><i class="fa-solid fa-user-minus"></i></button>`);
+      buttons.push(`<button class="icon-btn small" data-act="block" data-user="${escapeHtml(f.username)}" title="Bloquear" aria-label="Bloquear ${escapeHtml(f.username)}"><i class="fa-solid fa-ban"></i></button>`);
       return `
         <li class="friend-item status-${f.status}">
           ${avatarHtml(f.username)}
@@ -370,12 +385,23 @@
     const msg = $('add-friend-msg');
 
     if (act === 'join') return joinRoom(btn.dataset.room);
+    if (act === 'copy-link' || act === 'copy-code' || act === 'share') return shareCode(act);
+    if (act === 'reset-code') {
+      if (!confirm('Gerar um código novo? O link e o código antigos param de funcionar.')) return;
+      socket.emit('friends:reset_code', {}, res => {
+        msg.textContent = (res && (res.error || res.message)) || '';
+        msg.className = `form-msg ${res && res.error ? 'error' : 'ok'}`;
+      });
+      return;
+    }
     if (act === 'remove' && !confirm(`Remover ${user} dos seus amigos?`)) return;
+    if (act === 'block' && !confirm(`Bloquear ${user}? A amizade e os pedidos somem, e ${user} não consegue mais te pedir nem te convidar.`)) return;
 
     btn.disabled = true;
     const event = {
       accept: 'friends:respond', decline: 'friends:respond', cancel: 'friends:cancel',
-      remove: 'friends:remove', invite: 'friends:invite', add: 'friends:request'
+      remove: 'friends:remove', invite: 'friends:invite', add: 'friends:request',
+      block: 'friends:block', unblock: 'friends:unblock'
     }[act];
     const res = await friendAction(event, user, act === 'accept' || act === 'decline' ? { accept: act === 'accept' } : {});
     btn.disabled = false;
@@ -391,14 +417,50 @@
       }
     }
     if (act === 'add' || btn.closest('#friend-search-results')) runSearch();
+    if (btn.closest('#friends-recent-list') || act === 'block' || act === 'unblock') loadRecent();
   });
+
+  // Link e código de amigo
+  function inviteLink() {
+    const code = socialState && socialState.friendCode;
+    return code ? `${window.location.origin}/?amigo=${encodeURIComponent(code.replace('#', '-'))}` : '';
+  }
+  async function shareCode(act) {
+    const code = socialState && socialState.friendCode;
+    if (!code) return;
+    const msg = $('add-friend-msg');
+    const text = act === 'copy-code' ? code : inviteLink();
+    if (act === 'share' && navigator.share) {
+      try { await navigator.share({ title: 'Truco River', text: 'Bora jogar truco? Me adiciona:', url: inviteLink() }); } catch (e) { /* cancelou */ }
+      return;
+    }
+    const done = () => { msg.textContent = act === 'copy-code' ? `Código ${code} copiado.` : 'Link copiado! Mande para os amigos.'; msg.className = 'form-msg ok'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => prompt('Copie:', text));
+    else prompt('Copie:', text);
+  }
+
+  // Jogaram com você recentemente
+  function loadRecent() {
+    if (!me) return;
+    socket.emit('friends:recent', {}, res => {
+      const items = ((res && res.items) || []).filter(r => r.relation !== 'friend');
+      $('friends-recent').classList.toggle('hide', items.length === 0);
+      $('friends-recent-list').innerHTML = items.map(r => `
+        <li class="friend-item status-offline">
+          ${avatarHtml(r.username)}
+          <div class="friend-info"><b>${escapeHtml(r.username)}</b><small>${r.mode === '2v2' ? 'dupla' : '1v1'} · ${new Date(r.at).toLocaleDateString('pt-BR')}</small></div>
+          <div class="friend-actions">${(RELATION_BTN[r.relation] || RELATION_BTN.none)(r.username)}</div>
+        </li>`).join('');
+    });
+  }
 
   // Busca enquanto digita (nome parecido já aparece)
   const RELATION_BTN = {
     none: u => `<button class="btn btn-sm btn-primary" data-act="add" data-user="${escapeHtml(u)}"><i class="fa-solid fa-user-plus"></i> Adicionar</button>`,
     sent: () => '<span class="friend-tag">Pedido enviado</span>',
     received: u => `<button class="btn btn-sm btn-primary" data-act="accept" data-user="${escapeHtml(u)}">Aceitar pedido</button>`,
-    friend: () => '<span class="friend-tag ok"><i class="fa-solid fa-check"></i> Amigo</span>'
+    friend: () => '<span class="friend-tag ok"><i class="fa-solid fa-check"></i> Amigo</span>',
+    blocked: u => `<button class="btn btn-sm btn-secondary" data-act="unblock" data-user="${escapeHtml(u)}">Desbloquear</button>`
   };
   let searchTimer = null;
   let searchSeq = 0;
@@ -432,7 +494,10 @@
     const msg = $('add-friend-msg');
     const name = input.value.trim();
     if (!name) return;
-    const res = await friendAction('friends:request', name);
+    const isCode = /^.+[#\-]\d{4}$/.test(name);
+    const res = isCode
+      ? await new Promise(r => socket.emit('friends:code', { code: name }, x => r(x || { error: 'Erro inesperado.' })))
+      : await friendAction('friends:request', name);
     msg.textContent = res.error || res.message || '';
     msg.className = `form-msg ${res.error ? 'error' : 'ok'}`;
     if (!res.error) input.value = '';
@@ -446,6 +511,7 @@
     $('add-friend-input').value = '';
     $('friend-search-results').classList.add('hide');
     renderFriends();
+    loadRecent();
     openModal('modal-friends');
   }
 
@@ -531,6 +597,71 @@
   socket.on('connect', resumeSession);
   if (socket.connected) resumeSession();
 
+  // Link de convite: ?amigo=Nome-1234. Sem conta, guarda e usa depois de entrar.
+  const INVITE_KEY = 'truco_friend_invite';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('amigo');
+    if (code) {
+      storage.set(INVITE_KEY, code.slice(0, 40));
+      params.delete('amigo');
+      const rest = params.toString();
+      history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    }
+  } catch (e) { /* sem URLSearchParams */ }
+  let invitePrompted = false;
+  function usePendingInvite() {
+    const code = storage.get(INVITE_KEY);
+    if (!code) return;
+    const name = code.replace(/[-#]\d{4}$/, '');
+    if (!me) {
+      if (invitePrompted) return;
+      invitePrompted = true;
+      setTimeout(() => {
+        if (me) return;
+        toast(`<i class="fa-solid fa-user-plus"></i> <b>${escapeHtml(name)}</b> te convidou para ser amigo. Entre ou crie sua conta para aceitar.`, { timeout: 12000 });
+        openAuth('register');
+      }, 1200);
+      return;
+    }
+    storage.del(INVITE_KEY);
+    socket.emit('friends:code', { code }, res => {
+      toast(`<i class="fa-solid fa-user-group"></i> ${escapeHtml((res && (res.error || res.message)) || 'Pronto.')}`, { kind: res && res.error ? 'error' : 'success', timeout: 7000 });
+    });
+  }
+  window.addEventListener('truco:auth', () => setTimeout(usePendingInvite, 300));
+  setTimeout(usePendingInvite, 2500);
+
+  // Fim de partida: adicionar quem jogou com você
+  const endBox = $('end-add-friends');
+  function renderEndFriends() {
+    const s = typeof lastGameState !== 'undefined' ? lastGameState : null;
+    if (!endBox || !s || s.state !== 'game_end' || s.spectating) { if (endBox) endBox.classList.add('hide'); return; }
+    const myName = me ? me.username.toLowerCase() : null;
+    const people = s.players.filter(p => !p.isBot && p.hasAccount && p.name.toLowerCase() !== myName && p.id !== myPlayerId);
+    if (!me || !people.length) { endBox.classList.add('hide'); return; }
+    const btn = name => {
+      const rel = relationWith(name);
+      if (rel === 'friend') return '<span class="friend-tag ok"><i class="fa-solid fa-check"></i> Amigo</span>';
+      if (rel === 'sent') return '<span class="friend-tag">Pedido enviado</span>';
+      if (rel === 'blocked') return '<span class="friend-tag">Bloqueado</span>';
+      return `<button type="button" class="btn btn-sm btn-primary" data-end-add="${escapeHtml(name)}"><i class="fa-solid fa-user-plus"></i> ${rel === 'received' ? 'Aceitar' : 'Adicionar'}</button>`;
+    };
+    endBox.innerHTML = `<span class="end-add-title"><i class="fa-solid fa-user-group"></i> Jogou bem? Adicione:</span>` +
+      people.map(p => `<span class="end-add-item"><b>${escapeHtml(p.name)}</b>${btn(p.name)}</span>`).join('');
+    endBox.classList.remove('hide');
+  }
+  if (endBox) {
+    endBox.addEventListener('click', e => {
+      const b = e.target.closest('[data-end-add]');
+      if (!b) return;
+      b.disabled = true;
+      requestFriend(b.dataset.endAdd).then(renderEndFriends);
+    });
+    socket.on('game_state', () => setTimeout(renderEndFriends, 0));
+    window.addEventListener('truco:social', renderEndFriends);
+  }
+
   renderAccount();
 
   // Usado por outros scripts (ex.: atualizar a lista ao trocar de tela)
@@ -544,6 +675,7 @@
     if (has(socialState.friends)) return 'friend';
     if (has(socialState.requestsOut)) return 'sent';
     if (has(socialState.requestsIn)) return 'received';
+    if (has(socialState.blocked)) return 'blocked';
     return 'none';
   }
   async function requestFriend(name) {
@@ -556,5 +688,13 @@
     return res;
   }
 
-  window.trucoSocial = { openAuth, openFriends, toast, dismissToast, relationWith, requestFriend, isLogged: () => !!me };
+  async function blockPlayer(name) {
+    if (!me) return { error: 'Entre na sua conta.' };
+    if (!confirm(`Bloquear ${name}? Ele não vai conseguir te pedir amizade nem te convidar.`)) return { cancelled: true };
+    const res = await friendAction('friends:block', name);
+    toast(escapeHtml(res.error || res.message || 'Bloqueado.'), { kind: res.error ? 'error' : '' });
+    return res;
+  }
+
+  window.trucoSocial = { openAuth, openFriends, toast, dismissToast, relationWith, requestFriend, blockPlayer, isLogged: () => !!me };
 })();

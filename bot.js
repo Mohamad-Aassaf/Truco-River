@@ -764,6 +764,7 @@ function handleBotAction(game, playerIdx) {
   if (h.trucoResponsePending && h.trucoPendingTeam === player.team) {
     const canSingOverTruco = canSingNow && h.trucoState === 'truco' && h.envidoState === 'none';
     if (canSingOverTruco && player.hasFlor && h.florState === 'none') return { action: 'call_flor' };
+    if (game.canSingSecondFlor && game.canSingSecondFlor(playerIdx)) return { action: 'call_flor' };
     if (canSingOverTruco && !player.hasFlor) {
       const call = wantsEnvido(game, playerIdx);
       if (call) return { action: 'call_envido', value: call };
@@ -776,6 +777,7 @@ function handleBotAction(game, playerIdx) {
   if (h.currentPlayer !== playerIdx || handCards.length === 0) return null;
 
   // 4. Cantar Flor (obrigatório) ou Envido (só o pé, nas duplas)
+  if (game.canSingSecondFlor && game.canSingSecondFlor(playerIdx)) return { action: 'call_flor' };
   if (canSingNow) {
     if (player.hasFlor && h.florState === 'none' && h.envidoState === 'none') return { action: 'call_flor' };
     if (!player.hasFlor && h.envidoState === 'none' && game.isPe(playerIdx)) {
