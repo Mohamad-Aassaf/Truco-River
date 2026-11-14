@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=3.17">
+  <link rel="stylesheet" href="/css/home.css?v=3.19">
 </head>
 
 <body data-screen="home">
@@ -486,9 +486,9 @@
 
         <!-- CONTROLE DE CARTAS DO JOGADOR (SUA MÃO) -->
         <div class="player-hand-container">
-          <!-- Tempo da jogada: 20s; acabou, uma carta qualquer é jogada -->
+          <!-- Tempo da jogada: 30s; acabou, uma carta qualquer é jogada -->
           <div id="turn-timer" class="turn-timer hide" aria-live="polite">
-            <span class="turn-timer-text" id="turn-timer-text">Sua vez · 20s</span>
+            <span class="turn-timer-text" id="turn-timer-text">Sua vez · 30s</span>
             <span class="turn-timer-bar"><span id="turn-timer-fill"></span></span>
           </div>
           <!-- Resumo do fim da mão + contagem até a próxima -->
@@ -1049,7 +1049,7 @@
 
             <div class="rules-callout">
               <i class="fa-solid fa-stopwatch"></i>
-              <p><strong>Tempo de jogada.</strong> Cada jogador tem <strong>20 segundos</strong> na sua vez. Se o
+              <p><strong>Tempo de jogada.</strong> Cada jogador tem <strong>30 segundos</strong> na sua vez. Se o
                 tempo acabar, uma carta qualquer da mão é jogada sozinha. Se era para responder um Truco ou Envido, vale
                 "Não quero". Se era para responder uma Flor, você achica; se era uma Contra-Flor, vale "Quero".</p>
             </div>
@@ -1442,7 +1442,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=7"></script>
-  <script src="/js/app.js?v=33"></script>
+  <script src="/js/app.js?v=35"></script>
   <script src="/js/social.js?v=9"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>
@@ -1452,7 +1452,8 @@
   <script src="/js/admin.js?v=3"></script>
   <script src="/js/match-history.js?v=1"></script>
   <script src="/js/my-stats.js?v=1"></script>
-  <script src="/js/table-extras.js?v=15"></script>
+  <script src="/js/quick-chat.js?v=1"></script>
+  <script src="/js/table-extras.js?v=16"></script>
   <script src="/js/spectate.js?v=3"></script>
   <script src="/js/tournaments.js?v=9"></script>
 </body>

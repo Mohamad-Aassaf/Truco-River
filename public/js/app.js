@@ -2220,6 +2220,21 @@ function setupActionButtons(gameState) {
     return;
   }
 
+  // Truco pendente para o meu time e eu tenho Flor (sem ser quem responde):
+  // posso cantar a Flor antes do parceiro responder
+  if (hand.trucoResponsePending && hand.trucoPendingTeam === myTeam && hand.trucoResponderIdx !== mySeatIndex
+    && hand.trucoState === 'truco' && myPlayer.hasFlor && hand.currentRound === 0 && (hand.hands[mySeatIndex] || []).length === 3
+    && !hand.envidoResponsePending && !hand.florResponsePending
+    && ((hand.florState === 'none' && hand.envidoState === 'none') || mySecondFlor(hand))) {
+    if (statusEl) {
+      statusEl.textContent = 'Você tem Flor: pode cantar antes do parceiro responder o Truco.';
+      statusEl.classList.remove('hide');
+    }
+    groupFlor.classList.remove('hide');
+    showAndEnableButton(btnFlor);
+    return;
+  }
+
   // Só responde quem é o próximo depois de quem cantou; o parceiro espera
   const waitingPartner = (pending, team, responder) => pending && team === myTeam && responder !== mySeatIndex;
   if (waitingPartner(hand.envidoResponsePending, hand.envidoPendingTeam, hand.envidoResponderIdx)
@@ -2732,7 +2747,7 @@ function notifyChatMessage(sender, msg) {
   }
 }
 
-socket.on('receive_chat', ({ sender, senderId, msg, spectator }) => {
+socket.on('receive_chat', ({ sender, senderId, msg, spectator, quick }) => {
   const isSelf = senderId === socket.id;
   const div = document.createElement('div');
   div.className = `chat-bubble ${isSelf ? 'self' : ''}`;
@@ -2745,7 +2760,8 @@ socket.on('receive_chat', ({ sender, senderId, msg, spectator }) => {
   // Rolar para o final do chat
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
-  if (!isSelf) notifyChatMessage(String(sender || ''), String(msg || ''));
+  // Conversa rápida já aparece no balão do lugar: sem aviso extra por cima da mesa
+  if (!isSelf && !quick) notifyChatMessage(String(sender || ''), String(msg || ''));
 });
 
 // Sair da Partida

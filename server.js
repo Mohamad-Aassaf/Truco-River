@@ -797,7 +797,15 @@ function broadcastState(roomId) {
 }
 
 // --- TEMPO DA JOGADA (15s) ---
-const TURN_MS = Number(process.env.TURN_MS) || 20000;
+const TURN_MS = Number(process.env.TURN_MS) || 30000; // tempo de cada jogada
+// Conversa rápida na mesa (principalmente para a dupla combinar a jogada)
+const QUICK_CHAT = {
+  pontos: 'Peço os pontos?', tenho_pontos: 'Tenho pontos!', poucos: 'Tenho poucos pontos',
+  sim: 'Sim', nao: 'Não', aumenta: 'Aumenta!', aceita: 'Aceita!', nao_aceita: 'Não aceita',
+  truco: 'Peço truco?', mazo: 'Vamos ao mazo?', maior: 'Joga a maior', guarda: 'Guarda a maior',
+  comigo: 'Deixa comigo', espera: 'Espera aí', boa: 'Boa, parceiro!', vamos: 'Vamos lá!'
+};
+const BOT_WAIT_FLOR_MS = Number(process.env.BOT_WAIT_FLOR_MS) || 10000; // bot espera o parceiro com Flor
 
 // Quem precisa agir agora e o quê ('play', 'truco', 'envido', 'flor', 'sing')
 function actorOf(game) {
@@ -1064,7 +1072,9 @@ function runBotLogic(roomId) {
   if (activeBotIdx !== -1) {
     // Simula tempo de pensamento: responder aposta demora um pouco mais que jogar carta
     const h = game.hand;
-    const botDelay = ((h.trucoResponsePending || h.envidoResponsePending || h.florResponsePending) ? 1300 : 900) * (game.tournamentBotsOnly ? 0.6 : 1); // bot contra bot: um pouco mais rápido
+    let botDelay = ((h.trucoResponsePending || h.envidoResponsePending || h.florResponsePending) ? 1300 : 900) * (game.tournamentBotsOnly ? 0.6 : 1); // bot contra bot: um pouco mais rápido
+    // Parceiro de verdade com Flor pode cantar antes do bot responder o Truco: dá tempo a ele
+    if (h.trucoResponsePending && !h.envidoResponsePending && !h.florResponsePending && game.humanFlorOverTruco(h.trucoPendingTeam) !== -1) botDelay = BOT_WAIT_FLOR_MS;
     botTimers[roomId] = setTimeout(() => {
       delete botTimers[roomId];
       const g = activeGames[roomId];
@@ -1760,6 +1770,21 @@ io.on('connection', (socket) => {
       payload.channel = 'spec';
       io.to(specRoom(roomId)).emit('receive_chat', payload);
     }
+  });
+
+  // Conversa rápida: frases prontas que todos na mesa veem (balão no lugar de quem falou)
+  let lastQuick = 0;
+  socket.on('quick_chat', (data) => {
+    const text = QUICK_CHAT[data && data.id];
+    const game = activeGames[currentRoomId];
+    if (!text || !game || game.state === 'lobby') return;
+    const idx = game.players.findIndex(p => p.socketId === socket.id);
+    if (idx === -1) return;
+    if (Date.now() - lastQuick < 1200) return; // sem metralhadora de frases
+    lastQuick = Date.now();
+    const p = game.players[idx];
+    io.to(currentRoomId).to(specRoom(currentRoomId)).emit('quick_chat', { playerIdx: idx, name: p.name, team: p.team, text });
+    io.to(currentRoomId).to(specRoom(currentRoomId)).emit('receive_chat', { sender: p.name, senderId: socket.id, msg: text, spectator: false, channel: 'table', quick: true });
   });
 
   // Reiniciar jogo completo

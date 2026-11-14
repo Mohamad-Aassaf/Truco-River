@@ -927,10 +927,17 @@ class TrucoGame { // TRUCO GURIZINHO
     if (!p || !p.hasFlor || this.isFolded(playerIdx) || this.hasPlayerPlayedCard(playerIdx)) return false;
     if (h.florResponsePending || h.envidoResponsePending) return false;
     if (h.trucoResponsePending) {
-      return h.trucoPendingTeam === p.team && h.trucoState === 'truco'
-        && (h.trucoResponderIdx === undefined || h.trucoResponderIdx === playerIdx);
+      return h.trucoPendingTeam === p.team && h.trucoState === 'truco';
     }
     return h.currentPlayer === playerIdx;
+  }
+
+  humanFlorOverTruco(team) {
+    const h = this.hand;
+    if (!h || !h.trucoResponsePending || h.trucoPendingTeam !== team || h.trucoState !== 'truco' || h.currentRound !== 0) return -1;
+    return this.players.findIndex((p, i) => p && !p.isBot && p.team === team && p.hasFlor && !this.isFolded(i)
+      && !this.hasPlayerPlayedCard(i)
+      && ((h.florState === 'none' && h.envidoState === 'none') || (h.florSecond && h.florSecond.idx === i)));
   }
 
   singSecondFlor(playerIdx) {
@@ -955,9 +962,10 @@ class TrucoGame { // TRUCO GURIZINHO
 
     const callingTeam = this.players[playerIdx].team;
     if (this.hand.trucoResponsePending) {
-      // Respondendo um Truco simples: só quem responde, e o Truco é cancelado
+      // Truco simples esperando resposta: qualquer um do time que responde pode cantar
+      // a Flor antes (o Truco é cancelado). Assim o parceiro não perde a Flor se quem
+      // responde for rápido no "Não quero".
       if (callingTeam !== this.hand.trucoPendingTeam) return false;
-      if (this.hand.trucoResponderIdx !== undefined && this.hand.trucoResponderIdx !== playerIdx) return false;
       if (this.hand.trucoState !== 'truco') return false;
     } else if (this.hand.envidoResponsePending) {
       // Flor por cima do Envido: só o time que deve responder ao Envido
