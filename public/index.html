@@ -28,7 +28,7 @@
 
   <!-- CSS Customizado -->
   <link rel="stylesheet" href="/css/style.css?v=3.8">
-  <link rel="stylesheet" href="/css/home.css?v=3.19">
+  <link rel="stylesheet" href="/css/home.css?v=3.20">
 </head>
 
 <body data-screen="home">
@@ -133,12 +133,15 @@
       </div>
 
       <div class="input-group">
-        <label><i class="fa-solid fa-images"></i> Estilo das Cartas:</label>
+        <label id="deck-style-label"><i class="fa-solid fa-images"></i> Estilo das Cartas:</label>
         <div class="deck-selector-container">
           <button type="button" class="deck-option active" data-deck="traditional">Tradicional</button>
           <button type="button" class="deck-option" data-deck="pixel">Pixel Art</button>
           <button type="button" class="deck-option" data-deck="classico">Moderno</button>
           <button type="button" class="deck-option" data-deck="frances">Francês</button>
+          <button type="button" class="deck-option" data-deck="espanhol">Espanhol</button>
+          <!-- Baralho secreto: aparece depois de tocar 5 vezes em "Estilo das Cartas" -->
+          <button type="button" class="deck-option hide" data-deck="gremio" id="deck-secret-btn">Tricolor</button>
         </div>
         <div class="deck-preview-container">
           <button type="button" id="prev-preview-btn" class="icon-btn" title="Anterior"><i class="fa-solid fa-chevron-left"></i></button>
@@ -1442,7 +1445,7 @@
   <!-- BIBLIOTECAS CLIENTE -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sound.js?v=7"></script>
-  <script src="/js/app.js?v=35"></script>
+  <script src="/js/app.js?v=36"></script>
   <script src="/js/social.js?v=9"></script>
   <script src="/js/rules.js?v=4"></script>
   <script src="/js/reveal.js?v=4"></script>

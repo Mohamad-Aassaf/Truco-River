@@ -4076,3 +4076,13 @@ body.tour-game #restart-game-btn { display: none !important; }
 /* Conversa rápida: fora do caminho das cartas */
 @media (min-width: 851px) { .qc-btn { left: auto; right: -60px; bottom: 12px; } }
 @media (max-width: 850px) { .qc-btn { left: 6px; bottom: auto; top: -54px; } }
+
+/* Baralho secreto (Tricolor): verso próprio */
+body[data-deck-style="gremio"] .card.hidden,
+body[data-deck-style="gremio"] .deck-card.back,
+body[data-deck-style="gremio"] .mini-card-badge.hidden-card {
+  background-image: url("/decks/gremio/verso.png");
+  background-color: #111;
+}
+#deck-style-label { cursor: default; user-select: none; -webkit-user-select: none; }
+.deck-option.hide { display: none; }

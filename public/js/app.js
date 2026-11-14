@@ -242,7 +242,11 @@ const SUIT_MINIS = {
 let currentDeckStyle = localStorage.getItem('truco_deck_style') || 'traditional';
 
 // Baralhos em public/decks/<nome>/<naipe>-<valor>.png (naipe: espadas, bastos, copas, ouros)
-const FILE_DECKS = ['classico', 'frances'];
+const FILE_DECKS = ['classico', 'frances', 'espanhol', 'gremio'];
+// Baralho secreto (Tricolor): liberado tocando 5 vezes em "Estilo das Cartas"
+const SECRET_DECK = 'gremio';
+const SECRET_KEY = 'truco_deck_secret';
+const secretUnlocked = () => { try { return localStorage.getItem(SECRET_KEY) === '1'; } catch (e) { return false; } };
 const PIXELATED_DECKS = ['pixel', 'frances'];
 const deckFile = (deck, suit, value) => `/decks/${deck}/${suit}-${value}.png`;
 const fileDeckPreviews = deck => [
@@ -287,10 +291,12 @@ const DECK_PREVIEWS = {
     ]
   ],
   classico: fileDeckPreviews('classico'),
-  frances: fileDeckPreviews('frances')
+  frances: fileDeckPreviews('frances'),
+  espanhol: fileDeckPreviews('espanhol'),
+  gremio: fileDeckPreviews('gremio')
 };
 
-if (!DECK_PREVIEWS[currentDeckStyle]) currentDeckStyle = 'traditional';
+if (!DECK_PREVIEWS[currentDeckStyle] || (currentDeckStyle === SECRET_DECK && !secretUnlocked())) currentDeckStyle = 'traditional';
 
 let currentPreviewSlideIndex = 0;
 
@@ -299,7 +305,9 @@ const DECK_INFO = {
   traditional: 'O baralho espanhol de sempre',
   pixel: 'Estilo videogame antigo',
   classico: 'Desenhos limpos e coloridos',
-  frances: 'Naipes do pôquer, em pixel'
+  frances: 'Naipes do pôquer, em pixel',
+  espanhol: 'O clássico espanhol, com as cores de sempre',
+  gremio: 'Baralho secreto: azul, preto e branco'
 };
 
 // Prévia: trocar de exemplo vira as cartas em 3D, uma de cada vez; trocar de
@@ -424,6 +432,28 @@ function preloadDeck(deck) {
   if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
   else setTimeout(run, 1500);
 }
+
+// Baralho secreto: 5 toques seguidos em "Estilo das Cartas"
+(function setupSecretDeck() {
+  const secretBtn = document.getElementById('deck-secret-btn');
+  const label = document.getElementById('deck-style-label');
+  if (!secretBtn || !label) return;
+  if (secretUnlocked()) secretBtn.classList.remove('hide');
+  let taps = 0;
+  let tapTimer = null;
+  label.addEventListener('click', () => {
+    taps++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { taps = 0; }, 1500);
+    if (taps < 5) return;
+    taps = 0;
+    const firstTime = !secretUnlocked();
+    try { localStorage.setItem(SECRET_KEY, '1'); } catch (e) { /* sem armazenamento */ }
+    secretBtn.classList.remove('hide');
+    secretBtn.click();
+    if (window.trucoSocial) window.trucoSocial.toast(firstTime ? '🤫 Baralho secreto desbloqueado: <b>Tricolor</b>!' : 'Baralho <b>Tricolor</b> escolhido.', { kind: 'success' });
+  });
+})();
 
 // Inicializar botões e estado no lobby
 deckOptions.forEach(btn => {
