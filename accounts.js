@@ -466,7 +466,21 @@ function createAccounts(options = {}) {
       const r = h[k] || { vw: 0, vl: 0, tw: 0, tl: 0 };
       return { name: displayName(k), ...r };
     }).sort((a, b) => (b.vw + b.vl + b.tw + b.tl) - (a.vw + a.vl + a.tw + a.tl) || a.name.localeCompare(b.name));
-    return { username: u.username, createdAt: u.createdAt, stats: { played: u.stats.played, won: u.stats.won }, friends };
+    return { username: u.username, createdAt: u.createdAt, statsResetAt: u.statsResetAt || 0, stats: { played: u.stats.played, won: u.stats.won }, friends };
+  }
+
+  // Zera as estatísticas de uma conta (vitórias, derrotas, confronto com amigos).
+  // `once` = marca que só roda uma vez (para pedidos pontuais no deploy).
+  function resetStats(name, once) {
+    const u = get(name);
+    if (!u) return false;
+    if (once && (u.resets || []).includes(once)) return false;
+    u.stats = { played: 0, won: 0 };
+    u.h2h = {};
+    u.statsResetAt = Date.now();
+    if (once) u.resets = (u.resets || []).concat(once);
+    persist(key(u.username));
+    return true;
   }
 
   function displayName(k) {
@@ -497,6 +511,7 @@ function createAccounts(options = {}) {
     relationOf,
     recordResult,
     recordHeadToHead,
+    resetStats,
     profile,
     friendCodeOf,
     resetFriendCode,

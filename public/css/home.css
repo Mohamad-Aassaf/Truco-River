@@ -4086,3 +4086,121 @@ body[data-deck-style="gremio"] .mini-card-badge.hidden-card {
 }
 #deck-style-label { cursor: default; user-select: none; -webkit-user-select: none; }
 .deck-option.hide { display: none; }
+
+/* Fim da mão: mostrar as cartas que não foram jogadas */
+.hs-show { display: block; margin: 6px auto 2px; }
+.hs-show.hide { display: none; }
+.played-card.proof-shown { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 6px 14px rgba(0, 0, 0, 0.5); }
+
+/* Baralho Ilustrado: verso próprio */
+body[data-deck-style="ilustrado"] .card.hidden,
+body[data-deck-style="ilustrado"] .deck-card.back,
+body[data-deck-style="ilustrado"] .mini-card-badge.hidden-card {
+  background-image: url("/decks/ilustrado/verso.png");
+  background-color: #fff;
+}
+
+/* Fala rápida: por cima dos balões de aposta e do lado oposto a eles */
+.qc-bubble { z-index: 650; }
+#seat-right .qc-bubble { bottom: auto; top: calc(100% + 8px); }
+#seat-right .qc-bubble::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: #fff; }
+
+.end-hold-note { margin: 6px auto 0; max-width: 460px; font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+.end-hold-note.hide { display: none; }
+
+/* Estatísticas: resumo grande, filtros e lista de fatos */
+.st-hero { padding: 14px; border-radius: var(--radius-md); border: 1px solid rgba(223, 177, 91, 0.45); background: linear-gradient(135deg, rgba(223, 177, 91, 0.14), rgba(0, 0, 0, 0.3)); }
+.st-hero-main { display: flex; align-items: center; gap: 14px; }
+.st-hero-pct { font-size: 2.4rem; line-height: 1; color: var(--gold-bright); }
+.st-hero-main span { color: var(--cream); font-size: 0.95rem; }
+.st-hero-wl { margin: 8px 0 4px; font-size: 1rem; }
+.wl small { color: var(--text-muted); font-weight: 600; }
+.st-filters { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.st-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.st-filter > span { width: 74px; font-size: 0.72rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+.st-chip { padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid rgba(223, 177, 91, 0.35); background: rgba(0, 0, 0, 0.25); color: var(--cream); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+.st-chip.on { background: var(--gold); color: var(--wood-dark); border-color: var(--gold); }
+.st-facts { list-style: none; padding: 0; margin: 0 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.st-facts li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--hairline); font-size: 0.8rem; color: var(--text-muted); }
+.st-facts li i { color: var(--gold); width: 16px; text-align: center; }
+.st-facts li span { flex: 1; }
+.st-facts li b { color: var(--cream); font-size: 0.95rem; white-space: nowrap; }
+@media (max-width: 560px) { .st-facts { grid-template-columns: 1fr; } .st-filter > span { width: 100%; } }
+
+/* Resumo da mão enxuto */
+.hand-summary { gap: 5px; padding: 8px 12px; width: min(460px, 96vw); }
+.hs-head { align-items: center; }
+.hs-title { font-size: 1rem; }
+.hs-head .hs-rounds { margin-right: auto; }
+.hs-score { font-size: 1rem; }
+.hs-body { gap: 4px 6px; }
+.hs-body:empty { display: none; }
+.hs-why { font-size: 0.76rem; }
+.hs-chip { font-size: 0.7rem; padding: 1px 7px; }
+.hs-points { gap: 4px; }
+.hs-pt { padding: 3px 8px; gap: 4px 6px; }
+.hs-pt-kind { font-size: 0.66rem; }
+.hs-pt-line { font-size: 0.76rem; }
+.hs-pt-line b { font-size: 0.85rem; }
+.hs-pt-gain { font-size: 0.7rem; padding: 1px 6px; }
+.hs-next { gap: 8px; }
+.hs-bar { height: 4px; }
+.hs-next-text { min-width: 0; font-size: 0.7rem; }
+.hs-show { display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 2px 9px; border-radius: var(--radius-pill); border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.08); color: var(--cream); font: inherit; font-size: 0.7rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.hs-show:hover { background: rgba(255, 255, 255, 0.18); }
+.hs-show.hide { display: none; }
+
+/* Minha linha: [fala rápida] [meu nome] [tempo da jogada], todos alinhados */
+#seat-bottom .seat-side { position: absolute; top: 50%; transform: translateY(-50%); display: flex; align-items: center; z-index: 25; }
+#seat-bottom .seat-side.left { right: calc(100% + 10px); }
+#seat-bottom .seat-side.right { left: calc(100% + 10px); }
+#seat-bottom .seat-side .qc-btn { position: static; left: auto; right: auto; top: auto; bottom: auto; width: 40px; height: 40px; font-size: 1.05rem; }
+#seat-bottom .seat-side .turn-timer { position: static; transform: none; top: auto; right: auto; left: auto; flex-direction: row; gap: 8px; padding: 5px 10px; width: auto; white-space: nowrap; border-radius: var(--radius-pill); }
+#seat-bottom .seat-side .turn-timer .turn-timer-bar { width: 46px; }
+#seat-bottom .seat-timer { display: none; }
+/* O balão de aposta do meu lugar sobe (do lado fica o tempo) e a fala rápida vai para a esquerda */
+#seat-bottom .voice-bubble { left: 50%; top: auto; bottom: calc(100% + 10px); transform: translateX(-50%); }
+#seat-bottom .qc-bubble { left: auto; right: calc(100% + 58px); bottom: auto; top: 50%; transform: translateY(-50%) scale(0.8); }
+#seat-bottom .qc-bubble.show { transform: translateY(-50%) scale(1); }
+#seat-bottom .qc-bubble::after { left: 100%; top: 50%; transform: translateY(-50%); border-top-color: transparent; border-left-color: #fff; }
+@media (max-width: 850px) {
+  #seat-bottom .seat-side.left { right: calc(100% + 6px); }
+  #seat-bottom .seat-side.right { left: calc(100% + 6px); }
+  #seat-bottom .seat-side .turn-timer { padding: 4px 8px; gap: 6px; }
+  #seat-bottom .seat-side .turn-timer .turn-timer-bar { width: 34px; }
+  #seat-bottom .qc-bubble { right: auto; left: 50%; top: auto; bottom: calc(100% + 46px); transform: translateX(-50%) scale(0.8); }
+  #seat-bottom .qc-bubble.show { transform: translateX(-50%) scale(1); }
+  #seat-bottom .qc-bubble::after { left: 50%; top: 100%; transform: translateX(-50%); border-left-color: transparent; border-top-color: #fff; }
+  #seat-bottom .voice-bubble { left: calc(100% + 6px); bottom: calc(100% + 4px); transform: none; }
+}
+
+/* Celular: cartas da mão maiores */
+@media (max-width: 850px) and (min-height: 701px) {
+  #screen-game .player-hand-container { width: min(360px, 96vw); }
+  #screen-game .player-hand { height: 162px; min-height: 162px; }
+  #screen-game .card-lift-wrapper { width: 102px; height: 162px; }
+  #screen-game .player-hand .card { width: 102px; height: 153px; border-radius: 9px; }
+}
+@media (max-width: 850px) and (max-height: 700px) and (orientation: portrait) {
+  #screen-game .player-hand { height: 130px; min-height: 130px; }
+  #screen-game .card-lift-wrapper { width: 82px; height: 130px; }
+  #screen-game .player-hand .card { width: 82px; height: 123px; }
+}
+
+/* Celular: um toque não dá zoom (o toque duplo vira clique normal);
+   o zoom de pinça com dois dedos continua funcionando */
+html, body, button, a, input, select, textarea, label, .card, .card-lift-wrapper, .player-seat, .truco-table { touch-action: manipulation; }
+
+/* Selo do Envido/Flor: os pontos de cada um lado a lado */
+.proof-pill b.proof-score { display: inline-flex; align-items: center; gap: 3px; }
+.proof-pill b.proof-score.lose { opacity: 0.55; text-decoration: line-through; text-decoration-thickness: 2px; }
+.proof-pill .proof-crown { margin: 0; font-size: 0.75em; }
+@media (max-width: 600px) {
+  .proof-pill { gap: 5px; padding: 3px 5px 3px 9px; font-size: 0.66rem; letter-spacing: 0.03em; }
+  .proof-pill b { min-width: 1.7em; height: 1.6em; font-size: 1.1em; padding: 0 5px; }
+  .proof-lines line { stroke-width: 1.8; }
+}
+
+/* Narrativa: divisão por mão */
+.log-hand-sep { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; color: var(--gold); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.log-hand-sep::before, .log-hand-sep::after { content: ""; flex: 1; height: 1px; background: rgba(223, 177, 91, 0.3); }

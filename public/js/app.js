@@ -242,11 +242,12 @@ const SUIT_MINIS = {
 let currentDeckStyle = localStorage.getItem('truco_deck_style') || 'traditional';
 
 // Baralhos em public/decks/<nome>/<naipe>-<valor>.png (naipe: espadas, bastos, copas, ouros)
-const FILE_DECKS = ['classico', 'frances', 'espanhol', 'gremio'];
-// Baralho secreto (Tricolor): liberado tocando 5 vezes em "Estilo das Cartas"
+const FILE_DECKS = ['classico', 'frances', 'espanhol', 'ilustrado', 'gremio'];
+// Baralho secreto (Tricolor): liberado tocando 5 vezes em "Estilo das Cartas".
+// Não fica salvo: ao recarregar a página, precisa liberar de novo.
 const SECRET_DECK = 'gremio';
-const SECRET_KEY = 'truco_deck_secret';
-const secretUnlocked = () => { try { return localStorage.getItem(SECRET_KEY) === '1'; } catch (e) { return false; } };
+let secretDeckOn = false;
+const secretUnlocked = () => secretDeckOn;
 const PIXELATED_DECKS = ['pixel', 'frances'];
 const deckFile = (deck, suit, value) => `/decks/${deck}/${suit}-${value}.png`;
 const fileDeckPreviews = deck => [
@@ -293,6 +294,7 @@ const DECK_PREVIEWS = {
   classico: fileDeckPreviews('classico'),
   frances: fileDeckPreviews('frances'),
   espanhol: fileDeckPreviews('espanhol'),
+  ilustrado: fileDeckPreviews('ilustrado'),
   gremio: fileDeckPreviews('gremio')
 };
 
@@ -306,7 +308,8 @@ const DECK_INFO = {
   pixel: 'Estilo videogame antigo',
   classico: 'Desenhos limpos e coloridos',
   frances: 'Naipes do pôquer, em pixel',
-  espanhol: 'O clássico espanhol, com as cores de sempre',
+  espanhol: 'O espanhol de traço antigo e cores fortes',
+  ilustrado: 'Figuras pintadas em azul e dourado',
   gremio: 'Baralho secreto: azul, preto e branco'
 };
 
@@ -438,7 +441,6 @@ function preloadDeck(deck) {
   const secretBtn = document.getElementById('deck-secret-btn');
   const label = document.getElementById('deck-style-label');
   if (!secretBtn || !label) return;
-  if (secretUnlocked()) secretBtn.classList.remove('hide');
   let taps = 0;
   let tapTimer = null;
   label.addEventListener('click', () => {
@@ -448,7 +450,7 @@ function preloadDeck(deck) {
     if (taps < 5) return;
     taps = 0;
     const firstTime = !secretUnlocked();
-    try { localStorage.setItem(SECRET_KEY, '1'); } catch (e) { /* sem armazenamento */ }
+    secretDeckOn = true;
     secretBtn.classList.remove('hide');
     secretBtn.click();
     if (window.trucoSocial) window.trucoSocial.toast(firstTime ? '🤫 Baralho secreto desbloqueado: <b>Tricolor</b>!' : 'Baralho <b>Tricolor</b> escolhido.', { kind: 'success' });
@@ -468,7 +470,8 @@ deckOptions.forEach(btn => {
     btn.classList.add('active');
     if (currentDeckStyle === btn.dataset.deck) return;
     currentDeckStyle = btn.dataset.deck;
-    localStorage.setItem('truco_deck_style', currentDeckStyle);
+    // O secreto não fica salvo (ao voltar, abre com o último baralho normal)
+    if (currentDeckStyle !== SECRET_DECK) localStorage.setItem('truco_deck_style', currentDeckStyle);
     lastPreviewTouch = Date.now();
     updateDeckPreview('deal');
     updateBodyDeckStyle();
@@ -724,7 +727,31 @@ socket.on('kicked', () => {
 
 // --- RECEBIMENTO DO ESTADO DE JOGO (SOCKET PRINCIPAL) ---
 
-socket.on('game_state', (gameState) => {
+// Fim de partida: se outra pessoa clicar em "Jogar novamente" ou sair, a sala volta
+// para a espera, mas quem ainda está vendo o resultado continua nele até escolher.
+let endResultState = null;   // último estado de fim de partida
+let endHoldState = null;     // a sala já voltou para a espera (guardado até eu escolher)
+let endChoseRestart = false; // eu cliquei em "Jogar novamente"
+function showEndHold(on) {
+  const note = document.getElementById('end-hold-note');
+  if (note) note.classList.toggle('hide', !on);
+}
+
+socket.on('game_state', handleGameState);
+function handleGameState(gameState) {
+  if (gameState.state === 'game_end') endResultState = gameState;
+  if (gameState.state !== 'lobby') endChoseRestart = false;
+  const onResults = !!(endShownKey || endScheduledKey);
+  if (gameState.state === 'lobby' && onResults && !endChoseRestart && endResultState && endResultState.id === gameState.id) {
+    endHoldState = gameState;
+    if (!endShownKey) showEndScreenNow();
+    lastGameState = gameState;
+    showEndHold(true);
+    return;
+  }
+  endHoldState = null;
+  showEndHold(false);
+
   lastGameState = gameState; // Armazena a cópia local para verificação nos botões
   // Quem assiste vê a mesa pelo jogador escolhido; na sala de espera não é ninguém
   if (gameState.spectating) {
@@ -787,7 +814,7 @@ socket.on('game_state', (gameState) => {
       });
     }
   }
-});
+}
 
 // Espera a janela dos pontos do Envido/Flor fechar (OK). Se ninguém fechar em
 // 10 segundos, fecha sozinha para seguir para o resultado.
@@ -816,10 +843,11 @@ let endCountdownEl = null;
 function showEndScreenNow() {
   if (gameEndTimeout) clearTimeout(gameEndTimeout);
   gameEndTimeout = null;
-  if (!lastGameState || lastGameState.state !== 'game_end') return;
+  const endState = lastGameState && lastGameState.state === 'game_end' ? lastGameState : endResultState;
+  if (!endState || endState.state !== 'game_end') return;
   hideEndCountdown();
-  endShownKey = endScheduledKey;
-  renderGameEndScreen(lastGameState);
+  endShownKey = endScheduledKey || `${endState.id}:held`;
+  renderGameEndScreen(endState);
   // Música do resultado (e o som de vitória uma vez só)
   if (window.soundManager) {
     window.soundManager.changeMusic(window.TRUCO_MUSIC.end);
@@ -1075,7 +1103,8 @@ function renderGameScreen(gameState) {
     // Fim de mão ou de jogo: manter as cartas jogadas na mesa para visualização e mostrar resultado.
     // Quem ganhou Envido/Flor coloca na mesa as cartas que faltam para provar os pontos.
     const proofPlays = (gameState.lastHandSummary.proofCards || []).map(pc => ({ ...pc, proof: true }));
-    renderPlayedCards(gameState.lastHandSummary.playedCards.concat(proofPlays), gameState.players, null, gameState.lastHandSummary.roundWinners);
+    const shownPlays = (gameState.lastHandSummary.shownCards || []).map(pc => ({ ...pc, proof: true, win: true }));
+    renderPlayedCards(gameState.lastHandSummary.playedCards.concat(proofPlays, shownPlays), gameState.players, null, gameState.lastHandSummary.roundWinners);
     renderProofBadges(gameState.lastHandSummary.proofList || [], gameState);
 
     // Limpar mão local do jogador
@@ -1090,6 +1119,7 @@ function renderGameScreen(gameState) {
 
     // Resumo da mão (pontos de cada coisa) e contagem para a próxima
     renderHandSummary(gameState);
+    paintShowCardsBtn(gameState);
     document.body.classList.add('hand-ended');
     const statusMsg = document.getElementById('action-panel-status');
     if (statusMsg) statusMsg.classList.add('hide');
@@ -1306,6 +1336,29 @@ function hideHandSummary() {
   summaryKey = null;
 }
 
+// "Mostrar minhas cartas": só aparece se sobrou carta minha que ninguém viu
+function paintShowCardsBtn(gameState) {
+  const btn = document.getElementById('hs-show-btn');
+  if (!btn) return;
+  const s = gameState.lastHandSummary;
+  const me = gameState.spectating ? -1 : mySeatIndex;
+  let hidden = 0;
+  if (s && me >= 0) {
+    const key = c => `${c.value}-${c.suit}`;
+    const seen = new Set([].concat(s.playedCards || [], s.proofCards || [], s.shownCards || [])
+      .filter(pc => pc.playerIdx === me).map(pc => key(pc.card)));
+    hidden = ((s.originalHands || [])[me] || []).filter(c => !seen.has(key(c))).length;
+  }
+  btn.classList.toggle('hide', !hidden);
+  btn.disabled = false;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('#hs-show-btn');
+  if (!b) return;
+  b.disabled = true;
+  socket.emit('show_cards');
+});
+
 function renderHandSummary(gameState) {
   const s = gameState.lastHandSummary;
   if (!handSummaryEl || !s) return;
@@ -1341,17 +1394,18 @@ function renderHandSummary(gameState) {
   handSummaryEl.innerHTML = `
     <div class="hs-head ${won ? 'win' : 'lose'}">
       <span class="hs-title">${gameOver ? (gameState.winner === us ? 'Vencemos a partida!' : 'Perdemos a partida') : (won ? 'Mão nossa!' : 'Mão deles')}</span>
-      <span class="hs-score"><span class="us">${escapeText(teamLabel(gameState, us))} ${score[us]}</span> × <span class="them">${score[them]} ${escapeText(teamLabel(gameState, them))}</span></span>
+      ${rounds ? `<span class="hs-rounds">${rounds}</span>` : ''}
+      <span class="hs-score"><span class="us">${score[us]}</span> × <span class="them">${score[them]}</span></span>
     </div>
     <div class="hs-body">
-      ${rounds ? `<span class="hs-rounds">${rounds}</span>` : ''}
       ${why ? `<span class="hs-why">${why}</span>` : ''}
       ${chips}
     </div>
     ${points}
     <div class="hs-next">
       <div class="hs-bar"><span id="hs-bar-fill"></span></div>
-      <span class="hs-next-text" id="hs-next-text">${gameOver ? 'Fim de jogo!' : 'Distribuindo cartas...'}</span>
+      <span class="hs-next-text" id="hs-next-text">${gameOver ? 'Fim de jogo!' : '...'}</span>
+      <button type="button" class="hs-show hide" id="hs-show-btn" title="Mostrar as cartas que ninguém viu"><i class="fa-solid fa-eye"></i> Mostrar cartas</button>
     </div>`;
   handSummaryEl.classList.remove('hide');
 
@@ -1372,7 +1426,7 @@ function renderHandSummary(gameState) {
   fill.style.width = '0%';
   const update = () => {
     const left = summaryEndAt - Date.now();
-    text.textContent = left > 1200 ? `Próxima mão em ${Math.ceil(left / 1000)}s` : 'Distribuindo cartas...';
+    text.textContent = left > 1200 ? `${Math.ceil(left / 1000)}s` : '...';
   };
   update();
   summaryTick = setInterval(update, 250);
@@ -1409,6 +1463,7 @@ let lastLogSeqShown = 0;
 function renderLogs(logs, myTeam = 0, reset = true) {
   if (reset) {
     gameLogs.innerHTML = '';
+    gameLogs.dataset.lastHand = '';
     lastLogSeqShown = 0;
   }
   let added = 0;
@@ -1416,6 +1471,15 @@ function renderLogs(logs, myTeam = 0, reset = true) {
     if (log.seq && log.seq <= lastLogSeqShown) return; // já está na tela
     if (log.seq) lastLogSeqShown = log.seq;
     added++;
+    // Separador quando começa outra mão (a narrativa fica dividida por mão)
+    const lastH = gameLogs.dataset.lastHand;
+    if (log.h && String(log.h) !== lastH) {
+      gameLogs.dataset.lastHand = String(log.h);
+      const sep = document.createElement('div');
+      sep.className = 'log-hand-sep';
+      sep.textContent = `Mão ${log.h}`;
+      gameLogs.appendChild(sep);
+    }
     const div = document.createElement('div');
     div.className = 'log-entry';
     if (log.team === myTeam) {
@@ -2011,14 +2075,20 @@ function renderProofBadges(list, gameState) {
   // De cima para baixo na ordem dos lugares: o selo de cima aponta para as cartas de cima
   const order = { top: 0, left: 1, right: 2, bottom: 3 };
   const sorted = list.slice().sort((x, y) => order[seatOf(x.playerIdx)] - order[seatOf(y.playerIdx)]);
-  const several = kind => list.filter(p => p.kind === kind).length > 1;
-  const html = sorted.map(p => {
-    const name = gameState.players[p.playerIdx] ? gameState.players[p.playerIdx].name : '';
-    const label = p.kind === 'flor' ? 'Flor na mesa' : 'Envido na mesa';
-    const icon = p.kind === 'flor' ? 'fa-spa' : 'fa-calculator';
-    const crown = p.win && several(p.kind) ? '<i class="fa-solid fa-crown proof-crown"></i>' : '';
-    return `<div class="proof-pill ${p.kind} ${p.win ? 'win' : 'lose'}" data-key="${p.playerIdx}-${p.kind}" title="${escapeText(name)}: ${p.kind === 'flor' ? 'Flor' : 'Envido'} de ${p.score}">
-      <i class="fa-solid ${icon}"></i><span>${label}</span><b>${p.score}</b>${crown}</div>`;
+  // Um selo por tipo ("Flor na mesa"), com os pontos de cada um lado a lado;
+  // a linha sai do número de cada jogador até as cartas dele
+  const html = ['envido', 'flor'].map(kind => {
+    const items = sorted.filter(p => p.kind === kind);
+    if (!items.length) return '';
+    const several = items.length > 1;
+    const label = kind === 'flor' ? 'Flor na mesa' : 'Envido na mesa';
+    const icon = kind === 'flor' ? 'fa-spa' : 'fa-calculator';
+    const scores = items.map(p => {
+      const name = gameState.players[p.playerIdx] ? gameState.players[p.playerIdx].name : '';
+      return `<b class="proof-score ${p.win ? 'win' : 'lose'}" data-key="${p.playerIdx}-${p.kind}" title="${escapeText(name)}: ${p.score}">${p.win && several ? '<i class="fa-solid fa-crown proof-crown"></i>' : ''}${p.score}</b>`;
+    }).join('');
+    return `<div class="proof-pill ${kind} ${items.some(p => p.win) ? 'win' : 'lose'}">
+      <i class="fa-solid ${icon}"></i><span>${label}</span>${scores}</div>`;
   }).join('');
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
   proofState.list = sorted;
@@ -2050,7 +2120,7 @@ function drawProofLines() {
   const base = arena.getBoundingClientRect();
   const parts = [];
   proofState.list.forEach(p => {
-    const pill = arena.querySelector(`.proof-pill[data-key="${p.playerIdx}-${p.kind}"]`);
+    const pill = arena.querySelector(`.proof-score[data-key="${p.playerIdx}-${p.kind}"]`);
     if (!pill) return;
     const pr = pill.getBoundingClientRect();
     const cards = (p.cards || []).map(c => {
@@ -2703,8 +2773,15 @@ function renderGameEndScreen(gameState) {
 
 document.getElementById('end-lobby-btn').addEventListener('click', leaveRoomAndReload);
 
-// Botão Jogar Novamente
+// Botão Jogar Novamente: se a sala já voltou para a espera, só entra nela
 document.getElementById('restart-game-btn').addEventListener('click', () => {
+  endChoseRestart = true;
+  if (endHoldState) {
+    const s = endHoldState;
+    endHoldState = null;
+    handleGameState(s);
+    return;
+  }
   socket.emit('restart_game');
 });
 
@@ -2776,6 +2853,16 @@ function notifyChatMessage(sender, msg) {
     });
   }
 }
+
+// Sala nova (ou saiu da sala): a conversa da mesa anterior some
+let chatRoomId = null;
+function clearTableChat() { if (chatMessages) chatMessages.innerHTML = ''; }
+socket.on('game_state', s => {
+  if (!s || s.id === chatRoomId) return;
+  chatRoomId = s.id;
+  clearTableChat();
+});
+window.addEventListener('truco:left-room', () => { chatRoomId = null; clearTableChat(); });
 
 socket.on('receive_chat', ({ sender, senderId, msg, spectator, quick }) => {
   const isSelf = senderId === socket.id;

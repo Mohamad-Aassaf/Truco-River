@@ -19,7 +19,21 @@
   btn.setAttribute('aria-label', 'Conversa rápida');
   btn.setAttribute('aria-expanded', 'false');
   btn.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
-  host.appendChild(btn);
+  // Na mesma linha do meu nome: fala rápida à esquerda, tempo da jogada à direita
+  const mySeat = document.getElementById('seat-bottom');
+  const timerEl = document.getElementById('turn-timer');
+  if (mySeat) {
+    const left = document.createElement('div');
+    left.className = 'seat-side left';
+    left.appendChild(btn);
+    mySeat.appendChild(left);
+    if (timerEl) {
+      const right = document.createElement('div');
+      right.className = 'seat-side right';
+      right.appendChild(timerEl);
+      mySeat.appendChild(right);
+    }
+  } else host.appendChild(btn);
 
   const menu = document.createElement('div');
   menu.className = 'qc-menu hide';

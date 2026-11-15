@@ -91,33 +91,53 @@
     return { w, l, streak, best, avg: durN ? dur / durN : 0, quits, byMode, t };
   }
 
+  // Filtros da lista de partidas
+  const filters = { period: 30, mode: 'all', vs: 'all', result: 'all' };
+  const FILTERS = [
+    ['period', 'Período', [[7, '7 dias'], [30, '30 dias']]],
+    ['mode', 'Modo', [['all', 'Todos'], ['1v1', '1v1'], ['2v2', 'Duplas']]],
+    ['vs', 'Contra', [['all', 'Todos'], ['people', 'Pessoas'], ['bots', 'Bots']]],
+    ['result', 'Resultado', [['all', 'Todos'], ['win', 'Vitórias'], ['loss', 'Derrotas']]]
+  ];
+  function applyFilters(games) {
+    const since = Date.now() - filters.period * 86400000;
+    return games.filter(g => {
+      const m = mine(g);
+      if (g.endedAt < since) return false;
+      if (filters.mode !== 'all' && g.mode !== filters.mode) return false;
+      const bots = m.rivals.some(r => r.bot);
+      if (filters.vs === 'people' && bots) return false;
+      if (filters.vs === 'bots' && !bots) return false;
+      if (filters.result !== 'all' && m.result !== filters.result) return false;
+      return true;
+    });
+  }
+
   function render() {
     const p = data.profile;
-    const games = data.games || [];
     const life = p.stats;
     const lifeL = life.played - life.won;
-    const s = summary(games);
+    const lifePct = life.played ? Math.round((life.won / life.played) * 100) : null;
     sub.textContent = `${p.username} · conta criada em ${new Date(p.createdAt).toLocaleDateString('pt-BR')}`;
-    const tile = (label, value, cls = '') => `<div class="st-tile ${cls}"><b>${value}</b><span>${label}</span></div>`;
-    const wl = (w, l) => `<span class="wl"><b class="w">${w}</b> x <b class="l">${l}</b></span>`;
+    const wl = (w, l) => `<span class="wl"><b class="w">${w}</b> <small>vitórias</small> · <b class="l">${l}</b> <small>derrotas</small></span>`;
     const friends = p.friends.length ? `<ul class="st-friends">${p.friends.map(f => {
       const vs = pct(f.vw, f.vl);
+      const played = f.vw + f.vl;
       return `<li>
         <span class="st-friend-name"><i class="fa-solid fa-user"></i> ${esc(f.name)}</span>
-        <span class="st-friend-col"><small>Contra</small>${wl(f.vw, f.vl)}${vs !== null ? `<i class="st-bar"><i style="width:${vs}%"></i></i>` : '<em>nunca jogaram</em>'}</span>
-        <span class="st-friend-col"><small>Juntos</small>${f.tw + f.tl ? wl(f.tw, f.tl) : '<em>—</em>'}</span>
+        <span class="st-friend-col"><small>Você contra</small>${played ? `<span class="wl"><b class="w">${f.vw}</b> x <b class="l">${f.vl}</b></span><i class="st-bar"><i style="width:${vs}%"></i></i>` : '<em>nunca jogaram</em>'}</span>
+        <span class="st-friend-col"><small>Na mesma dupla</small>${f.tw + f.tl ? `<span class="wl"><b class="w">${f.tw}</b> x <b class="l">${f.tl}</b></span>` : '<em>—</em>'}</span>
       </li>`;
     }).join('')}</ul>` : '<p class="tour-empty">Adicione amigos para ver quantas vezes você ganhou e perdeu contra cada um.</p>';
 
     body.innerHTML = `
-      <section class="st-sec">
-        <div class="st-tiles">
-          ${tile('Partidas', life.played)}
-          ${tile('Vitórias', life.won, 'w')}
-          ${tile('Derrotas', lifeL, 'l')}
-          ${tile('Aproveitamento', life.played ? `${Math.round((life.won / life.played) * 100)}%` : '—')}
+      <section class="st-sec st-hero">
+        <div class="st-hero-main">
+          <b class="st-hero-pct">${lifePct === null ? '—' : `${lifePct}%`}</b>
+          <span>${life.played ? `Você venceu <b>${life.won}</b> de <b>${life.played}</b> partidas` : 'Ainda sem partidas contra pessoas'}</span>
         </div>
-        <p class="tour-note">Contam as partidas contra adversários de verdade (sem bot no time de lá).</p>
+        <div class="st-hero-wl">${wl(life.won, lifeL)}</div>
+        <p class="tour-note">Contam só as partidas contra pessoas (sem bot do outro lado), desde ${p.statsResetAt ? 'que as estatísticas foram zeradas' : 'que a conta foi criada'}.</p>
       </section>
 
       <section class="st-sec">
@@ -126,22 +146,44 @@
       </section>
 
       <section class="st-sec">
-        <h3 class="st-title"><i class="fa-solid fa-calendar-days"></i> Últimos ${data.keepDays || 30} dias <small>(inclui partidas com bots)</small></h3>
-        ${games.length ? `
-        <div class="st-tiles small">
-          ${tile('Vitórias x derrotas', wl(s.w, s.l))}
-          ${tile('Sequência atual', s.streak ? `${s.streak} vitória${s.streak > 1 ? 's' : ''}` : '—')}
-          ${tile('Melhor sequência', s.best || '—')}
-          ${tile('Tempo médio', s.avg ? fmtDur(s.avg) : '—')}
-          ${tile('1v1', wl(s.byMode['1v1'].w, s.byMode['1v1'].l))}
-          ${tile('Duplas', wl(s.byMode['2v2'].w, s.byMode['2v2'].l))}
-          ${tile('Mãos ganhas x perdidas', wl(s.t.handsWon, s.t.handsLost))}
-          ${tile('Trucos pedidos', s.t.trucoCalls)}
-          ${tile('Abandonos', s.quits)}
+        <h3 class="st-title"><i class="fa-solid fa-list"></i> Suas partidas</h3>
+        <div class="st-filters">${FILTERS.map(([k, label, opts]) => `
+          <div class="st-filter"><span>${label}</span>${opts.map(([v, t]) => `<button type="button" class="st-chip ${String(filters[k]) === String(v) ? 'on' : ''}" data-f="${k}" data-v="${v}">${t}</button>`).join('')}</div>`).join('')}
         </div>
-        <ul class="st-games">${games.map(gameHtml).join('')}</ul>` : '<p class="tour-empty">Nenhuma partida nos últimos dias. Bora jogar!</p>'}
+        <div id="st-filtered"></div>
       </section>`;
+    renderFiltered();
   }
+
+  function renderFiltered() {
+    const box = body.querySelector('#st-filtered');
+    if (!box) return;
+    const games = applyFilters(data.games || []);
+    const s = summary(games);
+    const total = s.w + s.l;
+    const line = (icon, label, value) => `<li><i class="fa-solid ${icon}"></i><span>${label}</span><b>${value}</b></li>`;
+    box.innerHTML = games.length ? `
+      <ul class="st-facts">
+        ${line('fa-trophy', 'Vitórias e derrotas', `${s.w} x ${s.l}${total ? ` (${Math.round((s.w / total) * 100)}%)` : ''}`)}
+        ${line('fa-fire', 'Vitórias seguidas agora', s.streak || '0')}
+        ${line('fa-medal', 'Maior sequência de vitórias', s.best || '0')}
+        ${line('fa-hand', 'Mãos ganhas e perdidas', `${s.t.handsWon} x ${s.t.handsLost}`)}
+        ${line('fa-bullhorn', 'Trucos que você pediu', s.t.trucoCalls)}
+        ${line('fa-clock', 'Duração média', s.avg ? fmtDur(s.avg) : '—')}
+        ${line('fa-door-open', 'Partidas que você abandonou', s.quits)}
+      </ul>
+      <ul class="st-games">${games.map(gameHtml).join('')}</ul>`
+      : '<p class="tour-empty">Nenhuma partida com esses filtros.</p>';
+  }
+
+  body.addEventListener('click', e => {
+    const c = e.target.closest('[data-f]');
+    if (!c) return;
+    const k = c.dataset.f;
+    filters[k] = k === 'period' ? Number(c.dataset.v) : c.dataset.v;
+    body.querySelectorAll(`[data-f="${k}"]`).forEach(x => x.classList.toggle('on', x === c));
+    renderFiltered();
+  });
 
   function gameHtml(g) {
     const m = mine(g);

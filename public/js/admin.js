@@ -65,6 +65,7 @@
         return;
       }
       isClientAdminAuthenticated = true;
+      window.dispatchEvent(new Event('truco:admin'));
       close();
       openAdminPanel();
     });
@@ -157,6 +158,30 @@
     });
   });
   socket.on('game_state', () => setTimeout(syncTimer, 0));
+
+  // Na sala de espera: botão direto para o admin ligar/desligar o tempo de jogada
+  const waitBtn = $('waiting-timer-btn');
+  function syncWaitBtn() {
+    if (!waitBtn) return;
+    const s = typeof lastGameState !== 'undefined' ? lastGameState : null;
+    const show = !!(isClientAdminAuthenticated && s && s.state === 'lobby' && !s.spectating);
+    waitBtn.classList.toggle('hide', !show);
+    if (!show) return;
+    const off = !!s.turnTimerOff;
+    waitBtn.querySelector('span').textContent = off ? 'Tempo de jogada: desligado' : 'Tempo de jogada: ligado';
+    waitBtn.classList.toggle('btn-success', off);
+    waitBtn.classList.toggle('btn-secondary', !off);
+  }
+  if (waitBtn) {
+    waitBtn.addEventListener('click', () => {
+      const s = typeof lastGameState !== 'undefined' ? lastGameState : null;
+      socket.emit('admin:turn_timer', { off: !(s && s.turnTimerOff) }, r => {
+        if (r && r.error && window.trucoSocial) window.trucoSocial.toast(escapeText(r.error));
+      });
+    });
+    socket.on('game_state', () => setTimeout(syncWaitBtn, 0));
+  }
+  window.addEventListener('truco:admin', syncWaitBtn);
 
   window.trucoAdmin = { askPassword, loadGames, syncTimer };
 })();

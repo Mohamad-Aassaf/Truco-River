@@ -43,6 +43,8 @@ const activeGames = {};
 
 // Contas e amigos
 const accounts = createAccounts();
+// Pedido pontual: zerar as estatísticas da conta "Mohamad" (roda uma vez só)
+accounts.ready.then(() => { if (accounts.resetStats('Mohamad', 'zerar-2026-11')) console.log('Estatísticas de Mohamad zeradas.'); });
 
 // Novidades (mesmo armazenamento das contas)
 const news = createNews(accounts.store);
@@ -1188,7 +1190,7 @@ io.on('connection', (socket) => {
     await matchHistory.ready;
     const prof = accounts.profile(acc);
     if (!prof) return cb({ error: 'Conta não encontrada.' });
-    const games = matchHistory.listForAccount(acc, 200);
+    const games = matchHistory.listForAccount(acc, 200).filter(g => g.endedAt > (prof.statsResetAt || 0));
     cb({ ok: true, profile: prof, games, keepDays: matchHistory.list({}).keepDays });
   });
   socket.on('me:game', async (data, cb) => {
@@ -1772,6 +1774,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Fim da mão: mostrar as cartas que não foram jogadas
+  socket.on('show_cards', () => {
+    const game = activeGames[currentRoomId];
+    if (!game) return;
+    const idx = game.players.findIndex(p => p.socketId === socket.id);
+    if (idx === -1) return;
+    if (game.showCards(idx)) broadcastState(currentRoomId);
+  });
+
   // Conversa rápida: frases prontas que todos na mesa veem (balão no lugar de quem falou)
   let lastQuick = 0;
   socket.on('quick_chat', (data) => {
@@ -1784,7 +1795,6 @@ io.on('connection', (socket) => {
     lastQuick = Date.now();
     const p = game.players[idx];
     io.to(currentRoomId).to(specRoom(currentRoomId)).emit('quick_chat', { playerIdx: idx, name: p.name, team: p.team, text });
-    io.to(currentRoomId).to(specRoom(currentRoomId)).emit('receive_chat', { sender: p.name, senderId: socket.id, msg: text, spectator: false, channel: 'table', quick: true });
   });
 
   // Reiniciar jogo completo
