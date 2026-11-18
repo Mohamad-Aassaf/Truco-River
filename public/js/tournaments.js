@@ -102,7 +102,7 @@
       ${adminBar}
       ${adminRelease}
       ${actionCard()}
-      ${started ? bracketHtml() : playersHtml()}
+      ${d.stage === 'seletiva' ? seletivaHtml() : started ? `${d.seletiva ? seletivaHtml() : ''}${bracketHtml()}` : playersHtml()}
       ${rulesLine()}`;
     startTick();
   }
@@ -141,6 +141,12 @@
         <p><i class="fa-solid fa-hourglass-half"></i> Esta fase começa quando a organização liberar. Você recebe um aviso.</p></div>`;
     }
     if (!m) {
+      const fila = d.stage === 'seletiva' && d.seletiva && d.seletiva.losers.find(l => l.account === me.account);
+      if (fila) {
+        return `<div class="tour-action"><p>Você perdeu na seletiva, mas ainda pode entrar pela <b>repescagem</b>.</p>
+          <p>Agora você está em <b>${fila.rank}º</b> na fila dos melhores perdedores (${d.seletiva.needed} vagas) · ${fila.gamesWon} ${fila.gamesWon === 1 ? 'partida ganha' : 'partidas ganhas'} · ${fila.points} pontos.
+          ${fila.inside ? '<b class="tm-in">Dentro, por enquanto</b>' : '<b class="tm-out">Fora, por enquanto</b>'}</p></div>`;
+      }
       const msg = me.status === 'champion' ? '<i class="fa-solid fa-trophy"></i> Você é o campeão!'
         : ['eliminated', 'absent', 'disqualified'].includes(me.status) ? 'Você foi eliminado. Acompanhe a chave!'
           : 'Você passou! Espere o seu próximo adversário.';
@@ -192,7 +198,27 @@
   }
 
   // Chave: colunas por fase; cada confronto mostra a série melhor de 3
-  const phaseLabel = m => (data && data.bracket && data.bracket.prelim && m.round === 0 && !m.third ? 'Fase preliminar' : ((data && data.roundNames[m.key]) || m.key));
+  const phaseLabel = m => (m.sel ? 'Seletiva' : data && data.bracket && data.bracket.prelim && m.round === 0 && !m.third ? 'Fase preliminar' : ((data && data.roundNames[m.key]) || m.key));
+
+  // Seletiva: confrontos e a fila dos melhores perdedores (repescagem)
+  function seletivaHtml() {
+    const d = data;
+    const sel = d.seletiva;
+    if (!sel) return '';
+    const done = d.stage !== 'seletiva';
+    const ms = Object.values(d.matches).filter(m => m.sel).sort((x, y) => x.slot - y.slot);
+    const box = matchBoxFn();
+    const rows = sel.losers.map(l => `<tr class="${l.inside ? 'in' : 'out'}">
+        <td>${l.rank}º</td><td>${esc(l.name)}</td><td>${l.gamesWon}</td><td>${l.points}</td>
+        <td>${l.inside ? `<b class="tm-in">${done ? 'Repescado' : 'Dentro'}</b>` : `<span class="tm-out">${!l.eligible ? 'Fora (W.O.)' : done ? 'Eliminado' : 'Fora'}</span>`}</td></tr>`).join('');
+    return `<section class="tb-prelim tb-sel ${done ? 'done' : ''}">
+      <h3 class="tb-title"><i class="fa-solid fa-filter"></i> Seletiva ${done ? '(encerrada)' : ''}</h3>
+      <p class="tour-note">Todos jogam um confronto melhor de 3. Os ${sel.winners.length + (done ? 0 : sel.pending)} vencedores${sel.bye ? ' (com quem passou direto)' : ''} entram na chave de ${sel.mainSize}; as outras <b>${sel.needed}</b> vagas vão para os melhores perdedores: primeiro quem ganhou pelo menos 1 partida da série, depois quem fez mais pontos somando todas as partidas.</p>
+      ${done ? '' : `<div class="tb-prelim-grid">${ms.map(m => `<div class="tb-prelim-slot">${box(m)}</div>`).join('')}</div>`}
+      ${sel.losers.length ? `<h4 class="tb-sub">Repescagem · ${sel.needed} vaga${sel.needed === 1 ? '' : 's'}${done ? '' : ` · faltam ${sel.pending} confronto${sel.pending === 1 ? '' : 's'}`}</h4>
+        <div class="st-table-wrap"><table class="sel-table"><thead><tr><th>#</th><th>Perdedor</th><th>Partidas ganhas</th><th>Pontos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+    </section>`;
+  }
 
   // De onde vem quem ocupa um lado do confronto (o confronto anterior na chave)
   function sourceOf(m, side) {
@@ -203,8 +229,14 @@
 
   function bracketHtml() {
     const d = data;
+    const box = matchBoxFn();
+    return bracketBody(d, box);
+  }
+
+  function matchBoxFn() {
+    const d = data;
     const meAcc = d.me && d.me.account;
-    const box = m => {
+    return m => {
       const need = Math.ceil((m.bestOf || 3) / 2);
       const side = s => {
         const acc = m[s];
@@ -235,6 +267,9 @@
         <div class="tm-foot">${tag}${live ? `<button type="button" class="link-btn tm-watch" data-tour-watch="${esc(live.roomId)}"><i class="fa-solid fa-eye"></i> Assistir</button>` : ''}${isAdmin() && m.a && m.b && ['running', 'paused'].includes(d.status) ? `<button type="button" class="tm-admin" data-tm-admin="${esc(m.id)}" title="Ferramentas do confronto" aria-label="Ferramentas do confronto"><i class="fa-solid fa-gear"></i></button>` : ''}</div>
       </div>`;
     };
+  }
+
+  function bracketBody(d, box) {
     // Fase preliminar (o número não fechou a chave): aparece à parte, só os confrontos de verdade
     const prelim = d.bracket.prelim;
     const prelimHtml = prelim ? `
@@ -625,6 +660,13 @@
           <label class="tadm-num"><input type="number" name="maxPlayers" min="2" max="64" value="${size}" aria-label="Número de vagas"></label></div>
         <small class="tadm-prelim" id="tadm-prelim"></small>
       </div>
+      <div class="tadm-field"><span>Se o número não fechar a chave</span>
+        <div class="tadm-seg">
+          <label><input type="radio" name="qualifyMode" value="preliminar" ${!t || t.qualifyMode !== 'seletiva' ? 'checked' : ''}><span>Fase preliminar</span></label>
+          <label><input type="radio" name="qualifyMode" value="seletiva" ${t && t.qualifyMode === 'seletiva' ? 'checked' : ''}><span>Seletiva + repescagem</span></label>
+        </div>
+        <small class="tadm-prelim" id="tadm-mode-hint"></small>
+      </div>
       <div class="tadm-field"><span>Cada partida vai até</span>
         <div class="tadm-seg">${[12, 24, 30].map(n => `<label><input type="radio" name="maxPoints" value="${n}" ${pts === n ? 'checked' : ''}><span>${n} pontos</span></label>`).join('')}</div>
       </div>
@@ -639,6 +681,15 @@
   }
 
   // Explica como a chave fica com o número de vagas (e a fase preliminar)
+  function seletivaHint(n) {
+    if (!(n >= 3)) return '';
+    let size = 2; while (size < n) size *= 2;
+    if (n === size) return `Chave de ${size}: fecha certinho, sem seletiva.`;
+    let main = 2; while (main * 2 <= n) main *= 2;
+    const winners = Math.ceil(n / 2);
+    return `Se vierem ${n}: seletiva com ${Math.floor(n / 2)} confrontos${n % 2 ? ' (1 passa direto)' : ''} → ${winners} vencedores + ${main - winners} melhores perdedores = chave de ${main}.`;
+  }
+
   function prelimHint(n) {
     if (!(n >= 2)) return '';
     let size = 2; while (size < n) size *= 2;
@@ -652,11 +703,18 @@
     const f = e.target.closest && e.target.closest('#tadm-form');
     if (!f) return;
     if (e.target.name === 'sizeQuick') f.elements.maxPlayers.value = e.target.value;
+    if (e.target.name === 'qualifyMode') { /* só atualiza a explicação */ }
     if (e.target.name === 'maxPlayers') f.querySelectorAll('[name="sizeQuick"]').forEach(r => { r.checked = r.value === e.target.value; });
+    const n = Number(f.elements.maxPlayers.value);
+    const mode = (f.querySelector('[name="qualifyMode"]:checked') || {}).value;
     const hint = f.querySelector('#tadm-prelim');
-    if (hint) hint.textContent = prelimHint(Number(f.elements.maxPlayers.value));
+    if (hint) hint.textContent = mode === 'seletiva' ? seletivaHint(n) : prelimHint(n);
+    const mh = f.querySelector('#tadm-mode-hint');
+    if (mh) mh.textContent = mode === 'seletiva'
+      ? 'Todos jogam uma rodada (melhor de 3). Vencedores entram na chave; as vagas que faltam vão para os melhores perdedores (quem ganhou ao menos 1 partida e, depois, quem fez mais pontos).'
+      : 'Alguns jogam uma fase antes e os outros já entram direto na chave.';
   });
-  document.addEventListener('change', e => { if (e.target.name === 'sizeQuick') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
+  document.addEventListener('change', e => { if (e.target.name === 'sizeQuick' || e.target.name === 'qualifyMode') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
 
   function readForm(f) {
     const g = n => f.elements[n];
@@ -665,6 +723,7 @@
       name: g('name').value,
       description: '',
       maxPlayers: Number(f.elements.maxPlayers.value),
+      qualifyMode: (f.querySelector('[name="qualifyMode"]:checked') || {}).value || 'preliminar',
       maxPoints: Number(f.querySelector('[name="maxPoints"]:checked').value),
       startAt,
       endAt: startAt + 12 * 3600000,

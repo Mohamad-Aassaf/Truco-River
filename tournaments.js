@@ -225,7 +225,10 @@ function createTournaments(accountStore, hooks = {}) {
       deadlinePolicy: DEADLINE_POLICIES.includes(data.deadlinePolicy) ? data.deadlinePolicy : 'finish_running',
       extendMinutes: clampInt(data.extendMinutes, 5, 24 * 60, 30),
       woEndsSeries: data.woEndsSeries !== false,
-      manualRounds: !!data.manualRounds // cada fase (depois da 1ª) só começa quando o admin liberar
+      manualRounds: !!data.manualRounds, // cada fase (depois da 1ª) só começa quando o admin liberar
+      // Quando o número não fecha a chave: 'preliminar' (padrão) ou 'seletiva' (todos jogam uma rodada;
+      // vencedores + melhores perdedores formam a chave)
+      qualifyMode: data.qualifyMode === 'seletiva' ? 'seletiva' : 'preliminar'
     };
     if (cfg.isPrivate && !existing && !str(data.password, 64)) errors.push('Campeonato privado precisa de senha.');
     return { cfg, errors };
@@ -334,6 +337,7 @@ function createTournaments(accountStore, hooks = {}) {
   function resetMatch(id, matchId, admin) {
     const { t, m } = findMatch(id, matchId);
     if (!running(t) || !m) return { error: 'Confronto não encontrado.' };
+    if (m.sel && t.stage !== 'seletiva') return { error: 'A seletiva já acabou e a chave foi montada. Use "Refazer chave" se precisar.' };
     if (!m.a || !m.b) return { error: 'Esse confronto ainda não tem os dois jogadores.' };
     const blocks = ref => { const nm = ref && t.matches[ref.id]; return nm && (nm.games.length || ['playing', 'between', 'done', 'void'].includes(nm.status)); };
     if (['done', 'void'].includes(m.status) && (blocks(m.next) || blocks(m.loserNext))) {
@@ -380,7 +384,7 @@ function createTournaments(accountStore, hooks = {}) {
     const t = items[id];
     if (!t || !['running', 'paused', 'finished'].includes(t.status)) return { error: 'Não dá para refazer a chave agora.' };
     H('endRooms')(t);
-    Object.assign(t, { status: 'registration', bracket: null, matches: {}, results: null, pause: null, released: {}, startedAt: null, finishedAt: null, deadlineHit: false });
+    Object.assign(t, { status: 'registration', bracket: null, matches: {}, results: null, pause: null, released: {}, startedAt: null, finishedAt: null, deadlineHit: false, stage: null, seletiva: null });
     t.participants.forEach(p => { if (!p.disqualified) { p.status = p.checkedIn ? 'checked_in' : 'registered'; } });
     if (t.startAt < now()) t.startAt = now() + 3600000;
     if (t.endAt < t.startAt) t.endAt = t.startAt + 12 * 3600000;
@@ -631,6 +635,95 @@ function createTournaments(accountStore, hooks = {}) {
       changed(t, { list: true });
       return;
     }
+    const isPow2 = n => n >= 2 && (n & (n - 1)) === 0;
+    if (t.qualifyMode === 'seletiva' && !isPow2(players.length) && players.length >= 3) return beginSeletiva(t, players);
+    buildBracket(t, players);
+  }
+
+  // ---------------------------------------------------------------- seletiva + repescagem
+  // Todos jogam uma rodada (melhor de 3). Vencedores entram direto na chave; as vagas que
+  // faltam vão para os melhores perdedores: primeiro quem ganhou pelo menos 1 partida da série,
+  // depois quem fez mais pontos somando todas as partidas.
+  const mainSizeFor = n => { let size = 2; while (size * 2 <= n) size *= 2; return size; };
+
+  function beginSeletiva(t, players) {
+    const order = shuffle(players.map(p => p.account));
+    const bye = order.length % 2 ? order.pop() : null; // número ímpar: um passa direto
+    t.matches = {};
+    t.bracket = null;
+    t.stage = 'seletiva';
+    t.seletiva = { mainSize: mainSizeFor(players.length), bye, total: players.length };
+    for (let k = 0; k < order.length / 2; k++) {
+      const id = `S${k + 1}`;
+      t.matches[id] = {
+        id, round: 0, slot: k, key: 'SEL', sel: true, a: null, b: null, aFilled: false, bFilled: false,
+        status: 'waiting', wins: { a: 0, b: 0 }, games: [], winner: null, loser: null, reason: null,
+        bestOf: Math.max(3, bestOfFor(t, 'SEL')), startedAt: null, endedAt: null, readyDeadline: null, ready: { a: false, b: false }, next: null
+      };
+    }
+    t.status = 'running';
+    t.startedAt = now();
+    players.forEach(p => { p.status = 'playing'; });
+    event(t, 'start', { players: players.length, seletiva: true });
+    Object.values(t.matches).forEach((m, k) => { fill(t, m, 'a', order[k * 2]); fill(t, m, 'b', order[k * 2 + 1]); });
+    notifyAll(t, 'started', `O campeonato começou pela seletiva! Os vencedores e os ${t.seletiva.mainSize - Math.ceil(players.length / 2)} melhores perdedores formam a chave de ${t.seletiva.mainSize}.`);
+    changed(t, { list: true });
+  }
+
+  // Pontos que cada um fez na série (soma de todas as partidas jogadas)
+  function seriesPoints(m, side) {
+    return m.games.reduce((sum, g) => sum + ((g.score && Number(g.score[side])) || 0), 0);
+  }
+
+  // Classificação da seletiva: quem já está dentro e a fila dos perdedores
+  function seletivaTable(t) {
+    if (!t.seletiva) return null;
+    const ms = Object.values(t.matches).filter(m => m.sel);
+    const winners = ms.filter(m => m.status === 'done' && m.winner).map(m => m.winner);
+    if (t.seletiva.bye) winners.push(t.seletiva.bye);
+    // Duplo W.O. (ninguém vence) libera mais uma vaga para a repescagem
+    const noWinner = ms.filter(m => ['done', 'void'].includes(m.status) && !m.winner).length;
+    const directSlots = Math.ceil(t.seletiva.total / 2) - noWinner;
+    const needed = Math.max(0, t.seletiva.mainSize - directSlots);
+    // Só concorre na repescagem quem jogou de verdade (não perdeu por W.O. sem jogar) e não foi desclassificado
+    const played = m => m.games.some(g => g.winner && g.reason !== 'wo');
+    const losers = ms.filter(m => ['done', 'void'].includes(m.status)).flatMap(m => {
+      const out = [];
+      ['a', 'b'].forEach(side => {
+        const acc = m[side];
+        if (!acc || acc === m.winner) return;
+        const p = participant(t, acc);
+        const eligible = played(m) && m.reason !== 'desclassificacao' && !(p && p.disqualified);
+        out.push({ account: acc, name: nameOf(t, acc), gamesWon: m.wins[side], points: seriesPoints(m, side), against: seriesPoints(m, side === 'a' ? 'b' : 'a'), matchId: m.id, eligible });
+      });
+      return out;
+    });
+    losers.sort((x, y) => (y.eligible - x.eligible) || ((y.gamesWon > 0) - (x.gamesWon > 0)) || (y.points - x.points) || ((y.points - y.against) - (x.points - x.against)) || x.name.localeCompare(y.name));
+    const done = ms.every(m => ['done', 'void'].includes(m.status));
+    losers.forEach((l, i) => { l.rank = i + 1; l.inside = l.eligible && i < needed; });
+    return { winners, needed, losers, done, mainSize: t.seletiva.mainSize, pending: ms.filter(m => !['done', 'void'].includes(m.status)).length };
+  }
+
+  // Seletiva acabou: monta a chave com os vencedores e os melhores perdedores
+  function finishSeletiva(t) {
+    const tab = seletivaTable(t);
+    if (!tab || !tab.done || t.stage !== 'seletiva') return;
+    const qualified = tab.winners.concat(tab.losers.filter(l => l.inside).map(l => l.account));
+    const players = qualified.map(acc => participant(t, acc)).filter(Boolean);
+    t.participants.forEach(p => { if (!qualified.includes(p.account) && p.status !== 'disqualified' && p.status !== 'absent') p.status = 'eliminated'; });
+    t.seletiva.qualified = qualified;
+    t.seletiva.repescados = tab.losers.filter(l => l.inside).map(l => l.account);
+    t.stage = 'chave';
+    // guarda os confrontos da seletiva (aparecem acima da chave) e monta a chave principal
+    const selMatches = Object.values(t.matches).filter(m => m.sel);
+    buildBracket(t, players);
+    selMatches.forEach(m => { t.matches[m.id] = m; });
+    tab.losers.filter(l => l.inside).forEach(l => H('notify')(l.account, { tid: t.id, type: 'repescagem', message: 'Você entrou na chave pela repescagem! Boa sorte.' }));
+    tab.losers.filter(l => !l.inside).forEach(l => H('notify')(l.account, { tid: t.id, type: 'match_end', message: 'A seletiva acabou e você não ficou entre os melhores perdedores. Valeu por jogar!' }));
+  }
+
+  // Monta a chave eliminatória com estes jogadores (BYEs se não fechar)
+  function buildBracket(t, players) {
     const size = SIZES.find(s => s >= players.length) || 64;
     const order = seedOrder(size);
     const seeded = shuffle(players.slice()).map(p => p.account);
@@ -668,17 +761,19 @@ function createTournaments(accountStore, hooks = {}) {
       // perdedores das semifinais vão para o 3º lugar
       rounds[totalRounds - 2].forEach((id, k) => { t.matches[id].loserNext = { id: '3P', side: k === 0 ? 'a' : 'b' }; });
     }
+    const fromSeletiva = t.stage === 'chave';
     t.status = 'running';
-    t.startedAt = now();
+    t.startedAt = t.startedAt && fromSeletiva ? t.startedAt : now();
     players.forEach(p => { p.status = 'playing'; });
-    event(t, 'start', { players: players.length, size });
+    event(t, fromSeletiva ? 'bracket' : 'start', { players: players.length, size });
     // primeira fase
     rounds[0].forEach((id, k) => {
       const m = t.matches[id];
       fill(t, m, 'a', slots[k * 2]);
       fill(t, m, 'b', slots[k * 2 + 1]);
     });
-    notifyAll(t, 'started', 'O campeonato começou! Veja a chave e o seu primeiro confronto.');
+    if (fromSeletiva) notifyAll(t, 'started', 'A chave principal está pronta! Veja o seu confronto.');
+    else notifyAll(t, 'started', 'O campeonato começou! Veja a chave e o seu primeiro confronto.');
     changed(t, { list: true });
   }
 
@@ -689,7 +784,7 @@ function createTournaments(accountStore, hooks = {}) {
     tryOpen(t, m);
   }
 
-  const phaseName = (t, m) => (t.bracket && t.bracket.prelim && m.round === 0 && !m.third ? 'Fase preliminar' : (ROUND_NAMES[m.key] || m.key));
+  const phaseName = (t, m) => (m.sel ? 'Seletiva' : t.bracket && t.bracket.prelim && m.round === 0 && !m.third ? 'Fase preliminar' : (ROUND_NAMES[m.key] || m.key));
 
   // Fase do confronto para a liberação manual (3º lugar anda junto com a final)
   const phaseOf = (t, m) => (m.third ? t.bracket.totalRounds - 1 : m.round);
@@ -828,7 +923,15 @@ function createTournaments(accountStore, hooks = {}) {
     event(t, 'match_end', { matchId: m.id, winner, reason });
     if (m.loser) {
       const lp = participant(t, m.loser);
-      if (lp && !lp.disqualified) lp.status = 'eliminated';
+      if (lp && !lp.disqualified) lp.status = m.sel ? 'waiting' : 'eliminated';
+    }
+    if (m.sel) {
+      [m.a, m.b].filter(Boolean).forEach(acc => H('notify')(acc, {
+        tid: t.id, type: 'match_end', matchId: m.id,
+        message: acc === winner ? 'Você venceu na seletiva e está na chave!' : 'Você perdeu na seletiva, mas ainda pode entrar pela repescagem (melhores perdedores).'
+      }));
+      finishSeletiva(t);
+      return;
     }
     if (winner) {
       [m.a, m.b].filter(Boolean).forEach(acc => H('notify')(acc, {
@@ -1221,6 +1324,9 @@ function createTournaments(accountStore, hooks = {}) {
       extendMinutes: t.extendMinutes,
       woEndsSeries: t.woEndsSeries,
       manualRounds: !!t.manualRounds,
+      qualifyMode: t.qualifyMode || 'preliminar',
+      stage: t.stage || null,
+      seletiva: t.seletiva ? { ...seletivaTable(t), repescados: t.seletiva.repescados || null, bye: t.seletiva.bye || null } : null,
       nextHold: nextHeldPhase(t),
       checkinOpensAt: t.startAt - CHECKIN_WINDOW_MS,
       startedAt: t.startedAt || null,
@@ -1230,7 +1336,7 @@ function createTournaments(accountStore, hooks = {}) {
       participants: t.participants.map(p => ({ account: p.account, name: p.name, checkedIn: p.checkedIn, status: p.status, bot: isBotAcc(p.account) })),
       bracket: t.bracket,
       matches: Object.fromEntries(Object.values(t.matches || {}).map(m => [m.id, {
-        id: m.id, round: m.round, slot: m.slot, key: m.key, third: !!m.third, bestOf: m.bestOf,
+        id: m.id, round: m.round, slot: m.slot, key: m.key, third: !!m.third, sel: !!m.sel, bestOf: m.bestOf,
         a: m.a, b: m.b, aName: m.a ? nameOf(t, m.a) : null, bName: m.b ? nameOf(t, m.b) : null,
         aFilled: m.aFilled, bFilled: m.bFilled, status: m.status, wins: m.wins, winner: m.winner, reason: m.reason,
         ready: m.ready, readyDeadline: m.readyDeadline, nextGameAt: m.nextGameAt || null, held: !!m.held,

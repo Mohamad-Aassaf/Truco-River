@@ -4228,3 +4228,14 @@ body.spectate-blind .player-hand { visibility: hidden; }
 .tadm-prelim { color: var(--gold-bright); font-size: 0.74rem; }
 /* Campo de vagas: aparece e aceita toque (os botões rápidos usam inputs escondidos) */
 .tadm-seg .tadm-num input { position: static; opacity: 1; pointer-events: auto; }
+
+/* Seletiva + repescagem */
+.tb-sel.done .tour-note { opacity: 0.85; }
+.tb-sub { margin: 14px 0 6px; text-align: center; color: var(--gold); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.sel-table { width: 100%; max-width: 640px; margin: 0 auto; border-collapse: collapse; font-size: 0.85rem; }
+.sel-table th { color: var(--text-dim); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: 4px 8px; }
+.sel-table td { padding: 6px 8px; border-top: 1px solid var(--hairline); color: var(--cream); }
+.sel-table tr.in td { background: rgba(46, 204, 113, 0.08); }
+.sel-table tr.out td { opacity: 0.7; }
+.tm-in { color: #7ee2a8; }
+.tm-out { color: #ff9a8b; }
