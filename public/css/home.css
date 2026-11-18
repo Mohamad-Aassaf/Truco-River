@@ -4204,3 +4204,25 @@ html, body, button, a, input, select, textarea, label, .card, .card-lift-wrapper
 /* Narrativa: divisão por mão */
 .log-hand-sep { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; color: var(--gold); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .log-hand-sep::before, .log-hand-sep::after { content: ""; flex: 1; height: 1px; background: rgba(223, 177, 91, 0.3); }
+
+/* Modo telão (quem assiste, cartas escondidas) */
+body.spectate-blind .player-hand { visibility: hidden; }
+
+/* Campeonato: ferramentas da organização */
+.tour-admin-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 900px; margin: 0 auto 12px; padding: 8px 12px; border-radius: var(--radius-md); border: 1px dashed rgba(223, 177, 91, 0.5); background: rgba(0, 0, 0, 0.25); }
+.tour-admin-bar > span { color: var(--gold); font-weight: 800; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.tour-admin-bar small { width: 100%; color: var(--text-dim); font-size: 0.72rem; }
+.tm-admin { margin-left: auto; border: none; background: transparent; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 0.85rem; }
+.tm-admin:hover { color: var(--gold-bright); }
+.tm-watch + .tm-admin { margin-left: 6px; }
+.tm-tools { position: fixed; z-index: 2300; display: flex; flex-direction: column; gap: 4px; min-width: 230px; padding: 8px; border-radius: var(--radius-md); background: rgba(24, 15, 6, 0.98); border: 1px solid var(--gold); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); }
+.tm-tools.hide { display: none; }
+.tm-tools-title { color: var(--gold-bright); font-size: 0.8rem; padding: 2px 4px 6px; }
+.tm-tools button { display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 9px; border-radius: 8px; border: 1px solid rgba(223, 177, 91, 0.25); background: rgba(255, 255, 255, 0.04); color: var(--cream); font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+.tm-tools button:hover { background: var(--gold); color: var(--wood-dark); }
+.tb-prelim { max-width: 900px; margin: 10px auto 18px; }
+.tb-prelim .tour-note { text-align: center; }
+.tb-prelim-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 8px; }
+.tadm-num { flex: 0 0 90px !important; }
+.tadm-num input { width: 100%; padding: 7px 8px; border-radius: 8px; border: 1px solid rgba(223, 177, 91, 0.3); background: var(--inset-bg); color: var(--cream); font-weight: 700; text-align: center; }
+.tadm-prelim { color: var(--gold-bright); font-size: 0.74rem; }

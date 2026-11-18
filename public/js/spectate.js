@@ -122,6 +122,7 @@
     if (!s || !s.spectating) {
       bar.classList.add('hide');
       watchingRoom = null;
+      document.body.classList.remove('spectate-blind');
       return;
     }
     wasAdmin = !!s.spectatorAdmin;
@@ -147,6 +148,28 @@
   });
 
   viewSel.addEventListener('change', () => socket.emit('spectate:view', { playerIdx: Number(viewSel.value) }));
+
+  // Modo telão: esconde as cartas de todos; tela cheia
+  const blindBtn = $('spectate-blind');
+  let blindOn = false;
+  if (blindBtn) {
+    blindBtn.addEventListener('click', () => socket.emit('spectate:blind', { on: !blindOn }));
+    socket.on('game_state', s => {
+      if (!s || !s.spectating) return;
+      blindOn = !!s.spectatorBlind;
+      document.body.classList.toggle('spectate-blind', blindOn);
+      blindBtn.classList.toggle('btn-success', blindOn);
+      blindBtn.classList.toggle('btn-secondary', !blindOn);
+      blindBtn.querySelector('span').textContent = blindOn ? 'Telão: cartas escondidas' : 'Modo telão';
+    });
+  }
+  const fullBtn = $('spectate-full');
+  if (fullBtn) {
+    fullBtn.addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+    });
+  }
 
   function leave() {
     const event = wasAdmin ? 'admin:unspectate' : 'spectate:leave';

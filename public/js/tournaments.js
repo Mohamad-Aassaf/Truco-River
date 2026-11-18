@@ -90,8 +90,16 @@
         <p><i class="fa-solid fa-lock"></i> <b>${esc(nh.name)}</b> esperando você liberar · ${nh.ready} de ${nh.total} confronto${nh.total === 1 ? '' : 's'} já definido${nh.total === 1 ? '' : 's'}</p>
         <button type="button" class="btn btn-primary" data-tour-act="release"><i class="fa-solid fa-unlock"></i> Liberar ${esc(nh.name)}</button>
       </div>` : '';
+    const adminBar = isAdmin() && ['running', 'paused', 'finished'].includes(d.status) ? `
+      <div class="tour-admin-bar">
+        <span><i class="fa-solid fa-screwdriver-wrench"></i> Organização</span>
+        ${d.status !== 'finished' ? '<button type="button" class="btn btn-sm btn-secondary" data-tour-act="announce"><i class="fa-solid fa-bullhorn"></i> Avisar jogadores</button>' : ''}
+        <button type="button" class="btn btn-sm btn-secondary" data-tour-act="reset_bracket"><i class="fa-solid fa-rotate-left"></i> Refazer chave</button>
+        <small>Toque na engrenagem de um confronto para reiniciar a partida, zerar ou dar a vitória.</small>
+      </div>` : '';
     body.innerHTML = `
       ${banners}
+      ${adminBar}
       ${adminRelease}
       ${actionCard()}
       ${started ? bracketHtml() : playersHtml()}
@@ -129,7 +137,7 @@
     const held = !m && Object.values(d.matches).find(x => x.held && (x.a === me.account || x.b === me.account));
     if (held) {
       const opp = held.a === me.account ? held.bName : held.aName;
-      return `<div class="tour-action next"><small>${esc(d.roundNames[held.key] || held.key)}</small><b class="tour-vs">Você × ${esc(opp)}</b>
+      return `<div class="tour-action next"><small>${esc(phaseLabel(held))}</small><b class="tour-vs">Você × ${esc(opp)}</b>
         <p><i class="fa-solid fa-hourglass-half"></i> Esta fase começa quando a organização liberar. Você recebe um aviso.</p></div>`;
     }
     if (!m) {
@@ -142,7 +150,7 @@
     const other = mine === 'a' ? 'b' : 'a';
     const opp = mine === 'a' ? m.bName : m.aName;
     const series = `<span class="tour-series">Série ${m.wins[mine]} x ${m.wins[other]} · melhor de ${m.bestOf}</span>`;
-    const head = `<small>${esc(d.roundNames[m.key] || m.key)}</small><b class="tour-vs">Você × ${esc(opp)}</b>${series}`;
+    const head = `<small>${esc(phaseLabel(m))}</small><b class="tour-vs">Você × ${esc(opp)}</b>${series}`;
     if (m.status === 'ready_check') {
       const iReady = m.ready[mine];
       return `<div class="tour-action next ${iReady ? 'ok' : 'urgent'}">${head}
@@ -184,6 +192,15 @@
   }
 
   // Chave: colunas por fase; cada confronto mostra a série melhor de 3
+  const phaseLabel = m => (data && data.bracket && data.bracket.prelim && m.round === 0 && !m.third ? 'Fase preliminar' : ((data && data.roundNames[m.key]) || m.key));
+
+  // De onde vem quem ocupa um lado do confronto (o confronto anterior na chave)
+  function sourceOf(m, side) {
+    if (!data || m.third || !m.round) return null;
+    const k = m.slot * 2 + (side === 'a' ? 1 : 2);
+    return data.matches[`R${m.round}M${k}`] || null;
+  }
+
   function bracketHtml() {
     const d = data;
     const meAcc = d.me && d.me.account;
@@ -193,7 +210,9 @@
         const acc = m[s];
         const win = m.winner && m.winner === acc;
         const lose = m.status === 'done' && acc && !win;
-        const label = acc ? esc(m[s + 'Name']) : m[s + 'Filled'] ? (m.reason === 'bye' ? '<i>passa direto</i>' : '<i>vaga vazia</i>') : '<i>a definir</i>';
+        const from = !acc && !m[s + 'Filled'] ? sourceOf(m, s) : null;
+        const label = acc ? esc(m[s + 'Name']) : m[s + 'Filled'] ? (m.reason === 'bye' ? '<i>passa direto</i>' : '<i>vaga vazia</i>')
+          : from && from.a && from.b ? `<i>vence ${esc(from.aName)} × ${esc(from.bName)}</i>` : '<i>a definir</i>';
         const dots = acc ? Array.from({ length: need }, (_, i) => `<span class="tm-dot ${i < m.wins[s] ? 'on' : ''}"></span>`).join('') : '';
         return `<div class="tm-side ${win ? 'win' : ''} ${lose ? 'lose' : ''} ${acc && acc === meAcc ? 'me' : ''}">
           <span class="tm-name">${win ? '<i class="fa-solid fa-crown"></i> ' : ''}${label}</span>
@@ -207,16 +226,25 @@
             : m.reason === 'wo' ? '<span class="tm-tag">Venceu por W.O.</span>'
               : m.reason === 'duplo_wo' ? '<span class="tm-tag">Ninguém apareceu</span>'
                 : m.reason === 'bye' ? '<span class="tm-tag">Passa direto</span>'
+                : m.reason === 'admin' ? '<span class="tm-tag">Decisão da organização</span>'
                   : m.held ? '<span class="tm-tag wait"><i class="fa-solid fa-lock"></i> Esperando liberar</span>'
                   : m.status === 'done' ? '<span class="tm-tag">Finalizado</span>'
                     : '<span class="tm-tag">Melhor de 3</span>';
       return `<div class="tm ${m.status}">
         ${side('a')}${side('b')}
-        <div class="tm-foot">${tag}${live ? `<button type="button" class="link-btn tm-watch" data-tour-watch="${esc(live.roomId)}"><i class="fa-solid fa-eye"></i> Assistir</button>` : ''}</div>
+        <div class="tm-foot">${tag}${live ? `<button type="button" class="link-btn tm-watch" data-tour-watch="${esc(live.roomId)}"><i class="fa-solid fa-eye"></i> Assistir</button>` : ''}${isAdmin() && m.a && m.b && ['running', 'paused'].includes(d.status) ? `<button type="button" class="tm-admin" data-tm-admin="${esc(m.id)}" title="Ferramentas do confronto" aria-label="Ferramentas do confronto"><i class="fa-solid fa-gear"></i></button>` : ''}</div>
       </div>`;
     };
+    // Fase preliminar (o número não fechou a chave): aparece à parte, só os confrontos de verdade
+    const prelim = d.bracket.prelim;
+    const prelimHtml = prelim ? `
+      <section class="tb-prelim">
+        <h3 class="tb-title"><i class="fa-solid fa-filter"></i> Fase preliminar</h3>
+        <p class="tour-note">Quem ganhar entra na chave principal. Os outros ${d.bracket.rounds[0].filter(id => d.matches[id].reason === 'bye').length} jogadores já estão nela.</p>
+        <div class="tb-prelim-grid">${d.bracket.rounds[0].map(id => d.matches[id]).filter(m => m.reason !== 'bye').map(m => `<div class="tb-prelim-slot">${box(m)}</div>`).join('')}</div>
+      </section>` : '';
     // Chave espelhada: metade dos confrontos de cada lado, final e campeão no meio
-    const rounds = d.bracket.rounds;
+    const rounds = prelim ? d.bracket.rounds.slice(1) : d.bracket.rounds;
     const last = rounds.length - 1;
     const sideCol = (ids, r, side) => {
       const key = d.matches[ids[0]].key;
@@ -245,7 +273,8 @@
           <div class="bx-bottom">${third}</div>
         </div>
       </div>`;
-    return `<section class="tb-section">
+    return `${prelimHtml}<section class="tb-section">
+      ${prelim ? '<h3 class="tb-title"><i class="fa-solid fa-sitemap"></i> Chave principal</h3>' : ''}
       <p class="tb-swipe"><i class="fa-solid fa-arrows-left-right"></i> Deslize para o lado para ver a chave inteira</p>
       <div class="bracket-wrap tb-bracket"><div class="bracket bx">${left.join('')}${center}${right.join('')}</div></div>
       <p class="tour-note tb-hint"><span class="tm-dot on"></span> = partida vencida. Quem ganhar 2 partidas avança.</p>
@@ -267,6 +296,8 @@
 
   // ---------------------------------------------------------------- ações
   body.addEventListener('click', e => {
+    const g = e.target.closest('[data-tm-admin]');
+    if (g) { openMatchTools(g.dataset.tmAdmin, g); return; }
     const w = e.target.closest('[data-tour-watch]');
     if (w) {
       socket.emit('spectate:join', { roomId: w.dataset.tourWatch, name: (typeof usernameInput !== 'undefined' && usernameInput.value) || '' }, res => {
@@ -279,6 +310,17 @@
     if (!act) return;
     const a = act.dataset.tourAct;
     if (a === 'login') { window.trucoSocial.openAuth('login'); return; }
+    if (a === 'announce') {
+      const msg = prompt('Aviso para todos os jogadores do campeonato:');
+      if (!msg) return;
+      socket.emit('tour:admin_action', { id: current, action: 'announce', message: msg }, res => toast(esc(res && res.error ? res.error : (res && res.message) || 'Feito.')));
+      return;
+    }
+    if (a === 'reset_bracket') {
+      if (!confirm('Refazer a chave? Todas as partidas em andamento são encerradas e os resultados somem. Depois é só clicar em "Começar agora" para sortear de novo.')) return;
+      socket.emit('tour:admin_action', { id: current, action: 'reset_bracket' }, res => { toast(esc(res && res.error ? res.error : (res && res.message) || 'Feito.')); load(); });
+      return;
+    }
     if (a === 'release') {
       if (!confirm('Liberar a próxima fase agora? Os confrontos já definidos começam na hora.')) return;
       act.disabled = true;
@@ -308,6 +350,57 @@
     });
   });
 
+  // ---- Ferramentas de um confronto (só admin)
+  let toolsBox = null;
+  function openMatchTools(matchId, anchor) {
+    const m = data && data.matches[matchId];
+    if (!m) return;
+    if (!toolsBox) {
+      toolsBox = document.createElement('div');
+      toolsBox.className = 'tm-tools hide';
+      document.body.appendChild(toolsBox);
+      document.addEventListener('click', e => { if (toolsBox && !toolsBox.contains(e.target) && !e.target.closest('[data-tm-admin]')) toolsBox.classList.add('hide'); });
+      toolsBox.addEventListener('click', e => {
+        const b = e.target.closest('[data-tool]');
+        if (!b) return;
+        const id = toolsBox.dataset.match;
+        const tool = b.dataset.tool;
+        toolsBox.classList.add('hide');
+        if (tool === 'watch') return watchRoom(b.dataset.room, true);
+        const ask = {
+          reset_game: 'Reiniciar a partida atual deste confronto? A mesa fecha e os dois confirmam de novo.',
+          reset_match: 'Zerar o confronto? A série volta para 0 x 0.',
+          set_winner: `Dar a vitória do confronto para ${b.dataset.name}?`
+        }[tool];
+        if (ask && !confirm(ask)) return;
+        socket.emit('tour:admin_action', { id: current, action: tool, matchId: id, account: b.dataset.acc }, res => { toast(esc(res && res.error ? res.error : (res && res.message) || 'Feito.')); load(); });
+      });
+    }
+    const live = m.games.find(x => x.roomId);
+    const going = ['playing', 'between', 'ready_check'].includes(m.status);
+    toolsBox.dataset.match = matchId;
+    toolsBox.innerHTML = `<b class="tm-tools-title">${esc(m.aName || '?')} × ${esc(m.bName || '?')}</b>
+      ${live ? `<button type="button" data-tool="watch" data-room="${esc(live.roomId)}"><i class="fa-solid fa-tv"></i> Assistir no telão (sem cartas)</button>` : ''}
+      ${going ? '<button type="button" data-tool="reset_game"><i class="fa-solid fa-rotate-right"></i> Reiniciar a partida atual</button>' : ''}
+      ${m.games.length || ['done', 'void'].includes(m.status) ? '<button type="button" data-tool="reset_match"><i class="fa-solid fa-backward"></i> Zerar confronto (0 x 0)</button>' : ''}
+      <button type="button" data-tool="set_winner" data-acc="${esc(m.a)}" data-name="${esc(m.aName)}"><i class="fa-solid fa-crown"></i> Vitória para ${esc(m.aName)}</button>
+      <button type="button" data-tool="set_winner" data-acc="${esc(m.b)}" data-name="${esc(m.bName)}"><i class="fa-solid fa-crown"></i> Vitória para ${esc(m.bName)}</button>`;
+    toolsBox.classList.remove('hide');
+    const r = anchor.getBoundingClientRect();
+    const w = toolsBox.offsetWidth, h = toolsBox.offsetHeight;
+    toolsBox.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
+    toolsBox.style.top = `${r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6}px`;
+  }
+
+  // Assistir (com a opção de esconder as cartas para o telão)
+  function watchRoom(roomId, blind) {
+    socket.emit('spectate:join', { roomId, name: (typeof usernameInput !== 'undefined' && usernameInput.value) || '' }, res => {
+      if (res && res.error) { toast(esc(res.error)); return; }
+      modal.classList.add('hide');
+      if (blind) setTimeout(() => socket.emit('spectate:blind', { on: true }), 150);
+    });
+  }
+
   // Atualizações em tempo real
   let reloadTimer = null;
   socket.on('tour:changed', ({ id }) => {
@@ -325,7 +418,7 @@
     if (n.type === 'match_ready') {
       actions.unshift({ label: 'Estou pronto', primary: true, onClick: () => socket.emit('tour:ready', { id: n.tid, matchId: n.matchId, clientId: CLIENT_ID }, res => { if (res && res.error) toast(esc(res.error)); }) });
     }
-    toast(`<i class="fa-solid fa-trophy"></i> ${esc(n.message)}`, { key: `tour-${n.tid}-${n.type}`, timeout: n.type === 'match_ready' ? 0 : 9000, kind: n.type === 'match_ready' ? 'invite' : '', actions });
+    toast(`<i class="fa-solid fa-trophy"></i> ${esc(n.message)}`, { key: `tour-${n.tid}-${n.type}`, timeout: n.type === 'match_ready' || n.type === 'announce' ? 0 : 9000, kind: n.type === 'match_ready' ? 'invite' : '', actions: n.type === 'announce' ? [{ label: 'Ok', primary: true }] : actions });
     if (n.type === 'match_ready' && current === n.tid) load();
   });
 
@@ -527,8 +620,10 @@
     return `<form class="tadm-form simple" id="tadm-form" autocomplete="off">
       <h4>${t ? 'Editar campeonato' : 'Novo campeonato'}</h4>
       <label>Nome do campeonato<input name="name" maxlength="60" value="${esc(t ? t.name : '')}" placeholder="Ex.: Copa do Galpão" required></label>
-      <div class="tadm-field"><span>Quantos jogadores?</span>
-        <div class="tadm-seg">${[4, 8, 16, 32].map(n => `<label><input type="radio" name="maxPlayers" value="${n}" ${size === n ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div>
+      <div class="tadm-field"><span>Quantas vagas? (de 2 a 64)</span>
+        <div class="tadm-seg">${[8, 16, 32].map(n => `<label><input type="radio" name="sizeQuick" value="${n}" ${size === n ? 'checked' : ''}><span>${n}</span></label>`).join('')}
+          <label class="tadm-num"><input type="number" name="maxPlayers" min="2" max="64" value="${size}" aria-label="Número de vagas"></label></div>
+        <small class="tadm-prelim" id="tadm-prelim"></small>
       </div>
       <div class="tadm-field"><span>Cada partida vai até</span>
         <div class="tadm-seg">${[12, 24, 30].map(n => `<label><input type="radio" name="maxPoints" value="${n}" ${pts === n ? 'checked' : ''}><span>${n} pontos</span></label>`).join('')}</div>
@@ -543,13 +638,33 @@
     </form>`;
   }
 
+  // Explica como a chave fica com o número de vagas (e a fase preliminar)
+  function prelimHint(n) {
+    if (!(n >= 2)) return '';
+    let size = 2; while (size < n) size *= 2;
+    if (n === size) return `Chave de ${size}, sem preliminar.`;
+    const main = size / 2;
+    if (n <= main) return '';
+    const playIn = (n - main) * 2;
+    return `Se vierem ${n}: chave principal de ${main} com fase preliminar — ${playIn} jogam a preliminar e ${n - playIn} já entram direto na chave.`;
+  }
+  document.addEventListener('input', e => {
+    const f = e.target.closest && e.target.closest('#tadm-form');
+    if (!f) return;
+    if (e.target.name === 'sizeQuick') f.elements.maxPlayers.value = e.target.value;
+    if (e.target.name === 'maxPlayers') f.querySelectorAll('[name="sizeQuick"]').forEach(r => { r.checked = r.value === e.target.value; });
+    const hint = f.querySelector('#tadm-prelim');
+    if (hint) hint.textContent = prelimHint(Number(f.elements.maxPlayers.value));
+  });
+  document.addEventListener('change', e => { if (e.target.name === 'sizeQuick') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
+
   function readForm(f) {
     const g = n => f.elements[n];
     const startAt = new Date(g('startAt').value).getTime();
     return {
       name: g('name').value,
       description: '',
-      maxPlayers: Number(f.querySelector('[name="maxPlayers"]:checked').value),
+      maxPlayers: Number(f.elements.maxPlayers.value),
       maxPoints: Number(f.querySelector('[name="maxPoints"]:checked').value),
       startAt,
       endAt: startAt + 12 * 3600000,

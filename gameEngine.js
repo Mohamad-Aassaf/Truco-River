@@ -1562,7 +1562,8 @@ class TrucoGame { // TRUCO GURIZINHO
   }
 
   // Gera dados do jogo sanitizados para enviar para um cliente específico
-  getGameStateForPlayer(playerIdx, spectator = false) {
+  // blind = modo telão: ninguém tem as cartas da mão mostradas (nem quem está sendo visto)
+  getGameStateForPlayer(playerIdx, spectator = false, blind = false) {
     // Sala de espera ou partida acabada (mesmo no meio de uma mão): estado simples
     if (!this.hand || this.state === 'game_end' || this.state === 'lobby') {
       return {
@@ -1590,7 +1591,7 @@ class TrucoGame { // TRUCO GURIZINHO
     Object.keys(this.hand.hands).forEach(key => {
       const idx = parseInt(key);
       const isPartner = this.mode === '2v2' && this.players[idx] && this.players[playerIdx] && this.players[idx].team === this.players[playerIdx].team;
-      if (idx === playerIdx || isPartner || spectator) {
+      if (!blind && (idx === playerIdx || isPartner || spectator)) {
         maskedHands[idx] = this.hand.hands[idx];
       } else {
         // Mapear apenas para representar que o jogador tem cartas, mas sem revelar o valor/naipe
@@ -1608,7 +1609,7 @@ class TrucoGame { // TRUCO GURIZINHO
       teamNames: this.teamNames,
       // Pontos de envido e flor só vão para o próprio jogador e o parceiro
       players: this.players.map((p, idx) => {
-        const own = spectator || idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team);
+        const own = !blind && (spectator || idx === playerIdx || (this.players[playerIdx] && p.team === this.players[playerIdx].team));
         return {
           id: p.id,
           name: p.name,

@@ -1626,6 +1626,8 @@ let pendingHandRender = null;
 let optimisticPlay = null; // { key, at }
 
 function renderMyHand(cards, isMyTurn) {
+  // Modo telão: as cartas vêm escondidas; a mão de baixo fica vazia
+  if (cards && cards.some(c => c && c.hidden)) cards = [];
   pendingHandRender = [cards, isMyTurn];
   // GUARDA: não re-renderiza enquanto a animação de carta estiver rodando
   // (o último estado é aplicado quando a animação termina)

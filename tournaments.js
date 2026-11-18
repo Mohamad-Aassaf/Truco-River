@@ -188,7 +188,7 @@ function createTournaments(accountStore, hooks = {}) {
     const name = str(data.name, 60);
     if (name.length < 3) errors.push('Dê um nome ao campeonato (pelo menos 3 letras).');
     const maxPlayers = Number(data.maxPlayers);
-    if (!SIZES.includes(maxPlayers)) errors.push('Escolha 4, 8, 16, 32 ou 64 participantes.');
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 64) errors.push('Escolha de 2 a 64 vagas.');
     const startAt = Number(data.startAt);
     const endAt = Number(data.endAt);
     if (!Number.isFinite(startAt)) errors.push('Informe a data e o horário de início.');
@@ -309,6 +309,96 @@ function createTournaments(accountStore, hooks = {}) {
     notifyAll(t, 'resumed', 'O campeonato voltou! Os prazos continuam de onde pararam.');
     changed(t, { list: true });
     return { ok: true };
+  }
+
+  // ---------------------------------------------------------------- ferramentas do admin
+  const findMatch = (id, matchId) => { const t = items[id]; return { t, m: t && t.matches && t.matches[matchId] }; };
+  const running = t => t && ['running', 'paused'].includes(t.status);
+
+  // Reiniciar a partida em andamento (bug na mesa): fecha a mesa e abre a confirmação de novo
+  function resetGame(id, matchId, admin) {
+    const { t, m } = findMatch(id, matchId);
+    if (!running(t) || !m) return { error: 'Confronto não encontrado.' };
+    if (['done', 'void'].includes(m.status)) return { error: 'Esse confronto já terminou. Use "Zerar confronto".' };
+    H('endMatchRoom')(t, m);
+    m.games = m.games.filter(g => g.winner);
+    m.status = 'waiting';
+    m.nextGameAt = null;
+    audit(t, admin, 'reiniciar partida', `${m.id} (partida ${m.games.length + 1})`);
+    tryOpen(t, m);
+    changed(t);
+    return { ok: true, message: 'Partida reiniciada: os dois confirmam "Estou pronto" de novo.' };
+  }
+
+  // Zerar o confronto (série volta a 0 x 0). Só se a próxima fase ainda não começou com o vencedor.
+  function resetMatch(id, matchId, admin) {
+    const { t, m } = findMatch(id, matchId);
+    if (!running(t) || !m) return { error: 'Confronto não encontrado.' };
+    if (!m.a || !m.b) return { error: 'Esse confronto ainda não tem os dois jogadores.' };
+    const blocks = ref => { const nm = ref && t.matches[ref.id]; return nm && (nm.games.length || ['playing', 'between', 'done', 'void'].includes(nm.status)); };
+    if (['done', 'void'].includes(m.status) && (blocks(m.next) || blocks(m.loserNext))) {
+      return { error: 'O confronto seguinte já começou. Zere ele primeiro.' };
+    }
+    H('endMatchRoom')(t, m);
+    // desfaz o que já tinha ido para a frente
+    [m.next, m.loserNext].forEach(ref => {
+      const nm = ref && t.matches[ref.id];
+      if (!nm) return;
+      nm[ref.side] = null;
+      nm[ref.side + 'Filled'] = false;
+      if (nm.status === 'ready_check') { nm.status = 'waiting'; nm.readyDeadline = null; nm.ready = { a: false, b: false }; }
+      nm.held = false;
+    });
+    [m.a, m.b].forEach(acc => { const p = participant(t, acc); if (p && !p.disqualified) p.status = 'playing'; });
+    Object.assign(m, { status: 'waiting', wins: { a: 0, b: 0 }, games: [], winner: null, loser: null, reason: null, endedAt: null, readyDeadline: null, nextGameAt: null, ready: { a: false, b: false }, held: false });
+    t.results = null;
+    audit(t, admin, 'zerar confronto', m.id);
+    tryOpen(t, m);
+    changed(t);
+    return { ok: true, message: 'Confronto zerado: começa de novo do 0 x 0.' };
+  }
+
+  // Dar a vitória do confronto para um dos dois (decisão da organização)
+  function setWinner(id, matchId, account, admin) {
+    const { t, m } = findMatch(id, matchId);
+    if (!running(t) || !m) return { error: 'Confronto não encontrado.' };
+    if (account !== m.a && account !== m.b) return { error: 'Esse jogador não está no confronto.' };
+    if (['done', 'void'].includes(m.status)) {
+      if (m.winner === account) return { ok: true, message: 'Ele já é o vencedor.' };
+      const r = resetMatch(id, matchId, admin);
+      if (r.error) return r;
+    }
+    H('endMatchRoom')(t, m);
+    audit(t, admin, 'definir vencedor', `${m.id}: ${nameOf(t, account)}`);
+    decideMatch(t, m, account, 'admin');
+    changed(t);
+    return { ok: true, message: `${nameOf(t, account)} avançou por decisão da organização.` };
+  }
+
+  // Refazer a chave: volta para as inscrições com os mesmos jogadores (novo sorteio ao começar)
+  function resetBracket(id, admin) {
+    const t = items[id];
+    if (!t || !['running', 'paused', 'finished'].includes(t.status)) return { error: 'Não dá para refazer a chave agora.' };
+    H('endRooms')(t);
+    Object.assign(t, { status: 'registration', bracket: null, matches: {}, results: null, pause: null, released: {}, startedAt: null, finishedAt: null, deadlineHit: false });
+    t.participants.forEach(p => { if (!p.disqualified) { p.status = p.checkedIn ? 'checked_in' : 'registered'; } });
+    if (t.startAt < now()) t.startAt = now() + 3600000;
+    if (t.endAt < t.startAt) t.endAt = t.startAt + 12 * 3600000;
+    audit(t, admin, 'refazer chave', 'voltou para as inscrições');
+    notifyAll(t, 'reset', 'A organização vai refazer a chave. Aguarde o novo sorteio.');
+    changed(t, { list: true });
+    return { ok: true, message: 'Chave desfeita. Clique em "Começar agora" para sortear de novo.' };
+  }
+
+  // Aviso da organização para todos os jogadores do campeonato
+  function announce(id, message, admin) {
+    const t = items[id];
+    const text = str(message, 200);
+    if (!t) return { error: 'Campeonato não encontrado.' };
+    if (!text) return { error: 'Escreva o aviso.' };
+    audit(t, admin, 'aviso', text);
+    notifyAll(t, 'announce', `📣 ${text}`);
+    return { ok: true, message: 'Aviso enviado para os jogadores.' };
   }
 
   // Apaga de vez (qualquer situação). Fecha as mesas que estiverem abertas.
@@ -563,7 +653,8 @@ function createTournaments(accountStore, hooks = {}) {
         rounds[r].push(id);
       }
     }
-    t.bracket = { size, rounds, totalRounds };
+    // Fase preliminar: o número não fecha a chave (ex.: 22 numa chave de 16 -> 12 jogam, 10 passam direto)
+    t.bracket = { size, rounds, totalRounds, prelim: players.length > size / 2 && players.length < size && totalRounds >= 2 };
     Object.values(t.matches).forEach(m => {
       m.key = roundKeyOf(t, m.round);
       m.bestOf = bestOfFor(t, m.key);
@@ -598,6 +689,8 @@ function createTournaments(accountStore, hooks = {}) {
     tryOpen(t, m);
   }
 
+  const phaseName = (t, m) => (t.bracket && t.bracket.prelim && m.round === 0 && !m.third ? 'Fase preliminar' : (ROUND_NAMES[m.key] || m.key));
+
   // Fase do confronto para a liberação manual (3º lugar anda junto com a final)
   const phaseOf = (t, m) => (m.third ? t.bracket.totalRounds - 1 : m.round);
   const phaseReleased = (t, r) => !t.manualRounds || r === 0 || !!(t.released && t.released[r]);
@@ -611,7 +704,7 @@ function createTournaments(accountStore, hooks = {}) {
       // Esperando o admin liberar a fase
       if (!m.held) {
         m.held = true;
-        [m.a, m.b].forEach(acc => H('notify')(acc, { tid: t.id, type: 'held', matchId: m.id, message: `Você está na ${ROUND_NAMES[m.key] || m.key}! Ela começa quando a organização liberar.` }));
+        [m.a, m.b].forEach(acc => H('notify')(acc, { tid: t.id, type: 'held', matchId: m.id, message: `Você está na ${phaseName(t, m)}! Ela começa quando a organização liberar.` }));
       }
       return;
     }
@@ -664,7 +757,7 @@ function createTournaments(accountStore, hooks = {}) {
   }
 
   function matchLabel(t, m) {
-    const base = ROUND_NAMES[m.key] || m.key;
+    const base = phaseName(t, m);
     return m.bestOf > 1 ? `${base} (MD${m.bestOf}, partida ${m.games.length + 1})` : base;
   }
 
@@ -1016,7 +1109,7 @@ function createTournaments(accountStore, hooks = {}) {
     const sortedGames = played.slice().sort((a, b) => effective(b) - effective(a));
     const withDur = doneMatches.filter(m => matchDur(m) > 0).sort((a, b) => matchDur(b) - matchDur(a));
     const gLabel = g => ({ matchId: g.match.id, phase: ROUND_NAMES[g.match.key] || g.match.key, n: g.n, players: [nameOf(t, g.match.a), nameOf(t, g.match.b)], ms: effective(g) });
-    const mLabel = m => ({ matchId: m.id, phase: ROUND_NAMES[m.key] || m.key, players: [nameOf(t, m.a), nameOf(t, m.b)], ms: matchDur(m), score: `${m.wins.a}x${m.wins.b}` });
+    const mLabel = m => ({ matchId: m.id, phase: phaseName(t, m), players: [nameOf(t, m.a), nameOf(t, m.b)], ms: matchDur(m), score: `${m.wins.a}x${m.wins.b}` });
     // Maior virada: série vencida por quem chegou a estar atrás por mais partidas
     let comeback = null;
     doneMatches.filter(m => m.bestOf > 1).forEach(m => {
@@ -1185,7 +1278,7 @@ function createTournaments(accountStore, hooks = {}) {
       const side = m ? (m.a === account ? 'a' : 'b') : null;
       out.push({
         id: t.id, name: t.name, status: t.status, startAt: t.startAt, myStatus: me.status,
-        match: m ? { id: m.id, status: m.status, iReady: !!m.ready[side], opponent: nameOf(t, side === 'a' ? m.b : m.a), wins: m.wins[side], losses: m.wins[side === 'a' ? 'b' : 'a'], label: ROUND_NAMES[m.key] || m.key } : null,
+        match: m ? { id: m.id, status: m.status, iReady: !!m.ready[side], opponent: nameOf(t, side === 'a' ? m.b : m.a), wins: m.wins[side], losses: m.wins[side === 'a' ? 'b' : 'a'], label: phaseName(t, m) } : null,
         champion: t.results && t.results.champion ? nameOf(t, t.results.champion) : null
       });
     });
@@ -1211,6 +1304,8 @@ function createTournaments(accountStore, hooks = {}) {
     get: id => items[id] || null,
     all: () => Object.values(items),
     list, view, create, update, pause, resume, cancel, finishNow, extend, startEarly, disqualify, decide, remove, addBots, removeBots, isBotAcc, mine, releaseRound,
+    resetGame, resetMatch, setWinner, resetBracket, announce,
+    phaseName,
     register, unregister, checkin, setReady, reportGame, recordGameAbort, noteDisconnect,
     multiAccountReport, globalStats, statsOf, tick,
     constants: { SIZES, BEST_OF, ROUND_NAMES, DEFAULT_TIMERS, DEADLINE_POLICIES }

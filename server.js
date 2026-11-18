@@ -541,7 +541,7 @@ function startTournamentGame(t, m, n) {
   });
   const roomId = generateUniqueRoomId();
   const game = new TrucoGame(roomId, '1v1', t.maxPoints);
-  const roundName = (tournaments.constants.ROUND_NAMES[m.key] || m.key);
+  const roundName = tournaments.phaseName(t, m);
   game.roomName = `${t.name} · ${roundName}`;
   game.isPrivate = true;
   game.allowSpectators = true; // a chave só aparece para participantes e admin: dá para assistir qualquer confronto
@@ -781,9 +781,10 @@ function broadcastState(roomId) {
     game.spectators.forEach((spec, sid) => {
       if (!io.sockets.sockets.has(sid)) { game.spectators.delete(sid); return; }
       const view = Math.min(Math.max(0, spec.view || 0), game.players.length - 1);
-      const st = withLogs(spec, game.getGameStateForPlayer(view, true));
+      const st = withLogs(spec, game.getGameStateForPlayer(view, true, !!spec.blind));
       st.spectating = true;
       st.spectatorView = view;
+      st.spectatorBlind = !!spec.blind;
       st.spectatorAdmin = !!spec.admin;
       io.to(sid).emit('game_state', st);
     });
@@ -1265,6 +1266,16 @@ io.on('connection', (socket) => {
     broadcastState(game.id);
   });
 
+  // Modo telão: quem assiste esconde as cartas de todos (só a mesa aparece)
+  socket.on('spectate:blind', (data) => {
+    const game = activeGames[socket.data.spectating];
+    const spec = game && game.spectators && game.spectators.get(socket.id);
+    if (!spec) return;
+    spec.blind = !!(data && data.on);
+    spec.logSentSeq = 0;
+    broadcastState(game.id);
+  });
+
   socket.on('spectate:leave', (data, cb) => {
     removeSpectator(socket);
     socket.join('lobby');
@@ -1581,6 +1592,11 @@ io.on('connection', (socket) => {
       case 'add_bots': return tournaments.addBots(id, d.count, 'admin');
       case 'remove_bots': return tournaments.removeBots(id, 'admin');
       case 'release': return tournaments.releaseRound(id, 'admin');
+      case 'reset_game': return tournaments.resetGame(id, String(d.matchId || ''), 'admin');
+      case 'reset_match': return tournaments.resetMatch(id, String(d.matchId || ''), 'admin');
+      case 'set_winner': return tournaments.setWinner(id, String(d.matchId || ''), String(d.account || ''), 'admin');
+      case 'reset_bracket': return tournaments.resetBracket(id, 'admin');
+      case 'announce': return tournaments.announce(id, d.message, 'admin');
       default: return { error: 'Ação desconhecida.' };
     }
   }));
