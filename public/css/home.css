@@ -4226,3 +4226,5 @@ body.spectate-blind .player-hand { visibility: hidden; }
 .tadm-num { flex: 0 0 90px !important; }
 .tadm-num input { width: 100%; padding: 7px 8px; border-radius: 8px; border: 1px solid rgba(223, 177, 91, 0.3); background: var(--inset-bg); color: var(--cream); font-weight: 700; text-align: center; }
 .tadm-prelim { color: var(--gold-bright); font-size: 0.74rem; }
+/* Campo de vagas: aparece e aceita toque (os botões rápidos usam inputs escondidos) */
+.tadm-seg .tadm-num input { position: static; opacity: 1; pointer-events: auto; }
