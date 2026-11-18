@@ -694,11 +694,11 @@ function createTournaments(accountStore, hooks = {}) {
         if (!acc || acc === m.winner) return;
         const p = participant(t, acc);
         const eligible = played(m) && m.reason !== 'desclassificacao' && !(p && p.disqualified);
-        out.push({ account: acc, name: nameOf(t, acc), gamesWon: m.wins[side], points: seriesPoints(m, side), against: seriesPoints(m, side === 'a' ? 'b' : 'a'), matchId: m.id, eligible });
+        out.push({ account: acc, name: nameOf(t, acc), gamesWon: m.wins[side], points: seriesPoints(m, side), against: seriesPoints(m, side === 'a' ? 'b' : 'a'), matchId: m.id, eligible, wonFirst: !!(m.games[0] && m.games[0].winner === acc) });
       });
       return out;
     });
-    losers.sort((x, y) => (y.eligible - x.eligible) || ((y.gamesWon > 0) - (x.gamesWon > 0)) || (y.points - x.points) || ((y.points - y.against) - (x.points - x.against)) || x.name.localeCompare(y.name));
+    losers.sort((x, y) => (y.eligible - x.eligible) || ((y.gamesWon > 0) - (x.gamesWon > 0)) || (y.points - x.points) || (y.wonFirst - x.wonFirst) || ((y.points - y.against) - (x.points - x.against)) || x.name.localeCompare(y.name));
     const done = ms.every(m => ['done', 'void'].includes(m.status));
     losers.forEach((l, i) => { l.rank = i + 1; l.inside = l.eligible && i < needed; });
     return { winners, needed, losers, done, mainSize: t.seletiva.mainSize, pending: ms.filter(m => !['done', 'void'].includes(m.status)).length };
@@ -788,14 +788,15 @@ function createTournaments(accountStore, hooks = {}) {
 
   // Fase do confronto para a liberação manual (3º lugar anda junto com a final)
   const phaseOf = (t, m) => (m.third ? t.bracket.totalRounds - 1 : m.round);
-  const phaseReleased = (t, r) => !t.manualRounds || r === 0 || !!(t.released && t.released[r]);
+  // Depois da seletiva, a 1ª fase da chave também espera o admin liberar
+  const phaseReleased = (t, r) => (r === 0 ? !t.seletiva : !t.manualRounds) || !!(t.released && t.released[r]);
 
   function tryOpen(t, m) {
     if (m.status !== 'waiting' || !m.aFilled || !m.bFilled) return;
     // BYE / vaga vazia
     if (!m.a && !m.b) return decideMatch(t, m, null, 'vazio');
     if (!m.a || !m.b) return decideMatch(t, m, m.a || m.b, m.round === 0 && !m.third ? 'bye' : 'vaga_vazia');
-    if (!phaseReleased(t, phaseOf(t, m))) {
+    if (!m.sel && !phaseReleased(t, phaseOf(t, m))) {
       // Esperando o admin liberar a fase
       if (!m.held) {
         m.held = true;
@@ -809,10 +810,10 @@ function createTournaments(accountStore, hooks = {}) {
 
   // Próxima fase que ainda não foi liberada
   function nextHeldPhase(t) {
-    if (!t.manualRounds || !t.bracket) return null;
-    for (let r = 1; r < t.bracket.totalRounds; r++) {
+    if ((!t.manualRounds && !t.seletiva) || !t.bracket) return null;
+    for (let r = 0; r < t.bracket.totalRounds; r++) {
       if (phaseReleased(t, r)) continue;
-      const ms = Object.values(t.matches).filter(m => phaseOf(t, m) === r);
+      const ms = Object.values(t.matches).filter(m => !m.sel && phaseOf(t, m) === r);
       const key = ms.find(m => !m.third) ? ms.find(m => !m.third).key : null;
       return { round: r, name: ROUND_NAMES[key] || key, ready: ms.filter(m => m.held).length, total: ms.filter(m => !['done', 'void'].includes(m.status)).length };
     }
@@ -827,7 +828,7 @@ function createTournaments(accountStore, hooks = {}) {
     t.released = t.released || {};
     t.released[next.round] = true;
     audit(t, admin, 'liberar fase', next.name);
-    Object.values(t.matches).filter(m => phaseOf(t, m) === next.round).forEach(m => { if (m.status === 'waiting') tryOpen(t, m); });
+    Object.values(t.matches).filter(m => !m.sel && phaseOf(t, m) === next.round).forEach(m => { if (m.status === 'waiting') tryOpen(t, m); });
     notifyAll(t, 'released', `${next.name} liberada! Fique de olho no seu confronto.`);
     changed(t, { list: true });
     return { ok: true, message: `${next.name} liberada.` };

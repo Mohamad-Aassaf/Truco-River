@@ -209,14 +209,14 @@
     const ms = Object.values(d.matches).filter(m => m.sel).sort((x, y) => x.slot - y.slot);
     const box = matchBoxFn();
     const rows = sel.losers.map(l => `<tr class="${l.inside ? 'in' : 'out'}">
-        <td>${l.rank}º</td><td>${esc(l.name)}</td><td>${l.gamesWon}</td><td>${l.points}</td>
+        <td>${l.rank}º</td><td>${esc(l.name)}</td><td>${l.gamesWon}</td><td>${l.points}</td><td>${l.wonFirst ? 'Ganhou' : '—'}</td>
         <td>${l.inside ? `<b class="tm-in">${done ? 'Repescado' : 'Dentro'}</b>` : `<span class="tm-out">${!l.eligible ? 'Fora (W.O.)' : done ? 'Eliminado' : 'Fora'}</span>`}</td></tr>`).join('');
     return `<section class="tb-prelim tb-sel ${done ? 'done' : ''}">
       <h3 class="tb-title"><i class="fa-solid fa-filter"></i> Seletiva ${done ? '(encerrada)' : ''}</h3>
-      <p class="tour-note">Todos jogam um confronto melhor de 3. Os ${sel.winners.length + (done ? 0 : sel.pending)} vencedores${sel.bye ? ' (com quem passou direto)' : ''} entram na chave de ${sel.mainSize}; as outras <b>${sel.needed}</b> vagas vão para os melhores perdedores: primeiro quem ganhou pelo menos 1 partida da série, depois quem fez mais pontos somando todas as partidas.</p>
+      <p class="tour-note">Todos jogam um confronto melhor de 3. Os ${sel.winners.length + (done ? 0 : sel.pending)} vencedores${sel.bye ? ' (com quem passou direto)' : ''} entram na chave de ${sel.mainSize}; as outras <b>${sel.needed}</b> vagas vão para os melhores perdedores: primeiro quem ganhou pelo menos 1 partida da série, depois quem fez mais pontos somando todas as partidas; empatou nos pontos, passa quem ganhou a 1ª partida da série. A chave só começa quando a organização liberar.</p>
       ${done ? '' : `<div class="tb-prelim-grid">${ms.map(m => `<div class="tb-prelim-slot">${box(m)}</div>`).join('')}</div>`}
       ${sel.losers.length ? `<h4 class="tb-sub">Repescagem · ${sel.needed} vaga${sel.needed === 1 ? '' : 's'}${done ? '' : ` · faltam ${sel.pending} confronto${sel.pending === 1 ? '' : 's'}`}</h4>
-        <div class="st-table-wrap"><table class="sel-table"><thead><tr><th>#</th><th>Perdedor</th><th>Partidas ganhas</th><th>Pontos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+        <div class="st-table-wrap"><table class="sel-table"><thead><tr><th>#</th><th>Perdedor</th><th>Partidas ganhas</th><th>Pontos</th><th>1ª partida</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
     </section>`;
   }
 
